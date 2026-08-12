@@ -1,0 +1,2838 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Pansi's Admin</title>
+<link rel="icon" href="images/Paws.jpg">
+<style>
+  :root {
+    --bg: #f8f6f3;
+    --card: #fffefc;
+    --ink: #1c1917;
+    --muted: #57534e;
+    --soft: #78716c;
+    --choc: #5d3a1a;
+    --choc-dk: #3d2817;
+    --honey: #b45309;
+    --honey-lt: #fef3c7;
+    --cream: #fef7ed;
+    --sage: #4a7c59;
+    --red: #b91c1c;
+    --red-bg: #fef2f2;
+    --amber: #b8860b;
+    --amber-bg: #fffbeb;
+    --border: #e7e5e4;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    background: var(--bg); color: var(--ink); font-size: 15px; line-height: 1.45;
+  }
+  h1, h2, h3, .display { font-family: 'Nunito', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+  button { font-family: inherit; cursor: pointer; }
+  input, select, textarea { font-family: inherit; font-size: 15px; }
+
+  /* === Login === */
+  #loginScreen {
+    position: fixed; inset: 0; background: var(--cream);
+    display: flex; align-items: center; justify-content: center; padding: 1rem; z-index: 1000;
+  }
+  .login-card { background: var(--card); border-radius: 16px; padding: 2.5rem 2rem; max-width: 380px; width: 100%; box-shadow: 0 20px 48px rgba(28,25,23,0.08); text-align: center; }
+  .login-card h1 { margin: 0 0 0.4rem; color: var(--choc); font-size: 1.6rem; }
+  .login-card p { color: var(--muted); margin: 0 0 1.5rem; font-size: 0.92rem; }
+  .login-card input { width: 100%; padding: 0.85rem 1rem; border: 1.5px solid var(--border); border-radius: 10px; outline: none; }
+  .login-card input:focus { border-color: var(--honey); }
+  .login-card button { margin-top: 0.75rem; width: 100%; padding: 0.85rem 1rem; background: var(--choc); color: var(--cream); border: none; border-radius: 10px; font-weight: 600; font-size: 0.95rem; }
+  .login-card .hint { font-size: 0.78rem; color: var(--soft); margin-top: 1rem; font-style: italic; }
+  .login-err { color: var(--red); font-size: 0.85rem; margin-top: 0.5rem; min-height: 1.1rem; }
+
+  /* === App shell === */
+  #app { display: none; min-height: 100vh; padding-bottom: 4.5rem; }
+  header {
+    background: var(--card); border-bottom: 1px solid var(--border);
+    padding: 0.85rem 1rem; display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { margin: 0; font-size: 1.1rem; color: var(--choc); }
+  header .date { font-size: 0.78rem; color: var(--soft); }
+
+  /* Bottom nav (mobile-first) */
+  nav.bottom-nav {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    background: var(--card); border-top: 1px solid var(--border);
+    display: flex; padding: 0.3rem 0.2rem; padding-bottom: calc(0.3rem + env(safe-area-inset-bottom)); z-index: 10;
+  }
+  nav.bottom-nav button {
+    flex: 1; background: transparent; border: none; padding: 0.55rem 0.2rem; color: var(--soft);
+    font-size: 0.7rem; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase;
+    display: flex; flex-direction: column; align-items: center; gap: 0.18rem;
+  }
+  nav.bottom-nav button .ico { font-size: 1.2rem; line-height: 1; }
+  nav.bottom-nav button.active { color: var(--choc); }
+
+  main { padding: 1rem; max-width: 900px; margin: 0 auto; }
+
+  /* === Cards / generic === */
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; margin-bottom: 0.75rem; }
+  .row { display: flex; align-items: center; gap: 0.75rem; }
+  .row.between { justify-content: space-between; }
+  .row.wrap { flex-wrap: wrap; }
+  .grow { flex: 1; }
+  .muted { color: var(--muted); font-size: 0.86rem; }
+  .tiny { font-size: 0.75rem; }
+  .bold { font-weight: 600; }
+  .pill { display: inline-block; padding: 0.18rem 0.55rem; border-radius: 999px; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; }
+  .pill.pending { background: var(--amber-bg); color: var(--amber); }
+  .pill.paid { background: #f0fdf4; color: var(--sage); }
+  .pill.overdue { background: var(--red-bg); color: var(--red); }
+  .pill.size-s { background: #fef7ed; color: var(--choc); border: 1px solid #f0e0c0; }
+  .pill.size-m { background: #fef3c7; color: var(--honey); }
+  .pill.size-l { background: #e0d6c2; color: var(--choc-dk); }
+  .empty { text-align: center; padding: 2.5rem 1rem; color: var(--soft); }
+  .empty .ico { font-size: 2.5rem; margin-bottom: 0.5rem; }
+
+  /* === Buttons === */
+  .btn { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.6rem 0.95rem; border-radius: 10px; border: 1.5px solid var(--border); background: var(--card); color: var(--ink); font-weight: 600; font-size: 0.88rem; }
+  .btn.primary { background: var(--choc); color: var(--cream); border-color: var(--choc); }
+  .btn.honey { background: var(--honey); color: white; border-color: var(--honey); }
+  .btn.danger { background: var(--red-bg); color: var(--red); border-color: #fecaca; }
+  .btn.tiny { padding: 0.35rem 0.65rem; font-size: 0.78rem; }
+  .btn.block { display: flex; width: 100%; justify-content: center; }
+  .fab {
+    position: fixed; bottom: calc(5rem + env(safe-area-inset-bottom)); right: 1rem;
+    width: 54px; height: 54px; border-radius: 50%; background: var(--choc); color: var(--cream);
+    border: none; font-size: 1.6rem; box-shadow: 0 8px 24px rgba(93,58,26,0.35); z-index: 5;
+  }
+
+  /* === Today === */
+  .today-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; margin-bottom: 1rem; }
+  .stat { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 0.65rem; text-align: center; }
+  .stat .n { font-size: 1.3rem; font-weight: 700; color: var(--choc); font-family: 'Nunito', sans-serif; }
+  .stat .l { font-size: 0.68rem; color: var(--soft); text-transform: uppercase; letter-spacing: 0.04em; }
+  .dog-row { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 0.85rem 0.85rem; margin-bottom: 0.5rem; }
+  .dog-row .name { font-weight: 700; font-size: 1.05rem; color: var(--choc); }
+  .dog-row .meta { font-size: 0.82rem; color: var(--muted); }
+  .dog-row .actions { display: flex; gap: 0.4rem; margin-top: 0.6rem; }
+  .dog-row .actions .btn { flex: 1; justify-content: center; padding: 0.5rem; font-size: 0.82rem; }
+  .timestamp { font-size: 0.75rem; color: var(--sage); font-weight: 600; }
+
+  /* === Forms === */
+  .form-grid { display: grid; gap: 0.85rem; }
+  .form-grid label { display: block; }
+  .form-grid label > span { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 0.3rem; font-weight: 600; }
+  .form-grid input, .form-grid select, .form-grid textarea {
+    width: 100%; padding: 0.65rem 0.8rem; border: 1.5px solid var(--border); border-radius: 9px; background: var(--card); outline: none;
+  }
+  .form-grid input:focus, .form-grid select:focus, .form-grid textarea:focus { border-color: var(--honey); }
+  .form-grid .two { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+  .form-grid .checkrow { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .form-grid .checkrow label { display: flex; align-items: center; gap: 0.3rem; padding: 0.4rem 0.75rem; border: 1.5px solid var(--border); border-radius: 999px; background: var(--card); cursor: pointer; font-size: 0.85rem; }
+  .form-grid .checkrow input { width: auto; margin: 0; }
+  .form-grid .checkrow label:has(input:checked) { background: var(--honey-lt); border-color: var(--honey); color: var(--choc); }
+
+  .price-display { background: linear-gradient(135deg, var(--choc) 0%, var(--choc-dk) 100%); color: var(--cream); border-radius: 12px; padding: 1rem; text-align: center; }
+  .price-display .total { font-size: 2rem; font-weight: 700; font-family: 'Nunito', sans-serif; }
+  .price-display .breakdown { font-size: 0.78rem; opacity: 0.85; margin-top: 0.4rem; }
+
+  /* === Modal === */
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(28,25,23,0.5); display: flex; align-items: flex-end; z-index: 50; }
+  @media (min-width: 640px) { .modal-backdrop { align-items: center; justify-content: center; } }
+  .modal { background: var(--card); border-radius: 16px 16px 0 0; padding: 1.25rem; width: 100%; max-height: 90vh; overflow-y: auto; }
+  @media (min-width: 640px) { .modal { border-radius: 16px; max-width: 540px; } }
+  .modal h2 { margin: 0 0 1rem; color: var(--choc); font-size: 1.25rem; }
+  .modal .close-x { float: right; background: none; border: none; font-size: 1.5rem; color: var(--soft); padding: 0; line-height: 1; cursor: pointer; }
+
+  /* === Calendar === */
+  .cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.8rem; }
+  .cal-header h2 { margin: 0; color: var(--choc); }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; background: var(--border); border-radius: 8px; overflow: hidden; }
+  /* Gantt timeline */
+  .gantt-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--card); -webkit-overflow-scrolling: touch; }
+  .gantt-grid { display: grid; min-width: 100%; }
+  .gantt-h-name, .gantt-h-day { background: var(--choc); color: var(--cream); padding: 8px 6px; font-size: 0.72rem; font-weight: 700; text-align: center; position: sticky; top: 0; z-index: 2; }
+  .gantt-h-name { text-align: left; padding-left: 10px; position: sticky; left: 0; z-index: 3; }
+  .gantt-h-day.weekend { background: #6a4a2a; }
+  .gantt-h-day.today { background: var(--honey); color: var(--choc-dk); }
+  .gantt-h-day .dow { display: block; font-size: 0.62rem; opacity: 0.8; font-weight: 600; letter-spacing: 0.05em; }
+  .gantt-h-day .dnum { font-size: 0.9rem; }
+  .gantt-name { background: var(--cream); padding: 8px 10px; font-size: 0.78rem; font-weight: 700; color: var(--choc); display: flex; flex-direction: column; justify-content: center; border-bottom: 1px solid var(--border); position: sticky; left: 0; z-index: 1; }
+  .gantt-name .owner { font-size: 0.65rem; font-weight: 500; color: var(--muted); margin-top: 2px; }
+  .gantt-name .flag { color: var(--red); font-size: 0.65rem; margin-top: 2px; }
+  .gantt-cell { background: var(--card); border-bottom: 1px solid #f1ead8; border-left: 1px dashed #f1ead8; min-height: 42px; position: relative; cursor: pointer; }
+  .gantt-cell.weekend { background: #fbf7ed; }
+  .gantt-cell.today-col { background: #fff5dc; }
+  .gantt-cell:hover { background: #f5ecd0; }
+  .gantt-block { position: absolute; inset: 4px 2px; border-radius: 6px; padding: 4px 6px; font-size: 0.66rem; font-weight: 600; display: flex; align-items: center; gap: 4px; line-height: 1.1; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+  .gantt-block.day { background: linear-gradient(180deg, #a6c46a, #8aab48); color: white; }
+  .gantt-block.night { background: linear-gradient(180deg, #e6b956, #c9962e); color: #3a2a08; }
+  .gantt-block.night.start { border-top-right-radius: 0; border-bottom-right-radius: 0; left: 4px; right: 0; }
+  .gantt-block.night.middle { border-radius: 0; left: 0; right: 0; }
+  .gantt-block.night.end { border-top-left-radius: 0; border-bottom-left-radius: 0; left: 0; right: 4px; }
+  .gantt-block.unpaid::after { content: '●'; color: #c0392b; margin-left: auto; font-size: 0.55rem; }
+  .gantt-block.paid::after   { content: '✓'; color: #2a6e2a; margin-left: auto; font-size: 0.7rem; }
+  .gantt-empty { padding: 1.5rem; text-align: center; color: var(--muted); font-size: 0.85rem; }
+  @media (max-width: 720px) {
+    .gantt-name { font-size: 0.7rem; padding: 6px 8px; }
+    .gantt-block { font-size: 0.6rem; padding: 3px 4px; }
+  }
+  .cal-dow { background: var(--choc); color: var(--cream); padding: 6px 4px; text-align: center; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+
+  /* === Clients === */
+  .client-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 0.85rem; margin-bottom: 0.5rem; }
+  .client-card .name { font-weight: 700; color: var(--choc); }
+  .client-card .dogs { font-size: 0.85rem; color: var(--muted); margin-top: 0.2rem; }
+  .client-card .contact { font-size: 0.8rem; color: var(--soft); margin-top: 0.2rem; }
+
+  /* === Payments === */
+  .payment-row { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem 0.85rem; margin-bottom: 0.4rem; }
+  .payment-row.overdue { border-left: 4px solid var(--red); }
+  .payment-row .name { font-weight: 700; color: var(--choc); }
+  .payment-row .amt { font-weight: 700; font-size: 1.1rem; }
+
+  /* === Settings / backup === */
+  .settings-section { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; margin-bottom: 0.75rem; }
+  .settings-section h3 { margin: 0 0 0.5rem; color: var(--choc); font-size: 1rem; }
+
+  /* utility */
+  .center { text-align: center; }
+  .mt-1 { margin-top: 0.6rem; }
+  .mt-2 { margin-top: 1.2rem; }
+  .mb-1 { margin-bottom: 0.6rem; }
+  .gap-1 { gap: 0.6rem; }
+  .hidden { display: none !important; }
+  /* Report modal */
+  .score-row { display: flex; align-items: center; gap: 0.6rem; margin: 0.4rem 0; }
+  .score-row label { flex: 0 0 100px; font-size: 0.82rem; color: var(--choc); font-weight: 600; }
+  .score-pills { display: flex; gap: 4px; flex: 1; }
+  .score-pill { flex: 1; padding: 6px 0; text-align: center; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 0.85rem; background: var(--card); user-select: none; }
+  .score-pill.active { background: var(--honey); color: var(--choc-dk); border-color: var(--honey); }
+  .score-pill:hover { border-color: var(--honey); }
+  .photo-preview { max-width: 100%; max-height: 180px; border-radius: 8px; margin-top: 0.4rem; display: block; }
+  .invoice-summary { padding: 0.6rem 0.8rem; background: var(--cream); border-radius: 8px; margin: 0.6rem 0; }
+  .invoice-summary .row { padding: 3px 0; }
+</style>
+<!-- jsPDF for invoice PDF generation -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<div id="loginScreen">
+  <div class="login-card">
+    <h1>🐾 Pansi's Admin</h1>
+    <p>Sign in with your email and password.</p>
+    <input id="emailInput" type="email" autocomplete="username" placeholder="Email" style="margin-bottom: 0.5rem;">
+    <input id="pwdInput" type="password" autocomplete="current-password" placeholder="Password">
+    <button onclick="login()">Sign in</button>
+    <div id="loginErr" class="login-err"></div>
+    <div class="hint">Data synced live across devices via Firebase.</div>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app">
+  <header>
+    <h1>🐾 Pansi's Admin</h1>
+    <div class="date" id="todayDate"></div>
+  </header>
+
+  <main id="tabContent"></main>
+
+  <button class="fab" id="fabBtn" title="New">+</button>
+
+  <nav class="bottom-nav">
+    <button data-tab="today" class="active"><span class="ico">🐶</span>Today</button>
+    <button data-tab="calendar"><span class="ico">📅</span>Calendar</button>
+    <button data-tab="clients"><span class="ico">👤</span>Clients</button>
+    <button data-tab="payments"><span class="ico">💰</span>Payments</button>
+    <button data-tab="settings"><span class="ico">⚙️</span>Settings</button>
+  </nav>
+</div>
+
+<!-- ============ MODAL HOST ============ -->
+<div id="modalHost"></div>
+
+<script type="module">
+/* ======================================================
+   PANSI'S ADMIN — Firebase-backed, real-time multi-device
+   ====================================================== */
+
+// === Firebase SDK (modular v10 via CDN) ===
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import {
+  getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+import {
+  getFirestore, doc, getDoc, setDoc, onSnapshot
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDAptLVEs0P5yto1ia_BzvuZqpGwT5kbXo",
+  authDomain: "pansi-paws.firebaseapp.com",
+  projectId: "pansi-paws",
+  storageBucket: "pansi-paws.firebasestorage.app",
+  messagingSenderId: "818843766857",
+  appId: "1:818843766857:web:2f9f2955f133f819d36f98",
+  measurementId: "G-42KNQ11X33"
+};
+const fbApp = initializeApp(firebaseConfig);
+const fbAuth = getAuth(fbApp);
+const fbDb = getFirestore(fbApp);
+const STATE_DOC = doc(fbDb, "pansis-admin", "state");
+
+const STORAGE_KEY = "pansis_admin_v1"; // kept as offline fallback / migration source
+
+// === Pricing — fetched from pricing.json (single source of truth) ===
+// Falls back to these defaults if fetch fails (e.g. opened offline)
+let PRICES = {
+  small:  { half: 55, extended: 70, full: 80,  overnight: 100 },
+  medium: { half: 65, extended: 80, full: 90,  overnight: 115 },
+  large:  { half: 75, extended: 90, full: 100, overnight: 130 }
+};
+let ADDONS = { senior: 12, puppy: 12, med: 5, diet: 3, taxi: 35 };
+let SURCHARGES = { publicHoliday: 25, xmasPeakDay: 15, xmasPeakNight: 30 };
+let PRICING_META = { updated: null, source: 'default' };
+
+async function loadPricing() {
+  try {
+    const resp = await fetch('pricing.json?t=' + Date.now()); // cache-bust
+    if (!resp.ok) throw new Error('no pricing.json');
+    const p = await resp.json();
+    PRICES = p.prices;
+    ADDONS = {
+      senior: p.addons.senior.amount,
+      puppy:  p.addons.puppy?.amount ?? 12,
+      med:    p.addons.med.amount,
+      diet:   p.addons.diet.amount,
+      taxi:   p.addons.taxi.amount
+    };
+    SURCHARGES = {
+      publicHoliday:  p.surcharges.publicHoliday.amount,
+      xmasPeakDay:    p.surcharges.xmasPeakDay.amount,
+      xmasPeakNight:  p.surcharges.xmasPeakNight.amount
+    };
+    PRICING_META = { updated: p.updated, source: 'pricing.json' };
+  } catch (err) {
+    console.warn('Pricing fetch failed, using built-in defaults', err);
+  }
+}
+
+const SESSION_LABELS = {
+  half: "Half day",
+  extended: "Extended half",
+  full: "Full day",
+  overnight: "Overnight"
+};
+const SIZE_LABELS = { small: "Small ≤10kg", medium: "Medium 10–25kg", large: "Large 25kg+" };
+
+// === Storage ===
+function emptyDb() {
+  return {
+    owners: [],
+    dogs: [],
+    bookings: [],
+    meta: {
+      version: 1, createdAt: new Date().toISOString(), lastBackup: null,
+      capacity: { maxDaycare: 5, maxBoarding: 3 }
+    }
+  };
+}
+function loadFromStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return emptyDb();
+    const db = JSON.parse(raw);
+    db.owners ||= []; db.dogs ||= []; db.bookings ||= []; db.meta ||= {};
+    db.meta.capacity ||= { maxDaycare: 5, maxBoarding: 3 };
+    if (db.meta.capacity.maxDaycare == null) db.meta.capacity.maxDaycare = 5;
+    if (db.meta.capacity.maxBoarding == null) db.meta.capacity.maxBoarding = 3;
+    return db;
+  } catch { return emptyDb(); }
+}
+
+let DB = emptyDb();
+let isSyncing = false; // prevents save() during snapshot updates
+
+async function loadFromFirestore() {
+  const snap = await getDoc(STATE_DOC);
+  if (snap.exists()) {
+    const remote = snap.data();
+    DB = {
+      owners: remote.owners || [],
+      dogs: remote.dogs || [],
+      bookings: remote.bookings || [],
+      meta: remote.meta || { capacity: { maxDaycare: 5, maxBoarding: 3 } }
+    };
+    DB.meta.capacity ||= { maxDaycare: 5, maxBoarding: 3 };
+    if (DB.meta.capacity.maxDaycare == null) DB.meta.capacity.maxDaycare = 5;
+    if (DB.meta.capacity.maxBoarding == null) DB.meta.capacity.maxBoarding = 3;
+    // also cache locally for offline access
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(DB));
+    return true;
+  }
+  return false;
+}
+
+async function save(db) {
+  // Local cache for offline access + speed
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+  // Push to Firestore unless we're currently applying a remote snapshot
+  if (!isSyncing && fbAuth.currentUser) {
+    try {
+      await setDoc(STATE_DOC, {
+        owners: db.owners, dogs: db.dogs, bookings: db.bookings, meta: db.meta,
+        _updatedAt: new Date().toISOString(),
+        _updatedBy: fbAuth.currentUser.email
+      });
+    } catch (err) {
+      console.error('Firestore write failed:', err);
+      flashStatus('Save failed (will retry when online)', 'red');
+    }
+  }
+}
+
+function flashStatus(msg, colorVar = 'sage') {
+  let el = document.getElementById('syncFlash');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'syncFlash';
+    el.style.cssText = 'position:fixed; top:64px; right:16px; background:var(--card); border:1px solid var(--border); border-radius:10px; padding:0.5rem 0.85rem; font-size:0.78rem; box-shadow:0 4px 12px rgba(0,0,0,0.1); z-index:200; transition:opacity 0.3s;';
+    document.body.appendChild(el);
+  }
+  el.style.color = `var(--${colorVar})`;
+  el.textContent = msg;
+  el.style.opacity = '1';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.style.opacity = '0'; }, 2500);
+}
+
+let snapshotUnsub = null;
+function startRealtimeSync() {
+  if (snapshotUnsub) snapshotUnsub();
+  snapshotUnsub = onSnapshot(STATE_DOC, (snap) => {
+    if (!snap.exists()) return;
+    const remote = snap.data();
+    // Ignore our own writes echoed back
+    if (remote._updatedBy === fbAuth.currentUser?.email &&
+        remote._updatedAt && DB.meta?._lastLocalSave === remote._updatedAt) return;
+    isSyncing = true;
+    DB.owners = remote.owners || [];
+    DB.dogs = remote.dogs || [];
+    DB.bookings = remote.bookings || [];
+    DB.meta = remote.meta || { capacity: { maxDaycare: 5, maxBoarding: 3 } };
+    DB.meta.capacity ||= { maxDaycare: 5, maxBoarding: 3 };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(DB));
+    isSyncing = false;
+    if (remote._updatedBy && remote._updatedBy !== fbAuth.currentUser?.email) {
+      flashStatus(`Synced from ${remote._updatedBy.split('@')[0]}`);
+    }
+    render();
+  }, (err) => {
+    console.error('Firestore snapshot listener failed:', err);
+    flashStatus('Sync paused — check connection', 'red');
+  });
+}
+
+// === Utility ===
+const uid = () => Math.random().toString(36).slice(2, 9);
+const localISO = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const todayISO = () => localISO(new Date());
+// "None", "N/A", "Nil", "None known" etc. shouldn't trigger a health flag
+const isMeaningfulHealth = (v) => v && !/^(none|n\/a|nil|no|na|nothing|nope)( known)?[.!]?$/i.test(String(v).trim());
+function fmtDate(iso) {
+  const d = new Date(iso + "T00:00:00");
+  return d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+function fmtDateLong(iso) {
+  const d = new Date(iso + "T00:00:00");
+  return d.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+function nowTime() {
+  return new Date().toTimeString().slice(0,5);
+}
+function isXmasPeak(iso) {
+  const m = parseInt(iso.slice(5,7));
+  const d = parseInt(iso.slice(8,10));
+  return (m === 12 && d >= 20) || (m === 1 && d <= 28);
+}
+function ownerById(id) { return DB.owners.find(o => o.id === id); }
+function dogById(id) { return DB.dogs.find(d => d.id === id); }
+function ownerOf(dogId) { const d = dogById(dogId); return d ? ownerById(d.ownerId) : null; }
+function dogsOfOwner(ownerId) { return DB.dogs.filter(d => d.ownerId === ownerId); }
+function bookingsForDate(iso) { return DB.bookings.filter(b => b.date === iso); }
+function bookingsForMonth(year, monthZeroIdx) {
+  const ym = year + '-' + String(monthZeroIdx + 1).padStart(2,'0');
+  return DB.bookings.filter(b => b.date.startsWith(ym));
+}
+
+// === Firebase Auth ===
+window.login = async function login() {
+  const email = document.getElementById('emailInput').value.trim();
+  const pwd = document.getElementById('pwdInput').value;
+  const errEl = document.getElementById('loginErr');
+  errEl.textContent = '';
+  if (!email || !pwd) { errEl.textContent = 'Email and password required'; return; }
+  try {
+    await signInWithEmailAndPassword(fbAuth, email, pwd);
+    // onAuthStateChanged below will hide the login screen
+  } catch (err) {
+    let msg = 'Sign-in failed';
+    if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') msg = 'Wrong email or password';
+    else if (err.code === 'auth/too-many-requests') msg = 'Too many attempts — wait a few minutes';
+    else if (err.code === 'auth/network-request-failed') msg = 'Offline — check connection';
+    errEl.textContent = msg;
+  }
+};
+
+window.signOutAdmin = async function signOutAdmin() {
+  if (snapshotUnsub) { snapshotUnsub(); snapshotUnsub = null; }
+  await signOut(fbAuth);
+  location.reload();
+};
+
+document.getElementById('pwdInput').addEventListener('keypress', e => { if (e.key === 'Enter') window.login(); });
+document.getElementById('emailInput').addEventListener('keypress', e => { if (e.key === 'Enter') document.getElementById('pwdInput').focus(); });
+
+// Auto-sign-in if session still valid
+onAuthStateChanged(fbAuth, async (user) => {
+  if (user) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    // Try Firestore first, fall back to localStorage cache
+    const loaded = await loadFromFirestore();
+    if (!loaded) {
+      // First-ever sign-in: check if local data exists and offer to upload
+      const local = loadFromStorage();
+      if (local.owners.length || local.dogs.length || local.bookings.length) {
+        const ok = confirm(`Welcome ${user.email.split('@')[0]}! You have local data on this device (${local.owners.length} clients, ${local.dogs.length} dogs, ${local.bookings.length} bookings). Upload to the cloud so it syncs to all devices?\n\nClick OK to upload. Click Cancel to start fresh.`);
+        if (ok) {
+          DB = local;
+          await save(DB);
+          flashStatus('Uploaded your local data ✓');
+        }
+      }
+    } else {
+      flashStatus(`Signed in as ${user.email.split('@')[0]}`);
+    }
+    startRealtimeSync();
+    initApp();
+  } else {
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+  }
+});
+
+// === App state ===
+let currentTab = "today";
+let calYear = new Date().getFullYear();
+let calMonth = new Date().getMonth();
+let calView = "month"; // "week" | "month" (month = Gantt timeline)
+let weekOffset = 0;  // 0 = this week, -1 = last week, +1 = next week
+let ganttDays = 14;     // visible range
+let ganttOffset = 0;    // days shifted from today
+let moneyPeriod = "month"; // "thisweek" | "lastweek" | "month" | "lastmonth" | "last4weeks" | "ytd" | "custom"
+let moneyCustomStart = '';
+let moneyCustomEnd = '';
+
+async function initApp() {
+  await loadPricing();
+  document.getElementById('todayDate').textContent = fmtDateLong(todayISO());
+  document.querySelectorAll('nav.bottom-nav button').forEach(b => {
+    b.onclick = () => switchTab(b.dataset.tab);
+  });
+  document.getElementById('fabBtn').onclick = onFabClick;
+  switchTab('today');
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('nav.bottom-nav button').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === tab);
+  });
+  render();
+}
+
+function onFabClick() {
+  if (currentTab === 'today' || currentTab === 'calendar') openBookingModal();
+  else if (currentTab === 'clients') openClientModal();
+  else if (currentTab === 'payments') openBookingModal();
+  else if (currentTab === 'settings') openClientModal();
+}
+
+// === Rendering ===
+function render() {
+  const main = document.getElementById('tabContent');
+  if (currentTab === 'today') main.innerHTML = renderToday();
+  else if (currentTab === 'calendar') main.innerHTML = (calView === 'week' ? renderWeekly() : renderCalendar());
+  else if (currentTab === 'clients') main.innerHTML = renderClients();
+  else if (currentTab === 'payments') main.innerHTML = renderPayments();
+  else if (currentTab === 'settings') main.innerHTML = renderSettings();
+  attachHandlers();
+}
+
+function attachHandlers() {
+  // Today actions
+  document.querySelectorAll('[data-arrive]').forEach(b => b.onclick = () => logArrival(b.dataset.arrive));
+  document.querySelectorAll('[data-depart]').forEach(b => b.onclick = () => logDeparture(b.dataset.depart));
+  document.querySelectorAll('[data-pay]').forEach(b => b.onclick = () => markPaid(b.dataset.pay));
+  document.querySelectorAll('[data-editbk]').forEach(b => b.onclick = () => openBookingModal(b.dataset.editbk));
+  document.querySelectorAll('[data-editc]').forEach(b => b.onclick = () => openClientModal(b.dataset.editc));
+  document.querySelectorAll('[data-cal-prev]').forEach(b => b.onclick = () => { calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; } render(); });
+  document.querySelectorAll('[data-cal-next]').forEach(b => b.onclick = () => { calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; } render(); });
+  document.querySelectorAll('[data-cal-day]').forEach(b => b.onclick = () => openDayDetail(b.dataset.calDay));
+  // Gantt controls
+  document.querySelectorAll('[data-gantt-prev]').forEach(b => b.onclick = () => { ganttOffset -= ganttDays; render(); });
+  document.querySelectorAll('[data-gantt-next]').forEach(b => b.onclick = () => { ganttOffset += ganttDays; render(); });
+  document.querySelectorAll('[data-gantt-today]').forEach(b => b.onclick = () => { ganttOffset = 0; render(); });
+  document.querySelectorAll('[data-gantt-range]').forEach(b => b.onclick = () => { ganttDays = parseInt(b.dataset.ganttRange, 10); render(); });
+  document.querySelectorAll('[data-wk-prev]').forEach(b => b.onclick = () => { weekOffset--; render(); });
+  document.querySelectorAll('[data-wk-next]').forEach(b => b.onclick = () => { weekOffset++; render(); });
+  document.querySelectorAll('[data-view-toggle]').forEach(b => b.onclick = () => { calView = b.dataset.viewToggle; if (calView === 'week') weekOffset = 0; render(); });
+  document.querySelectorAll('[data-money-period]').forEach(b => b.onclick = () => {
+    moneyPeriod = b.dataset.moneyPeriod;
+    if (moneyPeriod === 'custom' && !moneyCustomStart) {
+      const t = new Date(todayISO());
+      const s = new Date(t); s.setDate(t.getDate() - 30);
+      moneyCustomStart = s.toISOString().slice(0,10);
+      moneyCustomEnd = todayISO();
+    }
+    render();
+  });
+}
+function applyCustomRange() {
+  const s = document.getElementById('moneyStart').value;
+  const e = document.getElementById('moneyEnd').value;
+  if (s && e) { moneyCustomStart = s; moneyCustomEnd = e; render(); }
+}
+
+// ===== TODAY VIEW =====
+function renderToday() {
+  const t = todayISO();
+  const todays = bookingsForDate(t).sort((a,b) => (a.arrivalTime||'') > (b.arrivalTime||'') ? 1 : -1);
+  const arrived = todays.filter(b => b.arrivalLogged && !b.departureLogged).length;
+  const scheduled = todays.length;
+  const unpaid = todays.filter(b => b.paymentStatus !== 'paid').length;
+  const totalRev = todays.reduce((s,b) => s + b.total, 0);
+
+  const statBar = `
+    <div class="today-summary">
+      <div class="stat"><div class="n">${scheduled}</div><div class="l">Booked</div></div>
+      <div class="stat"><div class="n">${arrived}</div><div class="l">In care</div></div>
+      <div class="stat"><div class="n">${unpaid}</div><div class="l">Unpaid</div></div>
+      <div class="stat"><div class="n">$${totalRev}</div><div class="l">Day rev</div></div>
+    </div>`;
+
+  if (!todays.length) {
+    return statBar + `<div class="empty"><div class="ico">🦴</div><div>No bookings today.</div><div class="tiny mt-1">Tap + to add one.</div></div>`;
+  }
+
+  const rows = todays.map(b => {
+    const dog = dogById(b.dogId);
+    const owner = ownerOf(b.dogId);
+    if (!dog) return '';
+    const arrivedStatus = b.arrivalLogged
+      ? `<span class="timestamp">✓ Arrived ${b.arrivalLogged}</span>`
+      : '';
+    const leftStatus = b.departureLogged
+      ? `<span class="timestamp">→ Left ${b.departureLogged}</span>`
+      : '';
+    const payPill = `<span class="pill ${b.paymentStatus}">${b.paymentStatus}</span>`;
+    const sizePill = `<span class="pill size-${dog.size.charAt(0)}">${dog.size}</span>`;
+    return `
+      <div class="dog-row">
+        <div class="row between">
+          <div>
+            <div class="name">${dog.name}</div>
+            <div class="meta">${SESSION_LABELS[b.session]} · ${owner ? owner.name : '?'} · $${b.total}</div>
+            <div class="row gap-1 mt-1">${sizePill} ${payPill} ${arrivedStatus} ${leftStatus}</div>
+          </div>
+        </div>
+        <div class="actions">
+          ${!b.arrivalLogged ? `<button class="btn primary" data-arrive="${b.id}">Arrived</button>` : ''}
+          ${b.arrivalLogged && !b.departureLogged ? `<button class="btn honey" data-depart="${b.id}">Left</button>` : ''}
+          ${b.paymentStatus !== 'paid' ? `<button class="btn" data-pay="${b.id}">Mark paid</button>` : ''}
+          <button class="btn" onclick="openReportModal('${b.id}')">📋 Report + invoice</button>
+          <button class="btn tiny" data-editbk="${b.id}">Edit</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  return statBar + rows;
+}
+
+function logArrival(bookingId) {
+  const b = DB.bookings.find(x => x.id === bookingId);
+  if (!b) return;
+  b.arrivalLogged = nowTime();
+  save(DB); render();
+}
+function logDeparture(bookingId) {
+  const b = DB.bookings.find(x => x.id === bookingId);
+  if (!b) return;
+  b.departureLogged = nowTime();
+  save(DB); render();
+}
+function markPaid(bookingId) {
+  const b = DB.bookings.find(x => x.id === bookingId);
+  if (!b) return;
+  b.paymentStatus = 'paid';
+  b.paidAt = new Date().toISOString();
+  save(DB); render();
+}
+
+function emailOwner(ownerId) {
+  const o = DB.owners.find(x => x.id === ownerId);
+  if (!o || !o.email) { alert('No email on file for this client.'); return; }
+  const dogs = dogsOfOwner(o.id).map(d => d.name).join(' & ') || 'your dog';
+  const subject = `Pansi's Paws — a quick note about ${dogs}`;
+  const body = `Hi ${o.name.split(' ')[0]},\n\n\n\nThanks,\nAndressa\nPansi's Paws — Home Dog Daycare`;
+  // Uses mailto: so it opens Andressa's default mail client (Outlook / Mail.app / etc)
+  window.location.href = `mailto:${o.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+// ===== REPORT + INVOICE =====
+const SCORE_FIELDS = [
+  { key: 'energy',        label: 'Energy',        emoji: '⚡' },
+  { key: 'play',          label: 'Play',          emoji: '🎾' },
+  { key: 'socialisation', label: 'Socialisation', emoji: '🐕' },
+  { key: 'appetite',      label: 'Appetite',      emoji: '🍽' },
+  { key: 'rest',          label: 'Rest',          emoji: '😴' },
+  { key: 'mood',          label: 'Mood',          emoji: '🐾' }
+];
+let reportPhotoDataUrl = '';
+
+function openReportModal(bookingId) {
+  const b = DB.bookings.find(x => x.id === bookingId);
+  if (!b) return;
+  const dog = dogById(b.dogId);
+  const owner = ownerOf(b.dogId);
+  if (!dog || !owner) { alert('Missing dog or owner.'); return; }
+  reportPhotoDataUrl = '';
+
+  const scoreRows = SCORE_FIELDS.map(f => `
+    <div class="score-row">
+      <label>${f.emoji} ${f.label}</label>
+      <div class="score-pills" data-score-key="${f.key}">
+        ${[1,2,3,4,5].map(n => `<div class="score-pill" data-score="${n}">${n}</div>`).join('')}
+      </div>
+    </div>`).join('');
+
+  // Invoice preview
+  const invoiceLines = [`<div class="row between"><span>${fmtDate(b.date)} · ${SESSION_LABELS[b.session]}</span><span>$${b.total}</span></div>`];
+
+  showModal(`
+    <h2>📋 ${dog.name}'s Report + Invoice <button class="close-x" onclick="hideModal()">×</button></h2>
+    <p class="muted tiny">For ${owner.name}${owner.email ? ' — ' + owner.email : ' — <span style="color:var(--red);">no email on file</span>'}</p>
+
+    <h3 style="margin-top:0.8rem; color:var(--choc);">How ${dog.name} did today (1 = low, 5 = great)</h3>
+    ${scoreRows}
+
+    <div class="form-group mt-1">
+      <label><span>Commentary — what stood out?</span>
+        <textarea id="reportCommentary" rows="4" placeholder="e.g. Loved chasing the tennis ball, made a new friend with Rosie, napped hard after lunch."></textarea>
+      </label>
+    </div>
+
+    <div class="form-group mt-1">
+      <label><span>Photo (optional)</span>
+        <input type="file" accept="image/*" onchange="onReportPhoto(event)">
+      </label>
+      <img id="reportPhotoImg" class="photo-preview" style="display:none;">
+    </div>
+
+    <div class="invoice-summary">
+      <div class="bold" style="color:var(--choc);">Invoice — $${b.total}</div>
+      ${invoiceLines.join('')}
+      <div class="row between mt-1 bold" style="border-top:1px solid var(--border); padding-top:6px;">
+        <span>Total due</span><span>$${b.total}</span>
+      </div>
+    </div>
+
+    <button class="btn primary block" onclick="sendReportAndInvoice('${b.id}')">📧 Generate invoice + open email</button>
+    <p class="muted tiny center mt-1">Invoice downloads to your computer, then Gmail opens with the report body pre-filled — attach the PDF and send.</p>
+  `);
+
+  // Wire up score pills
+  document.querySelectorAll('.score-pills').forEach(row => {
+    row.querySelectorAll('.score-pill').forEach(pill => {
+      pill.onclick = () => {
+        row.querySelectorAll('.score-pill').forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+      };
+    });
+  });
+}
+
+function onReportPhoto(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    reportPhotoDataUrl = ev.target.result;
+    const img = document.getElementById('reportPhotoImg');
+    img.src = reportPhotoDataUrl;
+    img.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+function collectScores() {
+  const scores = {};
+  document.querySelectorAll('.score-pills').forEach(row => {
+    const key = row.dataset.scoreKey;
+    const active = row.querySelector('.score-pill.active');
+    scores[key] = active ? parseInt(active.dataset.score, 10) : null;
+  });
+  return scores;
+}
+
+function buildReportEmailBody(scores, commentary, dog, owner, booking) {
+  const scoreLines = SCORE_FIELDS
+    .filter(f => scores[f.key] != null)
+    .map(f => `${f.emoji} ${f.label}: ${'⭐'.repeat(scores[f.key])} (${scores[f.key]}/5)`)
+    .join('\n');
+
+  return `Hi ${owner.name.split(' ')[0]},
+
+Here's how ${dog.name} went today at Pansi's Paws 🐾
+
+${scoreLines}
+
+${commentary ? `\nNotes from Andressa:\n${commentary}\n` : ''}
+Invoice for today's session ($${booking.total}) is attached as a PDF. Payment details are on the invoice.
+
+Thanks for trusting us with ${dog.name}.
+
+Andressa
+Pansi's Paws — Home Dog Daycare
+Annandale, Sydney
+pansispaws.com.au`;
+}
+
+function generateInvoicePDF(booking, dog, owner) {
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+
+  // Header
+  pdf.setFontSize(24);
+  pdf.setTextColor(63, 40, 20);
+  pdf.text("Pansi's Paws", 20, 25);
+  pdf.setFontSize(10);
+  pdf.setTextColor(120, 100, 80);
+  pdf.text('Home Dog Daycare · Annandale · pansispaws.com.au', 20, 32);
+
+  // Invoice title + meta
+  pdf.setFontSize(18);
+  pdf.setTextColor(63, 40, 20);
+  pdf.text('INVOICE', 150, 25);
+  pdf.setFontSize(10);
+  pdf.setTextColor(80, 80, 80);
+  const invNum = 'INV-' + booking.date.replace(/-/g,'') + '-' + booking.id.slice(0,4).toUpperCase();
+  const today = new Date();
+  pdf.text(`Invoice #: ${invNum}`, 150, 33);
+  pdf.text(`Date: ${today.toLocaleDateString('en-AU')}`, 150, 39);
+
+  // Bill to
+  pdf.setDrawColor(220, 200, 170);
+  pdf.line(20, 45, 190, 45);
+  pdf.setFontSize(10);
+  pdf.setTextColor(120, 100, 80);
+  pdf.text('BILL TO', 20, 53);
+  pdf.setTextColor(30, 30, 30);
+  pdf.setFontSize(11);
+  pdf.text(owner.name, 20, 60);
+  if (owner.email) pdf.text(owner.email, 20, 66);
+  if (owner.phone) pdf.text(owner.phone, 20, 72);
+
+  // Line items header
+  const startY = 90;
+  pdf.setFillColor(63, 40, 20);
+  pdf.rect(20, startY, 170, 8, 'F');
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFontSize(10);
+  pdf.text('Description', 24, startY + 5.5);
+  pdf.text('Amount', 175, startY + 5.5, { align: 'right' });
+
+  // Line item(s)
+  pdf.setTextColor(30, 30, 30);
+  let y = startY + 15;
+  const desc = `${dog.name} — ${SESSION_LABELS[booking.session]} · ${new Date(booking.date + 'T00:00:00').toLocaleDateString('en-AU', { weekday:'short', day:'numeric', month:'short', year:'numeric' })}`;
+  pdf.setFontSize(10);
+  pdf.text(desc, 24, y);
+  pdf.text('$' + booking.total.toFixed(2), 186, y, { align: 'right' });
+  y += 6;
+
+  // Add-on breakdown
+  const addOns = [];
+  if (booking.addOns?.senior) addOns.push('Senior Care +$12');
+  if (booking.addOns?.puppy)  addOns.push('Puppy Care +$12');
+  if (booking.addOns?.med)    addOns.push('Medication +$5');
+  if (booking.addOns?.diet)   addOns.push('Diet prep +$3');
+  if (booking.addOns?.taxi)   addOns.push('Pickup/dropoff +$35');
+  if (booking.surcharges?.publicHoliday) addOns.push('Public holiday +$25');
+  if (booking.surcharges?.xmasPeak)     addOns.push('Xmas peak surcharge');
+  if (addOns.length) {
+    pdf.setTextColor(100, 100, 100);
+    pdf.setFontSize(9);
+    pdf.text('   inc: ' + addOns.join(' · '), 24, y);
+    y += 6;
+  }
+
+  // Total
+  y += 10;
+  pdf.line(20, y - 4, 190, y - 4);
+  pdf.setFontSize(12);
+  pdf.setTextColor(63, 40, 20);
+  pdf.text('TOTAL DUE', 130, y);
+  pdf.setFontSize(14);
+  pdf.text('$' + booking.total.toFixed(2), 186, y, { align: 'right' });
+
+  // Payment details
+  y += 20;
+  pdf.setFontSize(10);
+  pdf.setTextColor(120, 100, 80);
+  pdf.text('PAYMENT DETAILS', 20, y);
+  pdf.setTextColor(30, 30, 30);
+  y += 6;
+  pdf.setFontSize(9);
+  pdf.text('Bank transfer:', 20, y); y += 5;
+  pdf.text('Account name:  Pansi\'s Paws', 25, y); y += 4;
+  pdf.text('BSB:           062-000', 25, y); y += 4;
+  pdf.text('Account:       12345678', 25, y); y += 4;
+  pdf.text(`Reference:     ${invNum}`, 25, y);
+
+  // Footer
+  pdf.setFontSize(8);
+  pdf.setTextColor(150, 130, 100);
+  pdf.text('Thank you for choosing Pansi\'s Paws. Questions? andressa@pansispaws.com.au', 105, 285, { align: 'center' });
+
+  const filename = `invoice-${dog.name.replace(/\W+/g,'')}-${booking.date}.pdf`;
+  pdf.save(filename);
+}
+
+function sendReportAndInvoice(bookingId) {
+  const b = DB.bookings.find(x => x.id === bookingId);
+  if (!b) return;
+  const dog = dogById(b.dogId);
+  const owner = ownerOf(b.dogId);
+  if (!owner.email) {
+    if (!confirm(`No email on file for ${owner.name}. Continue anyway (Gmail will open with a blank To field)?`)) return;
+  }
+
+  const scores = collectScores();
+  const missing = SCORE_FIELDS.filter(f => scores[f.key] == null);
+  if (missing.length && !confirm(`Some scores are blank (${missing.map(m=>m.label).join(', ')}). Continue?`)) return;
+
+  const commentary = (document.getElementById('reportCommentary').value || '').trim();
+  const body = buildReportEmailBody(scores, commentary, dog, owner, b);
+
+  // 1. Generate + download the PDF
+  generateInvoicePDF(b, dog, owner);
+
+  // 2. Open default mail client (Outlook / Mail.app / whatever Andressa uses)
+  const subject = `${dog.name}'s day at Pansi's Paws — invoice attached`;
+  window.location.href = `mailto:${owner.email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+  hideModal();
+  flashStatus('Invoice downloaded · Email opened — attach the PDF and send');
+}
+
+// ===== WEEKLY VIEW =====
+function renderWeekly() {
+  const MAX_DAYCARE = DB.meta.capacity.maxDaycare;
+  const MAX_BOARDING = DB.meta.capacity.maxBoarding;
+
+  // Find Monday of current week + offset
+  const now = new Date(todayISO() + "T00:00:00");
+  const dayOfWeek = (now.getDay() + 6) % 7; // 0 = Mon
+  const monday = new Date(now); monday.setDate(now.getDate() - dayOfWeek + (weekOffset * 7));
+
+  const weekHeader = monday.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
+  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+  const weekRange = `${weekHeader} – ${sunday.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}`;
+
+  // Weekly totals
+  let weekBookings = 0, weekRev = 0, weekUnpaid = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday); d.setDate(monday.getDate() + i);
+    const iso = d.toISOString().slice(0,10);
+    const dayBks = DB.bookings.filter(b => b.date === iso);
+    weekBookings += dayBks.length;
+    weekRev += dayBks.reduce((s,b) => s + b.total, 0);
+    weekUnpaid += dayBks.filter(b => b.paymentStatus !== 'paid').reduce((s,b) => s + b.total, 0);
+  }
+
+  // Per-day rendering
+  const dayLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const capColor = pct => pct >= 100 ? 'var(--red)' : (pct >= 80 ? 'var(--honey)' : 'var(--sage)');
+
+  const dayCards = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday); d.setDate(monday.getDate() + i);
+    const iso = d.toISOString().slice(0,10);
+    const isToday = iso === todayISO();
+    const dayBks = DB.bookings.filter(b => b.date === iso).sort((a,b) => (a.arrivalTime||'') > (b.arrivalTime||'') ? 1 : -1);
+    const dayCount = dayBks.length;
+    const nightCount = dayBks.filter(b => b.session === 'overnight').length;
+    const dayPct = Math.min(100, Math.round(dayCount / MAX_DAYCARE * 100));
+    const nightPct = MAX_BOARDING ? Math.min(100, Math.round(nightCount / MAX_BOARDING * 100)) : 0;
+    const dayRev = dayBks.reduce((s,b) => s + b.total, 0);
+
+    const bookingsList = dayBks.map(b => {
+      const dog = dogById(b.dogId);
+      const owner = ownerOf(b.dogId);
+      const sessIco = b.session === 'overnight' ? '🌙' : '☀';
+      const payIco = b.paymentStatus === 'paid' ? '<span style="color:var(--sage);">✓</span>' : '<span style="color:var(--amber);">●</span>';
+      const arrivedFlag = b.arrivalLogged ? ' <span class="timestamp">in</span>' : '';
+      const leftFlag = b.departureLogged ? ' <span class="timestamp">left</span>' : '';
+      return `
+        <div class="row between" style="padding:0.4rem 0; border-bottom:1px solid var(--border); cursor:pointer;" data-editbk="${b.id}">
+          <div style="flex:1;">
+            <div><span class="bold">${sessIco} ${dog?.name || '?'}</span> <span class="muted tiny">· ${owner?.name || '?'}</span>${arrivedFlag}${leftFlag}</div>
+            <div class="muted tiny">${SESSION_LABELS[b.session]}${b.arrivalTime ? ' · ' + b.arrivalTime : ''}</div>
+          </div>
+          <div style="text-align:right; display:flex; flex-direction:column; align-items:flex-end; gap:2px;">
+            <span class="bold tiny">$${b.total}</span>
+            <span class="tiny">${payIco}</span>
+          </div>
+        </div>`;
+    }).join('');
+
+    dayCards.push(`
+      <div class="card" style="${isToday ? 'border:2px solid var(--honey); background:#fffbf0;' : ''} margin-bottom:0.6rem;">
+        <div class="row between" style="margin-bottom:0.5rem;">
+          <div>
+            <span class="bold" style="color:var(--choc); font-size:1rem;">${dayLabels[i]}</span>
+            <span class="muted tiny"> · ${d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}</span>
+            ${isToday ? ' <span class="pill" style="background:var(--honey-lt); color:var(--honey);">today</span>' : ''}
+          </div>
+          <div class="tiny" style="color:var(--muted);">${dayCount ? `$${dayRev}` : ''}</div>
+        </div>
+        <div style="display:flex; gap:6px; align-items:center; margin-bottom:3px;">
+          <span class="tiny" style="width:55px; color:var(--soft);">☀ ${dayCount}/${MAX_DAYCARE}</span>
+          <div style="flex:1; height:6px; background:var(--border); border-radius:3px; overflow:hidden;">
+            <div style="height:100%; width:${dayPct}%; background:${capColor(dayPct)};"></div>
+          </div>
+        </div>
+        <div style="display:flex; gap:6px; align-items:center; margin-bottom:0.5rem;">
+          <span class="tiny" style="width:55px; color:var(--soft);">🌙 ${nightCount}/${MAX_BOARDING}</span>
+          <div style="flex:1; height:6px; background:var(--border); border-radius:3px; overflow:hidden;">
+            <div style="height:100%; width:${nightPct}%; background:${capColor(nightPct)};"></div>
+          </div>
+        </div>
+        ${dayBks.length ? bookingsList : '<div class="muted tiny" style="padding:0.4rem 0;">No bookings</div>'}
+        <button class="btn tiny block mt-1" onclick="openBookingModal(null, '${iso}')">+ Add booking</button>
+      </div>`);
+  }
+
+  return `
+    <div class="cal-header">
+      <button class="btn tiny" data-wk-prev>← Prev</button>
+      <h2>${weekRange}</h2>
+      <button class="btn tiny" data-wk-next>Next →</button>
+    </div>
+    <div class="row between" style="margin-bottom:0.6rem; padding:0.4rem 0.6rem; background:var(--cream); border-radius:8px;">
+      <div class="tiny"><strong>${weekBookings}</strong> bookings · <strong>$${weekRev}</strong> revenue${weekUnpaid ? ' · <span style="color:var(--red);"><strong>$' + weekUnpaid + '</strong> unpaid</span>' : ''}</div>
+      <button class="btn tiny" data-view-toggle="month">Month →</button>
+    </div>
+    ${dayCards.join('')}
+    <button class="btn primary block mt-1" onclick="openRecurringModal()">📅 Add recurring booking</button>
+  `;
+}
+
+// ===== CALENDAR VIEW =====
+function renderCalendar() {
+  // Gantt timeline — one row per dog, days across the top
+  const today = new Date(todayISO() + "T00:00:00");
+  // Anchor to Monday of current week
+  const dayOfWeek = (today.getDay() + 6) % 7;
+  const anchorMonday = new Date(today);
+  anchorMonday.setDate(today.getDate() - dayOfWeek + ganttOffset);
+
+  // Build day list
+  const days = [];
+  for (let i = 0; i < ganttDays; i++) {
+    const d = new Date(anchorMonday); d.setDate(anchorMonday.getDate() + i);
+    const iso = localISO(d);
+    days.push({
+      iso,
+      dow: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][(d.getDay() + 6) % 7],
+      dnum: d.getDate(),
+      mon: d.toLocaleDateString('en-AU', { month: 'short' }),
+      isWeekend: ((d.getDay() + 6) % 7) >= 5,
+      isToday: iso === todayISO()
+    });
+  }
+  const firstISO = days[0].iso;
+  const lastISO = days[days.length-1].iso;
+
+  // Which dogs have any booking in this range?
+  const rangeBks = DB.bookings.filter(b => b.date >= firstISO && b.date <= lastISO);
+  const dogIds = [...new Set(rangeBks.map(b => b.dogId))];
+
+  // Sort: today's dogs first, then by next-upcoming booking date
+  const tToday = todayISO();
+  dogIds.sort((a, b) => {
+    const aToday = rangeBks.some(bk => bk.dogId === a && bk.date === tToday);
+    const bToday = rangeBks.some(bk => bk.dogId === b && bk.date === tToday);
+    if (aToday !== bToday) return aToday ? -1 : 1;
+    const aNext = rangeBks.filter(bk => bk.dogId === a && bk.date >= tToday).map(bk => bk.date).sort()[0] || '9999';
+    const bNext = rangeBks.filter(bk => bk.dogId === b && bk.date >= tToday).map(bk => bk.date).sort()[0] || '9999';
+    return aNext.localeCompare(bNext);
+  });
+
+  // Range stats
+  const rangeRev = rangeBks.reduce((s,b) => s + b.total, 0);
+  const rangeUnpaid = rangeBks.filter(b => b.paymentStatus !== 'paid').reduce((s,b) => s + b.total, 0);
+
+  if (!dogIds.length) {
+    return ganttToolbar(firstISO, lastISO, 0, 0, 0) +
+      `<div class="gantt-empty">No bookings in this range.<br><span class="tiny">Try Prev/Next or extend the range.</span></div>` +
+      `<button class="btn primary block mt-2" onclick="openBookingModal(null, '${tToday}')">+ Add booking</button>`;
+  }
+
+  // Header row
+  const colTemplate = `minmax(140px, 180px) repeat(${ganttDays}, minmax(54px, 1fr))`;
+  let html = `<div class="gantt-grid" style="grid-template-columns:${colTemplate};">`;
+  html += `<div class="gantt-h-name">Dog</div>`;
+  days.forEach(d => {
+    const cls = ['gantt-h-day'];
+    if (d.isWeekend) cls.push('weekend');
+    if (d.isToday) cls.push('today');
+    html += `<div class="${cls.join(' ')}"><span class="dow">${d.dow}</span><span class="dnum">${d.dnum}</span></div>`;
+  });
+
+  // Body rows
+  dogIds.forEach(did => {
+    const dog = dogById(did);
+    const owner = ownerOf(did);
+    const dogBks = rangeBks.filter(b => b.dogId === did);
+    const flag = (isMeaningfulHealth(dog?.medicalConditions) || dog?.aggression === 'yes') ? '⚕ flagged' : '';
+    html += `
+      <div class="gantt-name">
+        <div>🐶 ${dog?.name || '?'}</div>
+        <div class="owner">${owner?.name || '?'} · ${dog?.size || ''}</div>
+        ${flag ? `<div class="flag">${flag}</div>` : ''}
+      </div>`;
+
+    // Pre-compute which date indices have bookings for this dog, plus consecutive overnight ranges
+    const byIso = {};
+    dogBks.forEach(b => { byIso[b.date] = b; });
+
+    // Detect consecutive overnight runs
+    const overnightRuns = {}; // start idx -> { length, ids: [...] }
+    let i = 0;
+    while (i < days.length) {
+      const iso = days[i].iso;
+      const b = byIso[iso];
+      if (b && b.session === 'overnight') {
+        let j = i;
+        const ids = [];
+        while (j < days.length && byIso[days[j].iso] && byIso[days[j].iso].session === 'overnight') {
+          ids.push(byIso[days[j].iso].id);
+          j++;
+        }
+        overnightRuns[i] = { length: j - i, ids };
+        i = j;
+      } else {
+        i++;
+      }
+    }
+
+    // Render cells, skipping cells covered by an in-progress overnight run
+    let skipUntil = -1;
+    days.forEach((d, idx) => {
+      const cellClasses = ['gantt-cell'];
+      if (d.isWeekend) cellClasses.push('weekend');
+      if (d.isToday) cellClasses.push('today-col');
+
+      if (idx < skipUntil) {
+        // Cell still rendered for grid alignment, no block (block is rendered in the start cell with grid-column span)
+        html += `<div class="${cellClasses.join(' ')}"></div>`;
+        return;
+      }
+
+      const run = overnightRuns[idx];
+      const b = byIso[d.iso];
+
+      if (run) {
+        const firstBk = byIso[d.iso];
+        const totalRev = run.ids.reduce((s, id) => {
+          const bk = DB.bookings.find(x => x.id === id);
+          return s + (bk?.total || 0);
+        }, 0);
+        const anyUnpaid = run.ids.some(id => {
+          const bk = DB.bookings.find(x => x.id === id);
+          return bk && bk.paymentStatus !== 'paid';
+        });
+        const allPaid = !anyUnpaid;
+        const label = run.length === 1 ? `🌙 ${dog?.name || '?'}` : `🌙 ${dog?.name || '?'} · ${run.length}n`;
+        const payCls = allPaid ? ' paid' : ' unpaid';
+        html += `<div class="${cellClasses.join(' ')}" style="grid-column: span ${run.length};" data-editbk="${firstBk.id}" title="${run.length} night${run.length>1?'s':''} · $${totalRev} · ${allPaid?'paid':'unpaid'}">
+          <div class="gantt-block night${payCls}">${label}</div>
+        </div>`;
+        skipUntil = idx + run.length;
+      } else if (b) {
+        const payCls = b.paymentStatus === 'paid' ? ' paid' : ' unpaid';
+        const ico = b.session === 'overnight' ? '🌙' : '☀';
+        const sessShort = b.session === 'half' ? '½' : (b.session === 'extended' ? '5-6h' : '');
+        html += `<div class="${cellClasses.join(' ')}" data-editbk="${b.id}" title="${SESSION_LABELS[b.session]} · $${b.total} · ${b.paymentStatus}">
+          <div class="gantt-block day${payCls}">${ico} ${sessShort}</div>
+        </div>`;
+      } else {
+        // Empty cell — clickable to add a booking
+        html += `<div class="${cellClasses.join(' ')}" onclick="openBookingModal(null, '${d.iso}', '${did}')"></div>`;
+      }
+    });
+  });
+
+  html += `</div>`;
+
+  return ganttToolbar(firstISO, lastISO, rangeBks.length, rangeRev, rangeUnpaid) +
+    `<div class="gantt-wrap">${html}</div>` +
+    `<div class="row gap-1 mt-1" style="justify-content:center; font-size:0.7rem; color:var(--muted); flex-wrap:wrap;">
+       <span><span style="display:inline-block; width:14px; height:14px; background:#8aab48; border-radius:3px; vertical-align:middle;"></span> daycare</span>
+       <span><span style="display:inline-block; width:14px; height:14px; background:#c9962e; border-radius:3px; vertical-align:middle;"></span> overnight</span>
+       <span>✓ paid · ● unpaid · click cell to edit or add</span>
+     </div>
+     <button class="btn primary block mt-2" onclick="openRecurringModal()">📅 Add recurring booking</button>`;
+}
+
+function ganttToolbar(firstISO, lastISO, count, rev, unpaid) {
+  const fmt = iso => new Date(iso + "T00:00:00").toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
+  const rangeLabel = `${fmt(firstISO)} – ${fmt(lastISO)}`;
+  return `
+    <div class="cal-header">
+      <button class="btn tiny" data-gantt-prev>← Prev ${ganttDays/7}wk</button>
+      <h2>${rangeLabel}</h2>
+      <button class="btn tiny" data-gantt-next>Next ${ganttDays/7}wk →</button>
+    </div>
+    <div class="row between" style="margin-bottom:0.6rem; padding:0.4rem 0.6rem; background:var(--cream); border-radius:8px; flex-wrap:wrap; gap:0.4rem;">
+      <div class="tiny"><strong>${count}</strong> bookings · <strong>$${rev}</strong> revenue${unpaid ? ' · <span style="color:var(--red);"><strong>$' + unpaid + '</strong> unpaid</span>' : ''}</div>
+      <div class="row gap-1">
+        <button class="btn tiny${ganttDays===7?' primary':''}" data-gantt-range="7">1wk</button>
+        <button class="btn tiny${ganttDays===14?' primary':''}" data-gantt-range="14">2wk</button>
+        <button class="btn tiny${ganttDays===28?' primary':''}" data-gantt-range="28">4wk</button>
+        <button class="btn tiny" data-gantt-today>Today</button>
+        <button class="btn tiny" data-view-toggle="week">List</button>
+      </div>
+    </div>`;
+}
+
+function openDayDetail(iso) {
+  const bookings = bookingsForDate(iso).sort((a,b) =>
+    (a.session === 'overnight' ? 1 : 0) - (b.session === 'overnight' ? 1 : 0)
+  );
+  if (!bookings.length) {
+    if (confirm(`No bookings on ${fmtDate(iso)}. Add one?`)) openBookingModal(null, iso);
+    return;
+  }
+  const dayBks = bookings.filter(b => b.session !== 'overnight');
+  const nightBks = bookings.filter(b => b.session === 'overnight');
+  const totalRev = bookings.reduce((s,b) => s + b.total, 0);
+  const unpaidRev = bookings.filter(b => b.paymentStatus !== 'paid').reduce((s,b) => s + b.total, 0);
+
+  const rowFor = b => {
+    const dog = dogById(b.dogId);
+    const owner = ownerOf(b.dogId);
+    const sessIco = b.session === 'overnight' ? '🌙' : '☀';
+    const flags = [];
+    if (dog?.medicalConditions) flags.push(`<span class="pill overdue">⚕ medical</span>`);
+    if (dog?.allergies && !/^(none|n\/a)/i.test(dog.allergies)) flags.push(`<span class="pill pending">⚠ allergy</span>`);
+    if (dog?.aggression === 'yes') flags.push(`<span class="pill overdue">⚠ aggression</span>`);
+    return `
+      <div style="padding:0.7rem; margin-top:0.5rem; background:var(--cream); border-radius:8px; cursor:pointer;" data-editbk="${b.id}">
+        <div class="row between">
+          <div>
+            <div class="bold" style="color:var(--choc); font-size:0.95rem;">${sessIco} ${dog?.name || '?'} <span class="muted tiny">· ${dog?.size || ''}</span></div>
+            <div class="muted tiny" style="margin-top:2px;">${owner?.name || '?'}${owner?.phone ? ' · 📞 ' + owner.phone : ''}</div>
+            <div class="muted tiny" style="margin-top:2px;">${SESSION_LABELS[b.session]}${b.arrivalTime ? ' · arr ' + b.arrivalTime : ''}${b.departureTime ? ' · dep ' + b.departureTime : ''}</div>
+            ${flags.length ? `<div class="row gap-1 mt-1" style="flex-wrap:wrap;">${flags.join('')}</div>` : ''}
+          </div>
+          <div style="text-align:right;">
+            <div class="bold">$${b.total}</div>
+            <span class="pill ${b.paymentStatus}">${b.paymentStatus}</span>
+          </div>
+        </div>
+      </div>`;
+  };
+
+  const daySection = dayBks.length ? `<h3 style="margin-top:1rem; color:var(--choc);">☀ Daycare (${dayBks.length})</h3>${dayBks.map(rowFor).join('')}` : '';
+  const nightSection = nightBks.length ? `<h3 style="margin-top:1rem; color:var(--choc);">🌙 Overnight (${nightBks.length})</h3>${nightBks.map(rowFor).join('')}` : '';
+
+  showModal(`
+    <h2>${fmtDate(iso)} <button class="close-x" onclick="hideModal()">×</button></h2>
+    <div class="tiny" style="padding:0.4rem 0.6rem; background:var(--honey-lt); border-radius:6px;">
+      <strong>${bookings.length}</strong> bookings · <strong>$${totalRev}</strong> revenue${unpaidRev ? ' · <span style="color:var(--red);"><strong>$' + unpaidRev + '</strong> unpaid</span>' : ''}
+    </div>
+    ${daySection}${nightSection}
+    <button class="btn primary block mt-2" onclick="hideModal(); openBookingModal(null, '${iso}')">+ Add booking for this day</button>
+  `);
+}
+
+// ===== CLIENTS VIEW =====
+function renderClients() {
+  const importBtn = `<button class="btn block mb-1" onclick="openImportModal()">📥 Import from Formspree</button>`;
+  if (!DB.owners.length) {
+    return importBtn + `<div class="empty"><div class="ico">👋</div><div>No clients yet.</div><div class="tiny mt-1">Tap + to add manually, or Import to bring in Formspree submissions.</div></div>`;
+  }
+  const trunc = (s, n) => !s ? '' : (s.length > n ? s.slice(0, n) + '…' : s);
+  return importBtn + DB.owners.map(o => {
+    const dogs = dogsOfOwner(o.id);
+    const dogCards = dogs.map(d => {
+      const headerBits = [d.breed, d.size, d.age, d.weight ? d.weight + 'kg' : null, d.sex].filter(Boolean).join(' · ');
+      const flags = [];
+      // Vaccination status pill
+      if (d.vaccinated === 'no') flags.push('<span class="pill overdue">❗ unvacc</span>');
+      else if (d.vaccinationExpiry) {
+        const days = Math.ceil((new Date(d.vaccinationExpiry + "T00:00:00") - new Date(todayISO() + "T00:00:00")) / 86400000);
+        if (days < 0) flags.push('<span class="pill overdue">vacc expired</span>');
+        else if (days < 30) flags.push(`<span class="pill pending">vacc in ${days}d</span>`);
+        else flags.push('<span class="pill paid">✓ vacc</span>');
+      } else if (d.vaccinated === 'yes') flags.push('<span class="pill paid">✓ vacc</span>');
+      if (isMeaningfulHealth(d.medicalConditions)) flags.push(`<span class="pill overdue">⚕ ${trunc(d.medicalConditions, 28)}</span>`);
+      if (isMeaningfulHealth(d.allergies)) flags.push(`<span class="pill pending">⚠ ${trunc(d.allergies, 28)}</span>`);
+      if (d.aggression === 'yes') flags.push('<span class="pill overdue">⚠ aggression</span>');
+      if (d.separation === 'yes') flags.push('<span class="pill pending">⚠ separation anxiety</span>');
+
+      const extras = [];
+      if (d.vetName) extras.push(`<div class="tiny muted" style="margin-top:0.2rem;">🩺 ${trunc(d.vetName, 60)}</div>`);
+      if (d.feedingSchedule) extras.push(`<div class="tiny muted" style="margin-top:0.2rem;">🍽 ${trunc(d.feedingSchedule, 70)}</div>`);
+      if (d.toiletRoutine) extras.push(`<div class="tiny muted" style="margin-top:0.2rem;">🚽 ${trunc(d.toiletRoutine, 70)}</div>`);
+      if (d.additionalBehaviours) extras.push(`<div class="tiny muted" style="margin-top:0.2rem;">📝 ${trunc(d.additionalBehaviours, 100)}</div>`);
+
+      return `
+        <div style="padding:0.55rem 0.7rem; margin-top:0.5rem; background:var(--cream); border-radius:8px; border:1px solid #f0e0c0;">
+          <div class="row between">
+            <div class="bold" style="color:var(--choc);">🐶 ${d.name}</div>
+            <button class="btn tiny" onclick="event.stopPropagation(); openDogModal('${d.id}','${o.id}')">Edit dog</button>
+          </div>
+          <div class="muted tiny" style="margin-top:0.2rem;">${headerBits || d.size}</div>
+          ${flags.length ? `<div class="row gap-1 mt-1" style="flex-wrap:wrap;">${flags.join('')}</div>` : ''}
+          ${extras.join('')}
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="client-card" data-editc="${o.id}">
+        <div class="row between">
+          <div class="grow">
+            <div class="name">${o.name}</div>
+            <div class="contact">${o.phone ? '📞 ' + o.phone : ''}${o.phone && o.email ? ' · ' : ''}${o.email ? '✉ ' + o.email : ''}</div>
+            ${o.emergencyContact ? `<div class="contact" style="color:var(--muted);">🆘 ${o.emergencyContact}</div>` : ''}
+          </div>
+          <div class="row gap-1">
+            ${o.email ? `<button class="btn tiny" onclick="event.stopPropagation(); emailOwner('${o.id}')">📧 Email</button>` : ''}
+            ${o.phone ? `<a class="btn tiny" href="tel:${o.phone}" onclick="event.stopPropagation();">📞 Call</a>` : ''}
+            <button class="btn tiny">Edit</button>
+          </div>
+        </div>
+        ${dogCards || '<div class="muted tiny mt-1">No dogs yet</div>'}
+      </div>`;
+  }).join('');
+}
+
+// ===== PAYMENTS VIEW =====
+function renderPayments() {
+  const unpaid = DB.bookings.filter(b => b.paymentStatus !== 'paid').sort((a,b) => a.date.localeCompare(b.date));
+  const recentPaid = DB.bookings.filter(b => b.paymentStatus === 'paid').sort((a,b) => b.date.localeCompare(a.date)).slice(0, 20);
+  const allPaid = DB.bookings.filter(b => b.paymentStatus === 'paid');
+
+  const totalOwed = unpaid.reduce((s,b) => s + b.total, 0);
+  const last30Paid = recentPaid.filter(b => {
+    if (!b.paidAt) return false;
+    const d = new Date(b.paidAt);
+    return (Date.now() - d.getTime()) < 30*86400000;
+  }).reduce((s,b) => s + b.total, 0);
+
+  const allBookings = DB.bookings;
+  const today = todayISO();
+  const now = new Date(today + "T00:00:00");
+  const inRange = (b, s, e) => {
+    const d = new Date(b.date + "T00:00:00");
+    return d >= s && d <= e;
+  };
+
+  // === PERIOD RESOLVER ===
+  function resolvePeriod(p) {
+    const today = new Date(todayISO() + "T00:00:00");
+    const dayOfWeek = (today.getDay() + 6) % 7;
+    const monday = new Date(today); monday.setDate(today.getDate() - dayOfWeek);
+    const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+    if (p === 'thisweek') {
+      return { start: monday, end: sunday, label: 'This week', cmpStart: new Date(monday.getTime() - 7*86400000), cmpEnd: new Date(sunday.getTime() - 7*86400000), cmpLabel: 'last week' };
+    }
+    if (p === 'lastweek') {
+      const lws = new Date(monday); lws.setDate(monday.getDate() - 7);
+      const lwe = new Date(sunday); lwe.setDate(sunday.getDate() - 7);
+      return { start: lws, end: lwe, label: 'Last week', cmpStart: new Date(lws.getTime() - 7*86400000), cmpEnd: new Date(lwe.getTime() - 7*86400000), cmpLabel: 'week before' };
+    }
+    if (p === 'lastmonth') {
+      const s = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const e = new Date(today.getFullYear(), today.getMonth(), 0);
+      const cs = new Date(today.getFullYear(), today.getMonth() - 2, 1);
+      const ce = new Date(today.getFullYear(), today.getMonth() - 1, 0);
+      return { start: s, end: e, label: s.toLocaleDateString('en-AU',{month:'long', year:'numeric'}), cmpStart: cs, cmpEnd: ce, cmpLabel: cs.toLocaleDateString('en-AU',{month:'long'}) };
+    }
+    if (p === 'last4weeks') {
+      const s = new Date(today); s.setDate(today.getDate() - 28);
+      const cs = new Date(s); cs.setDate(s.getDate() - 28);
+      const ce = new Date(today); ce.setDate(today.getDate() - 28);
+      return { start: s, end: today, label: 'Last 4 weeks', cmpStart: cs, cmpEnd: ce, cmpLabel: 'previous 4 weeks' };
+    }
+    if (p === 'ytd') {
+      const s = new Date(today.getFullYear(), 0, 1);
+      const cs = new Date(today.getFullYear() - 1, 0, 1);
+      const ce = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate());
+      return { start: s, end: today, label: today.getFullYear() + ' YTD', cmpStart: cs, cmpEnd: ce, cmpLabel: today.getFullYear() - 1 + ' to same date' };
+    }
+    if (p === 'custom' && moneyCustomStart && moneyCustomEnd) {
+      const s = new Date(moneyCustomStart + "T00:00:00");
+      const e = new Date(moneyCustomEnd + "T00:00:00");
+      const days = Math.ceil((e - s) / 86400000) + 1;
+      const cs = new Date(s); cs.setDate(s.getDate() - days);
+      const ce = new Date(s); ce.setDate(s.getDate() - 1);
+      return { start: s, end: e, label: `${moneyCustomStart} → ${moneyCustomEnd}`, cmpStart: cs, cmpEnd: ce, cmpLabel: 'previous ' + days + ' days' };
+    }
+    // default 'month'
+    const s = new Date(today.getFullYear(), today.getMonth(), 1);
+    const e = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    const cs = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const ce = new Date(today.getFullYear(), today.getMonth(), 0);
+    return { start: s, end: e, label: s.toLocaleDateString('en-AU',{month:'long', year:'numeric'}), cmpStart: cs, cmpEnd: ce, cmpLabel: cs.toLocaleDateString('en-AU',{month:'long'}) };
+  }
+  const period = resolvePeriod(moneyPeriod);
+  const periodBookings = allBookings.filter(b => inRange(b, period.start, period.end));
+  const periodRev = periodBookings.reduce((s,b) => s + b.total, 0);
+  const periodPaidRev = periodBookings.filter(b => b.paymentStatus === 'paid').reduce((s,b) => s + b.total, 0);
+  const periodUnpaidRev = periodRev - periodPaidRev;
+  const cmpRev = allBookings.filter(b => inRange(b, period.cmpStart, period.cmpEnd)).reduce((s,b) => s + b.total, 0);
+  const periodPct = cmpRev ? Math.round((periodRev - cmpRev) / cmpRev * 100) : null;
+  const periodPctLabel = periodPct === null ? 'no prior data' : (periodPct >= 0 ? `+${periodPct}%` : `${periodPct}%`);
+  const periodPctColor = periodPct === null ? '#ccc' : (periodPct >= 0 ? '#a7f3d0' : '#fecaca');
+
+  // For backwards-compat with existing variable names below
+  const monthBookings = periodBookings;
+  const monthRev = periodRev;
+  const monthName = period.label;
+
+  // Week (Mon-Sun)
+  const dayOfWeek = (now.getDay() + 6) % 7;
+  const weekStart = new Date(now); weekStart.setDate(now.getDate() - dayOfWeek);
+  const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6);
+  const weekRev = allBookings.filter(b => inRange(b, weekStart, weekEnd)).reduce((s,b) => s + b.total, 0);
+
+  // Next 30 days forward
+  const in30 = new Date(now); in30.setDate(now.getDate() + 30);
+  const next30Rev = allBookings.filter(b => {
+    const d = new Date(b.date + "T00:00:00");
+    return d >= now && d <= in30;
+  }).reduce((s,b) => s + b.total, 0);
+
+  // YTD paid
+  const yearStart = new Date(now.getFullYear(), 0, 1);
+  const ytdPaid = allPaid.filter(b => inRange(b, yearStart, now)).reduce((s,b) => s + b.total, 0);
+
+  // === 6-WEEK BAR CHART ===
+  const weeks = [];
+  for (let i = 5; i >= 0; i--) {
+    const wStart = new Date(weekStart); wStart.setDate(weekStart.getDate() - 7*i);
+    const wEnd = new Date(wStart); wEnd.setDate(wStart.getDate() + 6);
+    const rev = allBookings.filter(b => inRange(b, wStart, wEnd)).reduce((s,b) => s + b.total, 0);
+    const label = wStart.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
+    weeks.push({ label, rev, isCurrent: i === 0 });
+  }
+  const maxWk = Math.max(...weeks.map(w => w.rev), 1);
+  const chartBars = weeks.map(w => {
+    const h = Math.max(4, Math.round(w.rev / maxWk * 80));
+    const color = w.isCurrent ? 'var(--honey)' : 'var(--choc)';
+    return `<div style="display:flex; flex-direction:column; align-items:center; flex:1;">
+      <div style="font-size:0.65rem; color:var(--choc); font-weight:700; margin-bottom:2px;">$${w.rev}</div>
+      <div style="width:100%; max-width:38px; height:${h}px; background:${color}; border-radius:3px 3px 0 0;"></div>
+      <div style="font-size:0.65rem; color:var(--muted); margin-top:3px;">${w.label}</div>
+    </div>`;
+  }).join('');
+
+  // === TOP CLIENTS BY REVENUE (last 90 days) ===
+  const ninetyAgo = new Date(now); ninetyAgo.setDate(now.getDate() - 90);
+  const recentBookings = allBookings.filter(b => {
+    const d = new Date(b.date + "T00:00:00");
+    return d >= ninetyAgo;
+  });
+  const ownerRev = {};
+  recentBookings.forEach(b => {
+    const dog = dogById(b.dogId);
+    if (!dog) return;
+    const o = ownerById(dog.ownerId);
+    if (!o) return;
+    if (!ownerRev[o.id]) ownerRev[o.id] = { name: o.name, rev: 0, bookings: 0 };
+    ownerRev[o.id].rev += b.total;
+    ownerRev[o.id].bookings += 1;
+  });
+  const topClients = Object.values(ownerRev).sort((a,b) => b.rev - a.rev).slice(0, 5);
+  const topClientsRows = topClients.length ? topClients.map((c, i) => `
+    <div class="row between" style="padding:0.4rem 0; border-bottom:1px solid var(--border);">
+      <div><span class="muted tiny">#${i+1}</span> <span class="bold">${c.name}</span> <span class="muted tiny">· ${c.bookings} bookings</span></div>
+      <div class="bold" style="color:var(--choc);">$${c.rev}</div>
+    </div>`).join('') : '<div class="muted tiny">No bookings yet in last 90 days</div>';
+
+  // === DAY-OF-WEEK ANALYSIS (last 90 days) ===
+  const dowRev = [0,0,0,0,0,0,0];
+  const dowCount = [0,0,0,0,0,0,0];
+  recentBookings.forEach(b => {
+    const jsDow = new Date(b.date + "T00:00:00").getDay();
+    const idx = (jsDow + 6) % 7;
+    dowRev[idx] += b.total;
+    dowCount[idx]++;
+  });
+  const dowLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const maxDow = Math.max(...dowRev, 1);
+  const dowBars = dowRev.map((rev, i) => {
+    const h = Math.max(3, Math.round(rev / maxDow * 50));
+    return `<div style="display:flex; flex-direction:column; align-items:center; flex:1;">
+      <div style="font-size:0.6rem; color:var(--choc); font-weight:700; margin-bottom:2px;">$${rev}</div>
+      <div style="width:100%; max-width:30px; height:${h}px; background:var(--honey); border-radius:3px 3px 0 0;"></div>
+      <div style="font-size:0.65rem; color:var(--muted); margin-top:3px;">${dowLabels[i]}</div>
+      <div style="font-size:0.6rem; color:var(--soft);">${dowCount[i]}</div>
+    </div>`;
+  }).join('');
+
+  // === CAPACITY UTILIZATION (next 14 days) ===
+  const MAX_DAYCARE = DB.meta.capacity.maxDaycare;
+  const MAX_BOARDING = DB.meta.capacity.maxBoarding;
+  const capColor = pct => pct >= 100 ? 'var(--red)' : (pct >= 80 ? 'var(--honey)' : 'var(--sage)');
+  const capRows = [];
+  for (let i = 0; i < 14; i++) {
+    const d = new Date(now); d.setDate(now.getDate() + i);
+    const iso = d.toISOString().slice(0,10);
+    const dayBookings = allBookings.filter(b => b.date === iso);
+    const dayCount = dayBookings.length;
+    const nightCount = dayBookings.filter(b => b.session === 'overnight').length;
+    const dayPct = Math.min(100, Math.round(dayCount / MAX_DAYCARE * 100));
+    const nightPct = Math.min(100, Math.round(nightCount / MAX_BOARDING * 100));
+    const label = d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
+    capRows.push(`
+      <div style="margin-bottom:0.6rem; padding-bottom:0.4rem; border-bottom:1px solid var(--border);">
+        <div class="row between" style="margin-bottom:4px;">
+          <span class="tiny bold">${label}</span>
+          <span class="tiny" style="color:var(--muted);">Day <strong style="color:var(--ink);">${dayCount}/${MAX_DAYCARE}</strong> · Night <strong style="color:var(--ink);">${nightCount}/${MAX_BOARDING}</strong></span>
+        </div>
+        <div style="display:flex; gap:6px; align-items:center; margin-bottom:3px;">
+          <span class="tiny" style="width:40px; color:var(--soft);">☀ day</span>
+          <div style="flex:1; height:7px; background:var(--border); border-radius:3px; overflow:hidden;">
+            <div style="height:100%; width:${dayPct}%; background:${capColor(dayPct)};"></div>
+          </div>
+        </div>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <span class="tiny" style="width:40px; color:var(--soft);">🌙 night</span>
+          <div style="flex:1; height:7px; background:var(--border); border-radius:3px; overflow:hidden;">
+            <div style="height:100%; width:${nightPct}%; background:${capColor(nightPct)};"></div>
+          </div>
+        </div>
+      </div>`);
+  }
+
+  // === LOCKED-IN RECURRING REVENUE ===
+  const futureBookings = allBookings.filter(b => {
+    const d = new Date(b.date + "T00:00:00");
+    return d >= now;
+  });
+  const recurringRev = futureBookings.filter(b => b.seriesId).reduce((s,b) => s + b.total, 0);
+  const adhocRev = futureBookings.filter(b => !b.seriesId).reduce((s,b) => s + b.total, 0);
+  const totalFuture = recurringRev + adhocRev;
+  const recurringPct = totalFuture ? Math.round(recurringRev / totalFuture * 100) : 0;
+
+  // === KEY METRICS ===
+  const avgBookingValue = allBookings.length ? Math.round(allBookings.reduce((s,b) => s + b.total, 0) / allBookings.length) : 0;
+  const collectionRate = allBookings.length ? Math.round(allPaid.length / allBookings.length * 100) : 0;
+  const activeClients = new Set(recentBookings.map(b => {
+    const dog = dogById(b.dogId);
+    return dog?.ownerId;
+  }).filter(Boolean)).size;
+  const avgRevPerClient = activeClients ? Math.round(recentBookings.reduce((s,b) => s + b.total, 0) / activeClients) : 0;
+
+  // Revenue by session type (this month)
+  const monthByType = monthBookings.reduce((acc, b) => {
+    const t = b.session === 'overnight' ? 'boarding' : 'daycare';
+    acc[t] = (acc[t] || 0) + b.total;
+    return acc;
+  }, { daycare: 0, boarding: 0 });
+
+  const periodChipsList = [
+    ['thisweek', 'This week'],
+    ['lastweek', 'Last week'],
+    ['month', 'This month'],
+    ['lastmonth', 'Last month'],
+    ['last4weeks', 'Last 4 weeks'],
+    ['ytd', 'YTD'],
+    ['custom', 'Custom…']
+  ];
+  const periodChips = periodChipsList.map(([k, lbl]) =>
+    `<button class="btn tiny" style="${moneyPeriod === k ? 'background:var(--choc); color:var(--cream); border-color:var(--choc);' : ''}" data-money-period="${k}">${lbl}</button>`
+  ).join('');
+  const customRange = moneyPeriod === 'custom' ? `
+    <div class="row gap-1 mt-1">
+      <input type="date" id="moneyStart" value="${moneyCustomStart}" style="flex:1; padding:0.4rem; border:1.5px solid var(--border); border-radius:6px;">
+      <span class="muted tiny" style="align-self:center;">→</span>
+      <input type="date" id="moneyEnd" value="${moneyCustomEnd}" style="flex:1; padding:0.4rem; border:1.5px solid var(--border); border-radius:6px;">
+      <button class="btn tiny primary" onclick="applyCustomRange()">Apply</button>
+    </div>` : '';
+
+  const summary = `
+    <div class="card" style="margin-bottom:0.75rem; padding:0.6rem 0.75rem;">
+      <div class="muted tiny" style="margin-bottom:0.4rem; font-weight:600; text-transform:uppercase; letter-spacing:0.04em;">📊 Period</div>
+      <div class="row wrap gap-1">${periodChips}</div>
+      ${customRange}
+    </div>
+
+    <div style="background: linear-gradient(135deg, var(--choc) 0%, var(--choc-dk) 100%); color: var(--cream); padding: 1.2rem; border-radius: 12px; margin-bottom: 0.75rem;">
+      <div style="font-size:0.75rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em;">${period.label}</div>
+      <div style="font-size:2.2rem; font-weight:700; font-family:'Nunito',sans-serif; line-height:1.1; margin-top:0.2rem;">$${periodRev}</div>
+      <div style="margin-top:0.3rem; font-size:0.85rem;">
+        <span style="color:${periodPctColor}; font-weight:700;">${periodPctLabel}</span>
+        ${periodPct !== null ? `<span style="opacity:0.75;"> vs ${period.cmpLabel} ($${cmpRev})</span>` : ''}
+      </div>
+      <div style="margin-top:0.5rem; padding-top:0.5rem; border-top:1px solid rgba(255,255,255,0.18); display:flex; gap:1rem; font-size:0.75rem;">
+        <div><span style="opacity:0.75;">Bookings</span> <strong>${periodBookings.length}</strong></div>
+        <div><span style="opacity:0.75;">Paid</span> <strong>$${periodPaidRev}</strong></div>
+        <div><span style="opacity:0.75;">Unpaid</span> <strong style="color:${periodUnpaidRev > 0 ? '#fecaca' : '#a7f3d0'}">$${periodUnpaidRev}</strong></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 0.6rem; color:var(--choc); font-size:0.95rem;">📈 Last 6 weeks</h3>
+      <div style="display:flex; gap:6px; align-items:flex-end; padding:0.4rem 0;">
+        ${chartBars}
+      </div>
+    </div>
+
+    <div class="today-summary">
+      <div class="stat"><div class="n">$${weekRev}</div><div class="l">This week</div></div>
+      <div class="stat"><div class="n">$${next30Rev}</div><div class="l">Next 30d</div></div>
+      <div class="stat"><div class="n">$${avgBookingValue}</div><div class="l">Avg booking</div></div>
+      <div class="stat"><div class="n">$${avgRevPerClient}</div><div class="l">Per client 90d</div></div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 0.4rem; color:var(--choc); font-size:0.95rem;">📅 Busiest days (90d)</h3>
+      <div class="muted tiny" style="margin-bottom:0.5rem;">Revenue $ · count below</div>
+      <div style="display:flex; gap:4px; align-items:flex-end;">
+        ${dowBars}
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 0.4rem; color:var(--choc); font-size:0.95rem;">🏆 Top clients (90d)</h3>
+      ${topClientsRows}
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 0.6rem; color:var(--choc); font-size:0.95rem;">🔒 Locked-in future revenue</h3>
+      <div class="row between"><span class="muted tiny">Recurring (from templates)</span><span class="bold" style="color:var(--sage);">$${recurringRev}</span></div>
+      <div class="row between"><span class="muted tiny">Ad-hoc bookings</span><span class="bold">$${adhocRev}</span></div>
+      <div style="height:10px; background:var(--border); border-radius:5px; overflow:hidden; margin:0.4rem 0;">
+        <div style="height:100%; width:${recurringPct}%; background:var(--sage);"></div>
+      </div>
+      <div class="tiny muted">${recurringPct}% of future revenue is locked in via recurring bookings</div>
+      <div class="row between mt-1" style="padding-top:0.5rem; border-top:1px solid var(--border);">
+        <span class="bold">Total future</span>
+        <span class="bold" style="color:var(--choc);">$${totalFuture}</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 0.4rem; color:var(--choc); font-size:0.95rem;">🎯 Capacity — next 14 days</h3>
+      <div class="muted tiny" style="margin-bottom:0.6rem;">Daycare max ${MAX_DAYCARE} · Boarding max ${MAX_BOARDING} · 🟢 &lt;80% · 🟡 80–99% · 🔴 full</div>
+      ${capRows.join('')}
+      <p class="muted tiny center mt-1">Adjust caps in Settings → Capacity</p>
+    </div>
+
+    <div class="card" style="background: var(--cream);">
+      <h3 style="margin:0 0 0.6rem; color:var(--choc); font-size:0.95rem;">${monthName} split</h3>
+      <div class="row between"><span class="muted tiny">Daycare</span><span class="bold">$${monthByType.daycare}</span></div>
+      <div class="row between"><span class="muted tiny">Boarding</span><span class="bold">$${monthByType.boarding}</span></div>
+      <div class="row between mt-1" style="padding-top:0.5rem; border-top:1px solid var(--border);">
+        <span class="bold">Month total</span>
+        <span class="bold" style="color:var(--choc); font-size:1.05rem;">$${monthRev}</span>
+      </div>
+    </div>
+
+    <div class="today-summary">
+      <div class="stat"><div class="n">$${ytdPaid}</div><div class="l">YTD paid</div></div>
+      <div class="stat"><div class="n">${collectionRate}%</div><div class="l">Collection</div></div>
+      <div class="stat"><div class="n">${activeClients}</div><div class="l">Active 90d</div></div>
+      <div class="stat"><div class="n">${allBookings.length}</div><div class="l">All bookings</div></div>
+    </div>
+
+    <h3 style="color:var(--choc); margin: 1rem 0 0.5rem;">💵 Cash status</h3>
+    <div class="today-summary">
+      <div class="stat"><div class="n">$${totalOwed}</div><div class="l">Outstanding</div></div>
+      <div class="stat"><div class="n">${unpaid.length}</div><div class="l">Unpaid</div></div>
+      <div class="stat"><div class="n">$${last30Paid}</div><div class="l">Paid 30d</div></div>
+      <div class="stat"><div class="n">${allPaid.length}</div><div class="l">Total paid</div></div>
+    </div>`;
+
+  const unpaidList = unpaid.length ? `<h3 style="color:var(--choc); margin:1rem 0 0.6rem;">Outstanding</h3>` + unpaid.map(b => {
+    const dog = dogById(b.dogId);
+    const owner = ownerOf(b.dogId);
+    const daysOld = Math.floor((Date.now() - new Date(b.date+"T00:00:00").getTime()) / 86400000);
+    const isOverdue = daysOld > 7;
+    return `
+      <div class="payment-row ${isOverdue ? 'overdue' : ''}">
+        <div class="row between">
+          <div>
+            <div class="name">${dog?.name||'?'} <span class="muted tiny">${owner?.name||'?'}</span></div>
+            <div class="muted tiny">${fmtDate(b.date)} · ${SESSION_LABELS[b.session]} · ${daysOld}d ago</div>
+          </div>
+          <div class="amt">$${b.total}</div>
+        </div>
+        <button class="btn primary tiny mt-1" data-pay="${b.id}">Mark paid</button>
+      </div>`;
+  }).join('') : '';
+
+  const paidList = recentPaid.length ? `<h3 style="color:var(--choc); margin:1.2rem 0 0.6rem;">Recent paid</h3>` + recentPaid.slice(0, 10).map(b => {
+    const dog = dogById(b.dogId);
+    return `<div class="payment-row"><div class="row between"><div><div class="name">${dog?.name||'?'}</div><div class="muted tiny">${fmtDate(b.date)} · paid</div></div><div class="amt" style="color:var(--sage);">$${b.total} ✓</div></div></div>`;
+  }).join('') : '';
+
+  return summary + unpaidList + paidList;
+}
+
+// ===== SETTINGS =====
+function renderSettings() {
+  return `
+    <div class="settings-section">
+      <h3>📦 Backup & Restore</h3>
+      <p class="muted tiny">Data is stored only on this device. Export regularly!</p>
+      <button class="btn primary block mt-1" onclick="exportData()">⬇️ Download backup JSON</button>
+      <label class="btn block mt-1" style="cursor:pointer;">
+        🔀 Merge import (keep existing, add new)
+        <input type="file" accept="application/json" style="display:none" onchange="importData(event, 'merge')">
+      </label>
+      <label class="btn block mt-1" style="cursor:pointer;">
+        ⚠️ Replace import (wipe + restore)
+        <input type="file" accept="application/json" style="display:none" onchange="importData(event, 'replace')">
+      </label>
+    </div>
+    <div class="settings-section">
+      <h3>🎯 Capacity limits</h3>
+      <p class="muted tiny">Used by the capacity chart on the Money tab. Adjust to match what Andressa can comfortably handle.</p>
+      <div class="form-grid mt-1">
+        <div class="two">
+          <label><span>Max daycare dogs/day</span>
+            <input type="number" min="1" max="20" id="capMaxDaycare" value="${DB.meta.capacity.maxDaycare}" onchange="saveCapacity()">
+          </label>
+          <label><span>Max boarding overnight</span>
+            <input type="number" min="0" max="10" id="capMaxBoarding" value="${DB.meta.capacity.maxBoarding}" onchange="saveCapacity()">
+          </label>
+        </div>
+      </div>
+      <p class="muted tiny mt-1">💡 Daycare count includes any dog in care that day — including boarding dogs that stay during daylight hours. Boarding count is overnight stays only.</p>
+    </div>
+    <div class="settings-section">
+      <h3>📊 At a glance</h3>
+      <div class="row between"><span class="muted">Total clients</span><span class="bold">${DB.owners.length}</span></div>
+      <div class="row between"><span class="muted">Total dogs</span><span class="bold">${DB.dogs.length}</span></div>
+      <div class="row between"><span class="muted">Total bookings</span><span class="bold">${DB.bookings.length}</span></div>
+      <div class="row between"><span class="muted">Last backup</span><span class="bold">${DB.meta.lastBackup ? new Date(DB.meta.lastBackup).toLocaleString('en-AU') : 'never'}</span></div>
+    </div>
+    <div class="settings-section">
+      <h3>💲 Pricing source</h3>
+      <p class="muted tiny">${PRICING_META.source === 'pricing.json' ? `Live from <code>pricing.json</code> (synced with website calculator)` : 'Built-in defaults (pricing.json not loaded)'}</p>
+      ${PRICING_META.updated ? `<div class="row between"><span class="muted">Pricing updated</span><span class="bold">${PRICING_META.updated}</span></div>` : ''}
+      <div class="row between"><span class="muted">Small full day</span><span class="bold">$${PRICES.small.full}</span></div>
+      <div class="row between"><span class="muted">Medium full day</span><span class="bold">$${PRICES.medium.full}</span></div>
+      <div class="row between"><span class="muted">Large full day</span><span class="bold">$${PRICES.large.full}</span></div>
+      <div class="row between"><span class="muted">Overnight S/M/L</span><span class="bold">$${PRICES.small.overnight}/$${PRICES.medium.overnight}/$${PRICES.large.overnight}</span></div>
+      <p class="muted tiny mt-1">To update prices: edit <code>pricing.json</code> in the website repo. Both the public calculator and this admin will pick up the change.</p>
+    </div>
+    <div class="settings-section">
+      <h3>⚠️ Danger zone</h3>
+      <button class="btn danger block mt-1" onclick="clearAllData()">Clear all data (Firestore + local)</button>
+      <button class="btn block mt-1" onclick="signOutAdmin()">Sign out</button>
+    </div>
+    <div class="muted tiny center mt-2">v1.0 · Pansi's Paws Admin</div>
+  `;
+}
+
+// ===== MODALS =====
+function showModal(html) {
+  document.getElementById('modalHost').innerHTML = `<div class="modal-backdrop" onclick="if(event.target===this)hideModal()"><div class="modal">${html}</div></div>`;
+}
+function hideModal() {
+  document.getElementById('modalHost').innerHTML = '';
+}
+
+// ----- Client (Owner + Dogs) modal -----
+function openClientModal(ownerId) {
+  const owner = ownerId ? ownerById(ownerId) : null;
+  const isNew = !owner;
+  const o = owner || { id: uid(), name: '', phone: '', email: '', address: '', notes: '', emergencyContact: '' };
+  const dogs = owner ? dogsOfOwner(owner.id) : [];
+
+  const flagPills = (d) => {
+    const pills = [];
+    if (isMeaningfulHealth(d.medicalConditions)) pills.push('<span class="pill overdue">⚕ medical</span>');
+    if (isMeaningfulHealth(d.allergies)) pills.push('<span class="pill pending">⚠ allergy</span>');
+    if (d.aggression === 'yes') pills.push('<span class="pill overdue">⚠ aggression</span>');
+    if (d.vaccinated === 'no' || !d.vaccinated) pills.push('<span class="pill pending">vacc?</span>');
+    return pills.join(' ');
+  };
+
+  const truncate = (s, n=80) => !s ? '' : (s.length > n ? s.slice(0, n) + '…' : s);
+  const dogRows = dogs.map((d) => {
+    const bits = [SIZE_LABELS[d.size] || d.size, d.breed, d.sex, d.age, d.weight ? d.weight + 'kg' : null].filter(Boolean).join(' · ');
+    const sections = [];
+    if (d.vaccinated || d.vaccDate || d.vaccinationExpiry) {
+      sections.push(`<div class="tiny" style="margin-top:0.5rem;"><strong style="color:var(--choc);">💉 Vacc:</strong> ${d.vaccinated || '?'} ${d.vaccDate ? '(' + d.vaccDate + ')' : ''} ${d.vetName ? ' · vet: ' + d.vetName : ''}</div>`);
+    }
+    if (isMeaningfulHealth(d.medicalConditions) || isMeaningfulHealth(d.allergies)) {
+      sections.push(`<div class="tiny" style="margin-top:0.3rem; color:var(--red);"><strong>⚕ Health:</strong> ${[isMeaningfulHealth(d.medicalConditions) && d.medicalConditions, isMeaningfulHealth(d.allergies) && 'Allergies: ' + d.allergies].filter(Boolean).join(' · ')}</div>`);
+    }
+    if (d.feedingSchedule) {
+      sections.push(`<div class="tiny" style="margin-top:0.3rem;"><strong style="color:var(--choc);">🍽 Feeding:</strong> ${truncate(d.feedingSchedule, 100)}</div>`);
+    }
+    if (d.aggression === 'yes' || d.separation === 'yes' || d.friendlyDogs === 'no') {
+      const flags = [];
+      if (d.aggression === 'yes') flags.push('aggression');
+      if (d.separation === 'yes') flags.push('separation anxiety');
+      if (d.friendlyDogs === 'no') flags.push('not dog-friendly');
+      sections.push(`<div class="tiny" style="margin-top:0.3rem; color:var(--red);"><strong>🐕 Behaviour flags:</strong> ${flags.join(', ')}</div>`);
+    }
+    if (d.additionalBehaviours) {
+      sections.push(`<div class="tiny" style="margin-top:0.3rem;"><strong style="color:var(--choc);">📝 Owner notes:</strong> ${truncate(d.additionalBehaviours, 140)}</div>`);
+    }
+    return `
+    <div class="card">
+      <div class="row between">
+        <div class="grow">
+          <div class="bold">${d.name}</div>
+          <div class="muted tiny mt-1">${bits}</div>
+          <div class="row gap-1 mt-1">${flagPills(d)}</div>
+          ${sections.join('')}
+        </div>
+        <div style="display:flex; flex-direction:column; gap:0.3rem; min-width: 60px;">
+          <button class="btn tiny" onclick="openDogModal('${d.id}', '${o.id}')">Edit</button>
+          <button class="btn tiny danger" onclick="deleteDog('${d.id}')">×</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  showModal(`
+    <h2>${isNew ? 'New client' : 'Edit client'} <button class="close-x" onclick="hideModal()">×</button></h2>
+    <form id="ownerForm" class="form-grid" onsubmit="saveOwner(event, '${o.id}', ${isNew})">
+      <label><span>Owner name</span><input name="name" value="${o.name}" required></label>
+      <div class="two">
+        <label><span>Phone</span><input name="phone" value="${o.phone}" type="tel"></label>
+        <label><span>Email</span><input name="email" value="${o.email}" type="email"></label>
+      </div>
+      <label><span>Emergency contact</span><input name="emergencyContact" value="${o.emergencyContact || ''}" placeholder="Name &amp; phone (someone not travelling with you)"></label>
+      <label><span>Address (optional)</span><input name="address" value="${o.address}"></label>
+      <label><span>Notes</span><textarea name="notes" rows="2">${o.notes}</textarea></label>
+      <button class="btn primary block" type="submit">${isNew ? 'Add client' : 'Save changes'}</button>
+    </form>
+    ${!isNew ? `
+      <h3 style="margin: 1.5rem 0 0.6rem; color: var(--choc);">Dogs</h3>
+      ${dogRows || '<div class="muted tiny">No dogs yet</div>'}
+      <button class="btn block mt-1" onclick="openDogModal(null, '${o.id}')">+ Add a dog</button>
+      <button class="btn danger block mt-2" onclick="deleteOwner('${o.id}')">Delete client</button>
+    ` : ''}
+  `);
+}
+function saveOwner(e, id, isNew) {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const owner = {
+    id, name: fd.get('name').trim(), phone: fd.get('phone').trim(),
+    email: fd.get('email').trim(), address: fd.get('address').trim(),
+    notes: fd.get('notes').trim(),
+    emergencyContact: (fd.get('emergencyContact') || '').toString().trim(),
+    createdAt: new Date().toISOString()
+  };
+  if (isNew) DB.owners.push(owner);
+  else {
+    const idx = DB.owners.findIndex(o => o.id === id);
+    DB.owners[idx] = { ...DB.owners[idx], ...owner };
+  }
+  save(DB);
+  if (isNew) {
+    hideModal();
+    openClientModal(id); // re-open to allow adding dogs
+  } else {
+    hideModal(); render();
+  }
+}
+function deleteOwner(id) {
+  if (!confirm('Delete this client and all their dogs? Bookings will remain.')) return;
+  DB.owners = DB.owners.filter(o => o.id !== id);
+  DB.dogs = DB.dogs.filter(d => d.ownerId !== id);
+  save(DB); hideModal(); render();
+}
+
+// ----- Dog modal -----
+function openDogModal(dogId, ownerId) {
+  const dog = dogId ? dogById(dogId) : null;
+  const isNew = !dog;
+  const d = dog || {
+    id: uid(), ownerId, name: '', size: 'medium', age: '', vaccinationExpiry: '', notes: '',
+    breed: '', sex: '', weight: '',
+    vaccinated: '', vaccDate: '', vaccCertUrl: '', desexCertUrl: '',
+    medicalConditions: '', allergies: '', fleaTick: '', vetName: '',
+    aggression: '', aggressionExplain: '', friendlyDogs: '', separation: '',
+    toiletRoutine: '', additionalBehaviours: '',
+    feedingSchedule: '', treatsConsent: '', photoConsent: '',
+    agreementSig: '', agreementDate: ''
+  };
+  const yn = (val, name) => `
+    <label class="checkrow" style="border:none; background:none; padding:0;">
+      <input type="radio" name="${name}" value="yes" ${val==='yes'?'checked':''}> Yes
+      <input type="radio" name="${name}" value="no" ${val==='no'?'checked':''} style="margin-left:0.8rem;"> No
+    </label>`;
+  showModal(`
+    <h2>${isNew ? 'Add dog' : 'Edit dog'} <button class="close-x" onclick="hideModal()">×</button></h2>
+    <form class="form-grid" onsubmit="saveDog(event, '${d.id}', '${ownerId}', ${isNew})">
+
+      <label><span>Dog name</span><input name="name" value="${d.name}" required></label>
+      <div class="two">
+        <label><span>Size</span>
+          <select name="size">
+            <option value="small" ${d.size==='small'?'selected':''}>Small ≤10kg</option>
+            <option value="medium" ${d.size==='medium'?'selected':''}>Medium 10–25kg</option>
+            <option value="large" ${d.size==='large'?'selected':''}>Large 25kg+</option>
+          </select>
+        </label>
+        <label><span>Sex</span>
+          <select name="sex">
+            <option value="" ${!d.sex?'selected':''}>—</option>
+            <option value="male" ${d.sex==='male'?'selected':''}>Male</option>
+            <option value="female" ${d.sex==='female'?'selected':''}>Female</option>
+            <option value="desexed" ${d.sex==='desexed'?'selected':''}>Desexed</option>
+          </select>
+        </label>
+      </div>
+      <div class="two">
+        <label><span>Breed</span><input name="breed" value="${d.breed||''}" placeholder="e.g. Labrador"></label>
+        <label><span>Age</span><input name="age" value="${d.age}" placeholder="e.g. 4 yrs"></label>
+      </div>
+      <label><span>Weight (kg)</span><input name="weight" value="${d.weight||''}" placeholder="e.g. 23"></label>
+
+      <details style="border:1px solid var(--border); border-radius:9px; padding:0.6rem 0.85rem;">
+        <summary style="cursor:pointer; font-weight:600; color:var(--choc);">💉 Vaccinations &amp; vet</summary>
+        <div class="form-grid mt-1">
+          <div class="two">
+            <label><span>Vaccinated?</span>${yn(d.vaccinated, 'vaccinated')}</label>
+            <label><span>Flea/tick treated?</span>${yn(d.fleaTick, 'fleaTick')}</label>
+          </div>
+          <div class="two">
+            <label><span>Last vaccination date</span><input name="vaccDate" type="date" value="${d.vaccDate||''}"></label>
+            <label><span>Vaccination expiry</span><input name="vacc" type="date" value="${d.vaccinationExpiry||''}"></label>
+          </div>
+          <label><span>Vet name</span><input name="vetName" value="${d.vetName||''}"></label>
+          ${d.vaccCertUrl ? `<a href="${d.vaccCertUrl}" target="_blank" class="muted tiny">📎 Vaccination certificate on file</a>` : ''}
+          ${d.desexCertUrl ? `<a href="${d.desexCertUrl}" target="_blank" class="muted tiny">📎 Desexing certificate on file</a>` : ''}
+        </div>
+      </details>
+
+      <details style="border:1px solid var(--border); border-radius:9px; padding:0.6rem 0.85rem;">
+        <summary style="cursor:pointer; font-weight:600; color:var(--choc);">⚕ Health</summary>
+        <div class="form-grid mt-1">
+          <label><span>Medical conditions</span><textarea name="medicalConditions" rows="2">${d.medicalConditions||''}</textarea></label>
+          <label><span>Allergies</span><textarea name="allergies" rows="2">${d.allergies||''}</textarea></label>
+        </div>
+      </details>
+
+      <details style="border:1px solid var(--border); border-radius:9px; padding:0.6rem 0.85rem;">
+        <summary style="cursor:pointer; font-weight:600; color:var(--choc);">🐕 Behaviour</summary>
+        <div class="form-grid mt-1">
+          <div class="two">
+            <label><span>Friendly with other dogs?</span>${yn(d.friendlyDogs, 'friendlyDogs')}</label>
+            <label><span>Aggression history?</span>${yn(d.aggression, 'aggression')}</label>
+          </div>
+          ${(d.aggression === 'yes' || d.aggressionExplain) ? `<label><span>Aggression details</span><textarea name="aggressionExplain" rows="2">${d.aggressionExplain||''}</textarea></label>` : `<label><span>Aggression details (if any)</span><textarea name="aggressionExplain" rows="2">${d.aggressionExplain||''}</textarea></label>`}
+          <label><span>Separation anxiety?</span>${yn(d.separation, 'separation')}</label>
+          <label><span>Toilet routine</span><textarea name="toiletRoutine" rows="2">${d.toiletRoutine||''}</textarea></label>
+          <label><span>Additional behaviour notes</span><textarea name="additionalBehaviours" rows="2">${d.additionalBehaviours||''}</textarea></label>
+        </div>
+      </details>
+
+      <details style="border:1px solid var(--border); border-radius:9px; padding:0.6rem 0.85rem;">
+        <summary style="cursor:pointer; font-weight:600; color:var(--choc);">🍽 Care preferences</summary>
+        <div class="form-grid mt-1">
+          <label><span>Feeding schedule</span><textarea name="feedingSchedule" rows="2">${d.feedingSchedule||''}</textarea></label>
+          <div class="two">
+            <label><span>Treats OK?</span>${yn(d.treatsConsent, 'treatsConsent')}</label>
+            <label><span>Photo consent?</span>${yn(d.photoConsent, 'photoConsent')}</label>
+          </div>
+        </div>
+      </details>
+
+      ${(d.agreementSig || d.agreementDate) ? `
+      <details style="border:1px solid var(--border); border-radius:9px; padding:0.6rem 0.85rem;">
+        <summary style="cursor:pointer; font-weight:600; color:var(--choc);">📝 Agreement on file</summary>
+        <div class="form-grid mt-1">
+          <div class="row between"><span class="muted">Signed by</span><span class="bold">${d.agreementSig || '—'}</span></div>
+          <div class="row between"><span class="muted">Date</span><span class="bold">${d.agreementDate || '—'}</span></div>
+        </div>
+      </details>` : ''}
+
+      <label><span>General notes</span><textarea name="notes" rows="2">${d.notes||''}</textarea></label>
+
+      <button class="btn primary block" type="submit">${isNew ? 'Add dog' : 'Save dog'}</button>
+    </form>
+  `);
+}
+
+function saveDog(e, id, ownerId, isNew) {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const existing = isNew ? null : dogById(id);
+  const get = (k) => (fd.get(k) || '').toString().trim();
+  const dog = {
+    id, ownerId,
+    name: get('name'),
+    size: get('size'),
+    age: get('age'),
+    breed: get('breed'),
+    sex: get('sex'),
+    weight: get('weight'),
+    vaccinationExpiry: get('vacc'),
+    vaccDate: get('vaccDate'),
+    vaccinated: get('vaccinated'),
+    fleaTick: get('fleaTick'),
+    vetName: get('vetName'),
+    vaccCertUrl: existing?.vaccCertUrl || '',
+    desexCertUrl: existing?.desexCertUrl || '',
+    medicalConditions: get('medicalConditions'),
+    allergies: get('allergies'),
+    friendlyDogs: get('friendlyDogs'),
+    aggression: get('aggression'),
+    aggressionExplain: get('aggressionExplain'),
+    separation: get('separation'),
+    toiletRoutine: get('toiletRoutine'),
+    additionalBehaviours: get('additionalBehaviours'),
+    feedingSchedule: get('feedingSchedule'),
+    treatsConsent: get('treatsConsent'),
+    photoConsent: get('photoConsent'),
+    agreementSig: existing?.agreementSig || '',
+    agreementDate: existing?.agreementDate || '',
+    notes: get('notes')
+  };
+  if (isNew) DB.dogs.push(dog);
+  else {
+    const idx = DB.dogs.findIndex(x => x.id === id);
+    DB.dogs[idx] = { ...DB.dogs[idx], ...dog };
+  }
+  save(DB);
+  hideModal();
+  openClientModal(ownerId);
+}
+function deleteDog(id) {
+  if (!confirm('Delete this dog?')) return;
+  const dog = dogById(id);
+  const ownerId = dog?.ownerId;
+  DB.dogs = DB.dogs.filter(d => d.id !== id);
+  save(DB);
+  hideModal();
+  if (ownerId) openClientModal(ownerId); else render();
+}
+
+// ----- Booking modal -----
+function openBookingModal(bookingId, prefillDate, prefillDogId) {
+  const bk = bookingId ? DB.bookings.find(b => b.id === bookingId) : null;
+  const isNew = !bk;
+  const b = bk || {
+    id: uid(), dogId: prefillDogId || '', date: prefillDate || todayISO(), session: 'full',
+    arrivalTime: '', departureTime: '',
+    arrivalLogged: null, departureLogged: null,
+    addOns: { senior: false, med: false, diet: false, taxi: false },
+    surcharges: { publicHoliday: false, xmasPeak: false },
+    discountPct: 0, total: 0, paymentStatus: 'pending', paidAt: null, notes: ''
+  };
+
+  if (!DB.dogs.length) {
+    showModal(`<h2>No dogs yet <button class="close-x" onclick="hideModal()">×</button></h2><p>Add a client and their dog first under the Clients tab.</p><button class="btn primary block mt-2" onclick="hideModal(); switchTab('clients')">Go to Clients</button>`);
+    return;
+  }
+
+  const dogOptions = DB.dogs.map(d => {
+    const o = ownerById(d.ownerId);
+    return `<option value="${d.id}" ${d.id === b.dogId ? 'selected' : ''}>${d.name} — ${o?.name || '?'} (${d.size})</option>`;
+  }).join('');
+
+  const seriesBanner = b.seriesId ? `
+    <div class="callout" style="background:var(--cream); border-left:3pt solid var(--honey); padding:0.5rem 0.7rem; margin-bottom:0.6rem;">
+      <span class="tiny"><strong>🔁 Part of recurring series:</strong> ${b.seriesPattern || ''}</span>
+      <button type="button" class="btn tiny danger mt-1" onclick="cancelSeries('${b.seriesId}')">Cancel entire series</button>
+    </div>` : '';
+  showModal(`
+    <h2>${isNew ? 'New booking' : 'Edit booking'} <button class="close-x" onclick="hideModal()">×</button></h2>
+    ${seriesBanner}
+    <form id="bookingForm" class="form-grid" onsubmit="saveBooking(event, '${b.id}', ${isNew})">
+      <label><span>Dog</span>
+        <select name="dogId" required onchange="recalc()">
+          <option value="">Choose a dog…</option>
+          ${dogOptions}
+        </select>
+      </label>
+      <div class="two">
+        <label><span>Date</span><input name="date" type="date" value="${b.date}" required onchange="recalc()"></label>
+        <label><span>Session</span>
+          <select name="session" onchange="recalc()">
+            <option value="half" ${b.session==='half'?'selected':''}>Half day (≤5hr)</option>
+            <option value="extended" ${b.session==='extended'?'selected':''}>Extended ½ (5–6hr)</option>
+            <option value="full" ${b.session==='full'?'selected':''}>Full day (>6hr)</option>
+            <option value="overnight" ${b.session==='overnight'?'selected':''}>Overnight</option>
+          </select>
+        </label>
+      </div>
+      <div class="two">
+        <label><span>Arrival time</span><input name="arrivalTime" type="time" value="${b.arrivalTime}"></label>
+        <label><span>Departure time</span><input name="departureTime" type="time" value="${b.departureTime}"></label>
+      </div>
+      <div>
+        <span style="display:block; font-size: 0.82rem; color: var(--muted); margin-bottom: 0.3rem; font-weight: 600;">Add-ons</span>
+        <div class="checkrow">
+          <label><input type="checkbox" name="senior" ${b.addOns.senior?'checked':''} onchange="recalc()"> Senior +$12</label>
+          <label><input type="checkbox" name="puppy" ${b.addOns.puppy?'checked':''} onchange="recalc()"> Puppy +$12</label>
+          <label><input type="checkbox" name="med" ${b.addOns.med?'checked':''} onchange="recalc()"> Med +$5</label>
+          <label><input type="checkbox" name="diet" ${b.addOns.diet?'checked':''} onchange="recalc()"> Diet +$3</label>
+          <label><input type="checkbox" name="taxi" ${b.addOns.taxi?'checked':''} onchange="recalc()"> Taxi +$35</label>
+        </div>
+      </div>
+      <div>
+        <span style="display:block; font-size: 0.82rem; color: var(--muted); margin-bottom: 0.3rem; font-weight: 600;">Surcharges & discount</span>
+        <div class="checkrow">
+          <label><input type="checkbox" name="ph" ${b.surcharges.publicHoliday?'checked':''} onchange="recalc()"> Public hol +$25</label>
+          <label><input type="checkbox" name="xmas" ${b.surcharges.xmasPeak?'checked':''} onchange="recalc()"> Xmas peak</label>
+        </div>
+        <label class="mt-1"><span>Custom price override (leave blank to use calculated)</span><input name="customPrice" type="number" min="0" step="1" placeholder="e.g. 75" value="${b.customPrice||''}" onchange="recalc()"></label>
+      </div>
+      <div id="priceBox" class="price-display">
+        <div class="total" id="priceTotal">$0</div>
+        <div class="breakdown" id="priceBreakdown">Pick a dog</div>
+      </div>
+      <label><span>Notes</span><textarea name="notes" rows="2">${b.notes}</textarea></label>
+      <div class="two">
+        <label><span>Payment status</span>
+          <select name="paymentStatus">
+            <option value="pending" ${b.paymentStatus==='pending'?'selected':''}>Pending</option>
+            <option value="paid" ${b.paymentStatus==='paid'?'selected':''}>Paid</option>
+          </select>
+        </label>
+        <button class="btn primary" type="submit" style="align-self:end;">${isNew ? 'Add booking' : 'Save'}</button>
+      </div>
+      ${!isNew ? `<button type="button" class="btn danger block" onclick="deleteBooking('${b.id}')">Delete booking</button>` : ''}
+    </form>
+  `);
+  setTimeout(recalc, 0);
+}
+
+function recalc() {
+  const f = document.getElementById('bookingForm');
+  if (!f) return;
+  const dogId = f.dogId.value;
+  const dog = dogById(dogId);
+  const session = f.session.value;
+  const date = f.date.value;
+
+  if (!dog) {
+    document.getElementById('priceTotal').textContent = '$0';
+    document.getElementById('priceBreakdown').textContent = 'Pick a dog';
+    return;
+  }
+
+  let base = PRICES[dog.size][session];
+  let breakdown = [`Base $${base}`];
+  let total = base;
+
+  if (f.senior.checked) { total += ADDONS.senior; breakdown.push(`Senior +$${ADDONS.senior}`); }
+  if (f.puppy && f.puppy.checked) { total += ADDONS.puppy; breakdown.push(`Puppy +$${ADDONS.puppy}`); }
+  if (f.med.checked)    { total += ADDONS.med;    breakdown.push(`Med +$${ADDONS.med}`); }
+  if (f.diet.checked)   { total += ADDONS.diet;   breakdown.push(`Diet +$${ADDONS.diet}`); }
+  if (f.taxi.checked)   { total += ADDONS.taxi;   breakdown.push(`Taxi +$${ADDONS.taxi}`); }
+  if (f.ph.checked)     { total += SURCHARGES.publicHoliday; breakdown.push(`Pub hol +$${SURCHARGES.publicHoliday}`); }
+  if (f.xmas.checked || (date && isXmasPeak(date))) {
+    if (!f.xmas.checked && isXmasPeak(date)) { f.xmas.checked = true; }
+    const xs = session === 'overnight' ? SURCHARGES.xmasPeakNight : SURCHARGES.xmasPeakDay;
+    total += xs;
+    breakdown.push(`Xmas peak +$${xs}`);
+  }
+  const customRaw = f.customPrice ? f.customPrice.value : '';
+  const custom = customRaw === '' ? null : parseFloat(customRaw);
+  if (custom !== null && !isNaN(custom)) {
+    document.getElementById('priceTotal').textContent = '$' + custom;
+    document.getElementById('priceBreakdown').textContent = `Custom price (auto-calc was $${total})`;
+    return;
+  }
+
+  document.getElementById('priceTotal').textContent = '$' + total;
+  document.getElementById('priceBreakdown').textContent = breakdown.join(' · ');
+}
+
+function saveBooking(e, id, isNew) {
+  e.preventDefault();
+  const f = e.target;
+  const dog = dogById(f.dogId.value);
+  if (!dog) return;
+  const session = f.session.value;
+  const date = f.date.value;
+
+  let base = PRICES[dog.size][session];
+  let total = base;
+  if (f.senior.checked) total += ADDONS.senior;
+  if (f.puppy && f.puppy.checked) total += ADDONS.puppy;
+  if (f.med.checked) total += ADDONS.med;
+  if (f.diet.checked) total += ADDONS.diet;
+  if (f.taxi.checked) total += ADDONS.taxi;
+  if (f.ph.checked) total += SURCHARGES.publicHoliday;
+  if (f.xmas.checked) total += (session === 'overnight' ? SURCHARGES.xmasPeakNight : SURCHARGES.xmasPeakDay);
+  const customRaw = f.customPrice ? f.customPrice.value : '';
+  const customPrice = customRaw === '' ? null : parseFloat(customRaw);
+  if (customPrice !== null && !isNaN(customPrice)) total = customPrice;
+
+  const existing = isNew ? null : DB.bookings.find(b => b.id === id);
+
+  const bk = {
+    id, dogId: f.dogId.value, date, session,
+    arrivalTime: f.arrivalTime.value,
+    departureTime: f.departureTime.value,
+    arrivalLogged: existing?.arrivalLogged || null,
+    departureLogged: existing?.departureLogged || null,
+    addOns: {
+      senior: f.senior.checked,
+      puppy: f.puppy ? f.puppy.checked : false,
+      med: f.med.checked,
+      diet: f.diet.checked, taxi: f.taxi.checked
+    },
+    surcharges: { publicHoliday: f.ph.checked, xmasPeak: f.xmas.checked },
+    customPrice: (customPrice !== null && !isNaN(customPrice)) ? customPrice : null,
+    total, paymentStatus: f.paymentStatus.value,
+    paidAt: f.paymentStatus.value === 'paid' ? (existing?.paidAt || new Date().toISOString()) : null,
+    notes: f.notes.value.trim(),
+    createdAt: existing?.createdAt || new Date().toISOString()
+  };
+
+  if (isNew) DB.bookings.push(bk);
+  else {
+    const idx = DB.bookings.findIndex(x => x.id === id);
+    DB.bookings[idx] = bk;
+  }
+  save(DB); hideModal(); render();
+}
+
+function deleteBooking(id) {
+  if (!confirm('Delete this booking?')) return;
+  DB.bookings = DB.bookings.filter(b => b.id !== id);
+  save(DB); hideModal(); render();
+}
+
+function cancelSeries(seriesId) {
+  const inSeries = DB.bookings.filter(b => b.seriesId === seriesId);
+  if (!inSeries.length) return;
+  const futureOnly = confirm(`This series has ${inSeries.length} bookings.\n\nClick OK to delete FUTURE bookings only (keeps past ones).\nClick Cancel to keep all bookings as-is.`);
+  if (!futureOnly) return;
+  const today = todayISO();
+  const before = DB.bookings.length;
+  DB.bookings = DB.bookings.filter(b => !(b.seriesId === seriesId && b.date >= today));
+  save(DB); hideModal(); render();
+  alert(`Cancelled ${before - DB.bookings.length} future bookings in this series.`);
+}
+
+// ===== RECURRING BOOKINGS =====
+function openRecurringModal() {
+  if (!DB.dogs.length) {
+    showModal(`<h2>No dogs yet <button class="close-x" onclick="hideModal()">×</button></h2><p>Add a client and their dog first under the Clients tab.</p>`);
+    return;
+  }
+  const dogOptions = DB.dogs.map(d => {
+    const o = ownerById(d.ownerId);
+    return `<option value="${d.id}">${d.name} — ${o?.name || '?'} (${d.size})</option>`;
+  }).join('');
+  const today = todayISO();
+  const in12wk = new Date(); in12wk.setDate(in12wk.getDate() + 84);
+  const defaultEnd = in12wk.toISOString().slice(0,10);
+
+  showModal(`
+    <h2>📅 Recurring booking <button class="close-x" onclick="hideModal()">×</button></h2>
+    <p class="muted tiny">Sets up a routine schedule. Creates one booking per chosen weekday between the start and end dates.</p>
+
+    <form id="recurForm" class="form-grid" onsubmit="generateRecurring(event)">
+      <label><span>Dog</span>
+        <select name="dogId" required>
+          <option value="">Choose a dog…</option>
+          ${dogOptions}
+        </select>
+      </label>
+
+      <div>
+        <span style="display:block; font-size: 0.82rem; color: var(--muted); margin-bottom: 0.3rem; font-weight: 600;">Days of week</span>
+        <div class="checkrow">
+          <label><input type="checkbox" name="dow0"> Mon</label>
+          <label><input type="checkbox" name="dow1"> Tue</label>
+          <label><input type="checkbox" name="dow2"> Wed</label>
+          <label><input type="checkbox" name="dow3"> Thu</label>
+          <label><input type="checkbox" name="dow4"> Fri</label>
+          <label><input type="checkbox" name="dow5"> Sat</label>
+          <label><input type="checkbox" name="dow6"> Sun</label>
+        </div>
+      </div>
+
+      <label><span>Session</span>
+        <select name="session">
+          <option value="half">Half day (≤5hr)</option>
+          <option value="extended">Extended ½ (5–6hr)</option>
+          <option value="full" selected>Full day (>6hr)</option>
+          <option value="overnight">Overnight</option>
+        </select>
+      </label>
+
+      <div class="two">
+        <label><span>Start date</span><input name="start" type="date" value="${today}" required></label>
+        <label><span>End date</span><input name="end" type="date" value="${defaultEnd}" required></label>
+      </div>
+
+      <label><span>Custom price per booking (leave blank for standard rate)</span>
+        <input name="customPrice" type="number" min="0" step="1" placeholder="e.g. 75 — overrides calculated price">
+      </label>
+
+      <label><span>Notes (applied to every booking)</span>
+        <input name="notes" placeholder="e.g. Drop off 8am" />
+      </label>
+
+      <div id="recurPreview" class="callout" style="background:var(--cream); border-left:3pt solid var(--honey); padding:0.6rem 0.8rem;">
+        <span class="muted tiny">Pick days + dates to see preview</span>
+      </div>
+
+      <button class="btn primary block" type="submit">Generate bookings</button>
+    </form>
+  `);
+  document.querySelectorAll('#recurForm input, #recurForm select').forEach(el => {
+    el.addEventListener('change', updateRecurPreview);
+  });
+}
+
+function updateRecurPreview() {
+  const f = document.getElementById('recurForm');
+  if (!f) return;
+  const dog = dogById(f.dogId.value);
+  if (!dog) {
+    document.getElementById('recurPreview').innerHTML = '<span class="muted tiny">Pick a dog…</span>';
+    return;
+  }
+  const selectedDays = [0,1,2,3,4,5,6].filter(i => f['dow' + i].checked);
+  if (!selectedDays.length) {
+    document.getElementById('recurPreview').innerHTML = '<span class="muted tiny">Pick at least one weekday…</span>';
+    return;
+  }
+  const start = new Date(f.start.value + 'T00:00:00');
+  const end   = new Date(f.end.value + 'T00:00:00');
+  if (!(start <= end)) {
+    document.getElementById('recurPreview').innerHTML = '<span class="muted tiny" style="color:var(--red);">End date must be on or after start.</span>';
+    return;
+  }
+
+  const dates = [];
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const jsDow = d.getDay(); // 0 = Sun
+    const monFirstDow = (jsDow + 6) % 7; // 0 = Mon
+    if (selectedDays.includes(monFirstDow)) {
+      dates.push(d.toISOString().slice(0,10));
+    }
+  }
+
+  const session = f.session.value;
+  const baseRate = PRICES[dog.size][session];
+  const customRaw = f.customPrice ? f.customPrice.value : '';
+  const customPrice = customRaw === '' ? null : parseFloat(customRaw);
+  const perBooking = (customPrice !== null && !isNaN(customPrice)) ? customPrice : baseRate;
+  let xmasCount = 0;
+  let totalIncXmas = 0;
+  dates.forEach(d => {
+    let bk = perBooking;
+    if (isXmasPeak(d)) {
+      xmasCount++;
+      bk += (session === 'overnight' ? SURCHARGES.xmasPeakNight : SURCHARGES.xmasPeakDay);
+    }
+    totalIncXmas += bk;
+  });
+
+  const dayLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const priceNote = (customPrice !== null && !isNaN(customPrice))
+    ? `$${perBooking} custom (std $${baseRate})`
+    : `$${baseRate}`;
+  document.getElementById('recurPreview').innerHTML = `
+    <div class="bold">${dog.name} · ${SESSION_LABELS[session]} · ${selectedDays.map(i => dayLabels[i]).join(', ')}</div>
+    <div class="muted tiny mt-1">${dates.length} bookings · ${priceNote}${xmasCount ? ' · ' + xmasCount + ' on Xmas peak (+surcharge)' : ''}</div>
+    <div class="bold mt-1" style="color:var(--choc);">Total: $${totalIncXmas}</div>
+  `;
+}
+
+function generateRecurring(e) {
+  e.preventDefault();
+  const f = e.target;
+  const dog = dogById(f.dogId.value);
+  if (!dog) return;
+  const selectedDays = [0,1,2,3,4,5,6].filter(i => f['dow' + i].checked);
+  if (!selectedDays.length) { alert('Pick at least one day of the week.'); return; }
+
+  const start = new Date(f.start.value + 'T00:00:00');
+  const end   = new Date(f.end.value + 'T00:00:00');
+  if (!(start <= end)) { alert('End date must be on or after start.'); return; }
+
+  const session = f.session.value;
+  const baseRate = PRICES[dog.size][session];
+  const customRaw = f.customPrice ? f.customPrice.value : '';
+  const customPrice = customRaw === '' ? null : parseFloat(customRaw);
+  const notes = (f.notes.value || '').trim();
+
+  const seriesId = uid();
+  const dayLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const seriesPattern = `${dayLabels.filter((_, i) => selectedDays.includes(i)).join('+')} · ${SESSION_LABELS[session]}`;
+
+  let created = 0, skipped = 0;
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const jsDow = d.getDay();
+    const monFirstDow = (jsDow + 6) % 7;
+    if (!selectedDays.includes(monFirstDow)) continue;
+    const iso = d.toISOString().slice(0,10);
+
+    // Skip if a booking already exists for this dog + date
+    const dup = DB.bookings.find(b => b.dogId === dog.id && b.date === iso);
+    if (dup) { skipped++; continue; }
+
+    let total = baseRate;
+    const isPeak = isXmasPeak(iso);
+    if (isPeak) total += (session === 'overnight' ? SURCHARGES.xmasPeakNight : SURCHARGES.xmasPeakDay);
+    if (customPrice !== null && !isNaN(customPrice)) total = customPrice + (isPeak ? (session === 'overnight' ? SURCHARGES.xmasPeakNight : SURCHARGES.xmasPeakDay) : 0);
+
+    DB.bookings.push({
+      id: uid(),
+      dogId: dog.id,
+      date: iso,
+      session,
+      arrivalTime: '', departureTime: '',
+      arrivalLogged: null, departureLogged: null,
+      addOns: { senior: false, puppy: false, med: false, diet: false, taxi: false },
+      surcharges: { publicHoliday: false, xmasPeak: isPeak },
+      customPrice: (customPrice !== null && !isNaN(customPrice)) ? customPrice : null,
+      total,
+      paymentStatus: 'pending',
+      paidAt: null,
+      notes,
+      seriesId,
+      seriesPattern,
+      createdAt: new Date().toISOString()
+    });
+    created++;
+  }
+
+  save(DB);
+  hideModal();
+  render();
+  alert(`✓ Created ${created} bookings${skipped ? ' (skipped ' + skipped + ' that already existed)' : ''}.`);
+}
+
+// ===== FORMSPREE IMPORT =====
+function openImportModal() {
+  showModal(`
+    <h2>📥 Import from Formspree <button class="close-x" onclick="hideModal()">×</button></h2>
+    <p class="muted tiny">Paste the form body from a Formspree email, OR upload a CSV export from your Formspree dashboard.</p>
+
+    <div class="form-grid mt-2">
+      <label><span>Option A — paste from email</span>
+        <textarea id="impPaste" rows="8" placeholder="Paste email body here. Works with both book.html and enrol.html forms."></textarea>
+      </label>
+      <button class="btn primary block" onclick="parsePaste()">Parse pasted text</button>
+
+      <div class="muted tiny center" style="margin:0.5rem 0;">— or —</div>
+
+      <label class="btn block" style="cursor:pointer;">
+        Option B — upload Formspree CSV
+        <input type="file" accept=".csv,text/csv" style="display:none" onchange="parseCSV(event)">
+      </label>
+    </div>
+
+    <div id="importPreview"></div>
+  `);
+}
+
+function fieldFromText(text, ...keys) {
+  // Try to find "Key: value" in pasted email
+  for (const k of keys) {
+    const re = new RegExp('(?:^|\\n)\\s*' + k.replace(/[-\\s_]/g, '[\\s_-]?') + '[\\s_:]*:?\\s*([^\\n]+)', 'i');
+    const m = text.match(re);
+    if (m) return m[1].trim();
+  }
+  return '';
+}
+
+function normalizeSize(s) {
+  if (!s) return 'medium';
+  const v = s.toLowerCase();
+  if (v.includes('small') || v.includes('10') && v.includes('≤')) return 'small';
+  if (v.includes('large') || v.includes('25+') || v.includes('kg+')) return 'large';
+  return 'medium';
+}
+
+function normalizeSession(s) {
+  if (!s) return 'full';
+  const v = s.toLowerCase();
+  if (v.includes('half')) return 'half';
+  if (v.includes('extended')) return 'extended';
+  if (v.includes('overnight') || v.includes('boarding') || v.includes('night')) return 'overnight';
+  return 'full';
+}
+
+function parsePaste() {
+  const text = document.getElementById('impPaste').value;
+  if (!text.trim()) return;
+
+  // Try to extract a single record from the pasted text
+  const record = {
+    ownerName: fieldFromText(text, 'ownerName', 'owner name', 'name'),
+    ownerPhone: fieldFromText(text, 'ownerPhone', 'phone', 'owner phone', 'mobile'),
+    ownerEmail: fieldFromText(text, 'ownerEmail', 'email', 'owner email'),
+    dogName: fieldFromText(text, 'dogName', 'dog name', 'dog'),
+    size: fieldFromText(text, 'size', 'dog size', 'weight'),
+    session: fieldFromText(text, 'session', 'service'),
+    date: fieldFromText(text, 'date', 'booking date', 'preferred date'),
+    breed: fieldFromText(text, 'breed'),
+    age: fieldFromText(text, 'age'),
+    notes: fieldFromText(text, 'notes', 'message', 'comments'),
+    medicalConditions: fieldFromText(text, 'medicalConditions', 'medical conditions', 'medical'),
+    allergies: fieldFromText(text, 'allergies'),
+    source: 'paste'
+  };
+
+  if (!record.ownerName && !record.ownerPhone && !record.dogName) {
+    alert('Could not find any recognisable fields. Make sure the pasted text has "Name:", "Phone:", "Dog:" etc. on separate lines.');
+    return;
+  }
+
+  showImportPreview([record]);
+}
+
+function parseCSV(ev) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const records = csvToRecords(e.target.result);
+      if (!records.length) { alert('No rows found in CSV.'); return; }
+      showImportPreview(records);
+    } catch (err) {
+      alert('Could not parse CSV: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+// Minimal CSV parser (handles quoted fields with commas)
+function csvToRecords(csv) {
+  const lines = csv.replace(/\r/g, '').split('\n').filter(l => l.trim());
+  if (lines.length < 2) return [];
+  const parseLine = (line) => {
+    const out = []; let cur = ''; let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"' && line[i+1] === '"') { cur += '"'; i++; }
+      else if (c === '"') inQ = !inQ;
+      else if (c === ',' && !inQ) { out.push(cur); cur = ''; }
+      else cur += c;
+    }
+    out.push(cur);
+    return out;
+  };
+  const headers = parseLine(lines[0]).map(h => h.trim());
+  return lines.slice(1).map(line => {
+    const cells = parseLine(line);
+    const row = {};
+    headers.forEach((h, i) => row[h] = (cells[i] || '').trim());
+    return {
+      ownerName: row.ownerName || row.name || '',
+      ownerPhone: row.ownerPhone || row.phone || '',
+      ownerEmail: row.ownerEmail || row.email || '',
+      dogName: row.dogName || row.dog || '',
+      size: row.size || row.weight || '',
+      session: row.session || row.service || '',
+      date: row.date || '',
+      breed: row.breed || '',
+      age: row.age || '',
+      notes: row.notes || row.message || '',
+      medicalConditions: row.medicalConditions || row.medical || '',
+      allergies: row.allergies || '',
+      source: 'csv'
+    };
+  }).filter(r => r.ownerName || r.dogName);
+}
+
+function showImportPreview(records) {
+  const existing = new Set(DB.owners.map(o => (o.phone || '').replace(/\s+/g, '')));
+  const rows = records.map((r, i) => {
+    const phoneNorm = r.ownerPhone.replace(/\s+/g, '');
+    const isDup = phoneNorm && existing.has(phoneNorm);
+    const sizeNorm = normalizeSize(r.size);
+    const sessNorm = normalizeSession(r.session);
+    return `
+      <div class="card" style="${isDup ? 'opacity:0.5;' : ''}">
+        <div class="row between">
+          <div>
+            <div class="bold">${r.ownerName || '(no name)'} ${isDup ? '<span class="pill overdue">DUP</span>' : ''}</div>
+            <div class="muted tiny">${r.ownerPhone || ''} ${r.ownerEmail ? '· ' + r.ownerEmail : ''}</div>
+            <div class="muted tiny">🐶 ${r.dogName || '?'} · ${sizeNorm}${r.breed ? ' · ' + r.breed : ''}</div>
+            ${r.date ? `<div class="muted tiny">📅 ${r.date} · ${sessNorm}</div>` : ''}
+            ${r.medicalConditions ? `<div class="muted tiny">⚕ ${r.medicalConditions}</div>` : ''}
+          </div>
+          <label class="row gap-1">
+            <input type="checkbox" id="imp-${i}" ${isDup ? '' : 'checked'}>
+            <span class="tiny bold">Import</span>
+          </label>
+        </div>
+      </div>`;
+  }).join('');
+
+  window._pendingImport = records;
+  document.getElementById('importPreview').innerHTML = `
+    <h3 style="color:var(--choc); margin: 1rem 0 0.5rem;">Preview (${records.length})</h3>
+    <p class="muted tiny">Untick any you don't want. "DUP" = phone already exists in your clients.</p>
+    ${rows}
+    <button class="btn primary block mt-2" onclick="confirmImport()">Import selected</button>
+  `;
+}
+
+function confirmImport() {
+  const records = window._pendingImport || [];
+  let added = 0;
+  records.forEach((r, i) => {
+    const cb = document.getElementById('imp-' + i);
+    if (!cb || !cb.checked) return;
+
+    // Create owner
+    const ownerId = uid();
+    DB.owners.push({
+      id: ownerId,
+      name: r.ownerName || '(Unknown)',
+      phone: r.ownerPhone || '',
+      email: r.ownerEmail || '',
+      address: '',
+      notes: [r.medicalConditions, r.allergies, r.notes].filter(Boolean).join(' · '),
+      createdAt: new Date().toISOString(),
+      source: 'formspree'
+    });
+
+    // Create dog
+    if (r.dogName) {
+      const dogId = uid();
+      DB.dogs.push({
+        id: dogId,
+        ownerId,
+        name: r.dogName,
+        size: normalizeSize(r.size),
+        age: r.age || '',
+        vaccinationExpiry: '',
+        notes: [r.breed, r.medicalConditions, r.allergies].filter(Boolean).join(' · ')
+      });
+
+      // If date present, create a pending booking
+      if (r.date && /^\d{4}-\d{2}-\d{2}$/.test(r.date)) {
+        const session = normalizeSession(r.session);
+        const base = PRICES[normalizeSize(r.size)][session];
+        DB.bookings.push({
+          id: uid(),
+          dogId,
+          date: r.date,
+          session,
+          arrivalTime: '', departureTime: '',
+          arrivalLogged: null, departureLogged: null,
+          addOns: { senior: false, med: false, diet: false, taxi: false },
+          surcharges: { publicHoliday: false, xmasPeak: isXmasPeak(r.date) },
+          discountPct: 0,
+          total: base + (isXmasPeak(r.date) ? (session === 'overnight' ? SURCHARGES.xmasPeakNight : SURCHARGES.xmasPeakDay) : 0),
+          paymentStatus: 'pending',
+          paidAt: null,
+          notes: r.notes || '',
+          createdAt: new Date().toISOString()
+        });
+      }
+    }
+    added++;
+  });
+  save(DB);
+  hideModal();
+  render();
+  alert(`Imported ${added} client(s).`);
+}
+
+function saveCapacity() {
+  const d = parseInt(document.getElementById('capMaxDaycare').value, 10);
+  const b = parseInt(document.getElementById('capMaxBoarding').value, 10);
+  if (!isNaN(d) && d > 0) DB.meta.capacity.maxDaycare = d;
+  if (!isNaN(b) && b >= 0) DB.meta.capacity.maxBoarding = b;
+  save(DB);
+}
+
+// ===== BACKUP =====
+function exportData() {
+  const data = JSON.stringify(DB, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const date = todayISO();
+  a.href = url;
+  a.download = `pansis-admin-backup-${date}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  DB.meta.lastBackup = new Date().toISOString();
+  save(DB); render();
+}
+function importData(e, mode) {
+  mode = mode || 'replace';
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!data.owners || !data.dogs || !data.bookings) throw new Error('bad shape');
+
+      if (mode === 'replace') {
+        if (!confirm(`REPLACE all current data with the backup?\n\n• ${data.owners.length} clients\n• ${data.dogs.length} dogs\n• ${data.bookings.length} bookings\n\nCurrent data will be lost.`)) return;
+        DB = data;
+        save(DB); render();
+        alert('Restored.');
+        return;
+      }
+
+      // MERGE mode — dedupe owners by phone, dogs by (ownerId, name), bookings by (dogId, date, session)
+      const normPhone = p => (p || '').replace(/\s+|-/g, '');
+      const normName  = n => (n || '').trim().toLowerCase();
+
+      let addedOwners = 0, mergedOwners = 0;
+      let addedDogs = 0, mergedDogs = 0;
+      let addedBookings = 0, skippedBookings = 0;
+
+      // Map of incoming ownerId -> existing/created ownerId (so we can remap dogs+bookings)
+      const ownerIdMap = {};
+
+      data.owners.forEach(newO => {
+        const phone = normPhone(newO.phone);
+        const existing = phone
+          ? DB.owners.find(o => normPhone(o.phone) === phone)
+          : DB.owners.find(o => normName(o.name) === normName(newO.name));
+
+        if (existing) {
+          // Merge — prefer existing non-empty fields, fill in any blanks from new
+          ['email','address','notes','emergencyContact','source'].forEach(k => {
+            if (!existing[k] && newO[k]) existing[k] = newO[k];
+          });
+          ownerIdMap[newO.id] = existing.id;
+          mergedOwners++;
+        } else {
+          DB.owners.push({ ...newO });
+          ownerIdMap[newO.id] = newO.id;
+          addedOwners++;
+        }
+      });
+
+      data.dogs.forEach(newD => {
+        const mappedOwnerId = ownerIdMap[newD.ownerId] || newD.ownerId;
+        const existing = DB.dogs.find(d =>
+          d.ownerId === mappedOwnerId &&
+          normName(d.name) === normName(newD.name)
+        );
+        if (existing) {
+          // Fill in any blanks on the existing dog from the incoming data
+          Object.keys(newD).forEach(k => {
+            if (k === 'id' || k === 'ownerId') return;
+            if (!existing[k] && newD[k]) existing[k] = newD[k];
+          });
+          mergedDogs++;
+        } else {
+          DB.dogs.push({ ...newD, ownerId: mappedOwnerId });
+          addedDogs++;
+        }
+      });
+
+      // Remap booking dogIds via dog name lookup (the new dog ids may not survive merging)
+      const dogIdMap = {};
+      data.dogs.forEach(newD => {
+        const mappedOwnerId = ownerIdMap[newD.ownerId] || newD.ownerId;
+        const found = DB.dogs.find(d =>
+          d.ownerId === mappedOwnerId &&
+          normName(d.name) === normName(newD.name)
+        );
+        if (found) dogIdMap[newD.id] = found.id;
+      });
+
+      data.bookings.forEach(newB => {
+        const mappedDogId = dogIdMap[newB.dogId] || newB.dogId;
+        const exists = DB.bookings.find(b =>
+          b.dogId === mappedDogId &&
+          b.date === newB.date &&
+          (b.session || 'full') === (newB.session || 'full')
+        );
+        if (exists) {
+          skippedBookings++;
+        } else {
+          DB.bookings.push({ ...newB, dogId: mappedDogId });
+          addedBookings++;
+        }
+      });
+
+      save(DB); render();
+      alert(
+        `Merge complete:\n\n` +
+        `Clients:  +${addedOwners} new, ${mergedOwners} merged\n` +
+        `Dogs:     +${addedDogs} new, ${mergedDogs} merged\n` +
+        `Bookings: +${addedBookings} new, ${skippedBookings} duplicates skipped`
+      );
+    } catch (err) {
+      console.error(err);
+      alert('Invalid backup file.');
+    }
+  };
+  reader.readAsText(file);
+}
+
+async function clearAllData() {
+  const ok = confirm('Delete ALL data from BOTH this device AND the cloud? This cannot be undone.');
+  if (!ok) return;
+  const ok2 = confirm('Really sure? All clients, dogs, bookings will be lost.');
+  if (!ok2) return;
+  try {
+    await setDoc(STATE_DOC, {
+      owners: [], dogs: [], bookings: [],
+      meta: { version: 1, createdAt: new Date().toISOString(), capacity: { maxDaycare: 5, maxBoarding: 3 } },
+      _updatedAt: new Date().toISOString(),
+      _updatedBy: fbAuth.currentUser?.email || 'unknown'
+    });
+  } catch (err) {
+    console.error('Failed to clear Firestore:', err);
+  }
+  localStorage.removeItem(STORAGE_KEY);
+  location.reload();
+}
+
+// === Expose functions called from inline onclick/onchange/onsubmit handlers ===
+Object.assign(window, {
+  // already exposed: login, signOutAdmin (defined with window.X)
+  applyCustomRange, cancelSeries, confirmImport,
+  deleteBooking, deleteDog, deleteOwner,
+  exportData, generateRecurring, hideModal, importData,
+  openBookingModal, openClientModal, openDogModal, openImportModal,
+  openRecurringModal, parseCSV, parsePaste, recalc,
+  saveBooking, saveCapacity, saveDog, saveOwner,
+  switchTab, clearAllData, openDayDetail,
+  logArrival, logDeparture, markPaid,
+  openReportModal, onReportPhoto, sendReportAndInvoice,
+  emailOwner
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 360" role="img" aria-label="Pansi's Paws Day Care embroidery mark">
+  <title>Pansi's Paws Day Care — embroidery mark</title>
+  <defs>
+    <style>
+      .ink { fill: #3d2817; }
+      .tan { fill: #d4a574; }
+      .tan-dark { fill: #a87842; }
+      .choc { fill: #5d3a1a; }
+      .stroke { stroke: #3d2817; stroke-linejoin: round; stroke-linecap: round; }
+    </style>
+  </defs>
+
+  <!-- Banner: gentle curve, notched fish-tail ends -->
+  <!-- Back-fold tails (darker tan, sit behind main banner) -->
+  <path class="tan-dark stroke" stroke-width="4"
+        d="M 80 115 L 30 95 L 50 140 L 80 155 Z" />
+  <path class="tan-dark stroke" stroke-width="4"
+        d="M 720 115 L 770 95 L 750 140 L 720 155 Z" />
+
+  <!-- Main banner body: curved ribbon with notched ends -->
+  <path class="tan stroke" stroke-width="5"
+        d="M 80 115
+           Q 400 80 720 115
+           L 700 165
+           L 720 215
+           Q 400 250 80 215
+           L 100 165
+           Z" />
+
+  <!-- Subtle inner fold line for depth -->
+  <path fill="none" stroke="#8b5a2b" stroke-width="2.5" stroke-linecap="round" opacity="0.55"
+        d="M 110 130 Q 400 100 690 130" />
+
+  <!-- Wordmark: PANSI'S PAWS -->
+  <text x="400" y="180" text-anchor="middle"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-size="72" font-weight="700" letter-spacing="2"
+        class="ink">PANSI'S PAWS</text>
+
+  <!-- DAY CARE smaller -->
+  <text x="400" y="220" text-anchor="middle"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-size="26" font-weight="600" letter-spacing="8"
+        class="ink">DAY CARE</text>
+
+  <!-- Paw print below banner, centred -->
+  <g transform="translate(400 295)">
+    <!-- Main pad -->
+    <ellipse class="choc stroke" stroke-width="3" cx="0" cy="14" rx="26" ry="22"/>
+    <!-- Toes -->
+    <ellipse class="choc stroke" stroke-width="3" cx="-32" cy="-18" rx="10" ry="14" transform="rotate(-20 -32 -18)"/>
+    <ellipse class="choc stroke" stroke-width="3" cx="-12" cy="-30" rx="10" ry="14" transform="rotate(-6 -12 -30)"/>
+    <ellipse class="choc stroke" stroke-width="3" cx="12" cy="-30" rx="10" ry="14" transform="rotate(6 12 -30)"/>
+    <ellipse class="choc stroke" stroke-width="3" cx="32" cy="-18" rx="10" ry="14" transform="rotate(20 32 -18)"/>
+  </g>
+</svg>

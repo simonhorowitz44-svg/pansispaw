@@ -1,0 +1,2660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f4ead8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Pansi's Daybook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,400;9..144,500;9..144,600;9..144,700;9..144,800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root {
+  --font-serif: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+
+  --ink:      #2b1a10;
+  --ink-2:    #6a5240;
+  --ink-3:    #a1907c;
+  --paper:    #f8f1e0;
+  --paper-2:  #fdf7ea;
+  --paper-3:  #f2e5c8;
+  --edge:     #ead9b8;
+  --edge-2:   #f0e3c4;
+
+  --action:      #6a8f4a;
+  --action-dark: #4d6d34;
+  --highlight:   #dba63f;
+  --highlight-2: #f5e2a7;
+  --highlight-ink:#7a5a10;
+  --night:       #3a3660;
+  --night-2:     #ebe6f2;
+  --owe:         #c26a4f;
+  --owe-2:       #f7e0d6;
+  --medical:     #c94a3d;
+  --medical-2:   #f9e0dc;
+
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out:    cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 140ms; --dur: 240ms; --dur-slow: 440ms;
+
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 20px; --s6: 24px; --s7: 32px; --s8: 40px; --s9: 56px; --s10: 72px;
+  --r1: 6px; --r2: 10px; --r3: 16px; --r4: 22px;
+  --shadow-sm: 0 1px 2px rgba(60,30,10,0.06), 0 1px 3px rgba(60,30,10,0.04);
+  --shadow-md: 0 4px 14px rgba(60,30,10,0.08), 0 2px 4px rgba(60,30,10,0.05);
+  --shadow-lg: 0 12px 40px rgba(60,30,10,0.14);
+
+  --appbar-h: 60px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; overflow-x: hidden; }
+body {
+  font-family: var(--font-sans);
+  color: var(--ink);
+  background: var(--paper);
+  background-image:
+    radial-gradient(circle at 20% 10%, rgba(219,166,63,0.04) 0, transparent 40%),
+    radial-gradient(circle at 80% 90%, rgba(58,54,96,0.03) 0, transparent 40%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.16 0 0 0 0 0.10 0 0 0 0 0.06 0 0 0 0.028 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh; min-height: 100dvh;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+body.modal-open { overflow: hidden; }
+
+/* Type scale */
+.t-display   { font-family: var(--font-serif); font-weight: 500; font-size: clamp(30px, 6vw, 44px); line-height: 1.1; letter-spacing: -0.02em; font-variation-settings: 'opsz' 144, 'SOFT' 100; }
+.t-headline  { font-family: var(--font-serif); font-weight: 600; font-size: 24px; line-height: 1.15; letter-spacing: -0.01em; font-variation-settings: 'opsz' 144, 'SOFT' 90; }
+.t-title     { font-family: var(--font-serif); font-weight: 600; font-size: 18px; line-height: 1.2; font-variation-settings: 'opsz' 144, 'SOFT' 90; }
+.t-body      { font-family: var(--font-sans); font-size: 15px; line-height: 1.5; }
+.t-caption   { font-family: var(--font-sans); font-size: 12px; line-height: 1.35; color: var(--ink-2); }
+
+/* Login */
+#loginScreen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--paper); z-index: 100; }
+.login-card { max-width: 380px; width: 92%; padding: var(--s7) var(--s6); text-align: center; }
+.login-mark { font-family: var(--font-serif); font-weight: 800; font-size: 46px; color: var(--ink); font-variation-settings: 'opsz' 144, 'SOFT' 100; letter-spacing: -0.02em; margin: 0 0 var(--s2); }
+.login-sub { color: var(--ink-2); font-size: 14px; margin: 0 0 var(--s7); font-family: var(--font-serif); font-style: italic; }
+
+.field { width: 100%; padding: 14px var(--s4); margin-bottom: var(--s3); border: 1px solid var(--edge); border-radius: var(--r2); font-size: 16px; font-family: inherit; background: var(--paper-2); color: var(--ink); transition: border-color var(--dur), box-shadow var(--dur); }
+.field:focus { outline: none; border-color: var(--ink); box-shadow: 0 0 0 3px rgba(43,26,16,0.08); }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--s2); padding: 12px var(--s5); border-radius: var(--r2); border: 1px solid transparent; background: var(--paper-2); color: var(--ink); font: 500 15px/1 var(--font-sans); cursor: pointer; transition: transform var(--dur) var(--ease-spring), background var(--dur), box-shadow var(--dur); user-select: none; text-decoration: none; }
+.btn:hover { background: var(--paper-3); }
+.btn:active { transform: scale(0.97); }
+.btn.primary { background: var(--action); color: white; border-color: var(--action-dark); box-shadow: 0 2px 0 var(--action-dark); }
+.btn.primary:hover { background: var(--action-dark); }
+.btn.primary:active { transform: translateY(1px); box-shadow: 0 0 0 var(--action-dark); }
+.btn.ghost { background: transparent; border-color: var(--edge); }
+.btn.night { background: var(--night); color: white; border-color: transparent; }
+.btn.block { width: 100%; }
+.btn.big { padding: 16px var(--s6); font-size: 16px; border-radius: var(--r3); }
+.btn.tiny { padding: 6px 10px; font-size: 12px; border-radius: var(--r1); font-weight: 500; }
+.btn.danger { color: var(--owe); background: var(--owe-2); border-color: transparent; }
+
+/* App shell */
+#app { display: none; min-height: 100vh; min-height: 100dvh; }
+.appbar { position: sticky; top: 0; z-index: 20; height: var(--appbar-h); padding: 0 var(--s5); padding-top: env(safe-area-inset-top); display: flex; align-items: center; justify-content: space-between; background: linear-gradient(180deg, var(--paper) 70%, rgba(248,241,224,0)); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.brand { font-family: var(--font-serif); font-weight: 700; font-size: 22px; color: var(--ink); font-variation-settings: 'opsz' 144, 'SOFT' 100; letter-spacing: -0.01em; cursor: pointer; }
+.avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--night); color: white; display: flex; align-items: center; justify-content: center; font-family: var(--font-serif); font-weight: 700; font-size: 16px; cursor: pointer; transition: transform var(--dur) var(--ease-spring); border: 2px solid var(--paper); box-shadow: var(--shadow-sm); }
+.avatar:active { transform: scale(0.94); }
+
+#surface { padding: var(--s3) var(--s5) 110px; max-width: 720px; margin: 0 auto; }
+@media (min-width: 900px) { #surface { max-width: 960px; padding-bottom: var(--s9); } }
+
+/* Tab bar */
+.tabs { position: fixed; left: 0; right: 0; bottom: 0; padding: 8px var(--s3) calc(8px + env(safe-area-inset-bottom)); background: rgba(248,241,224,0.92); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-top: 1px solid var(--edge); display: flex; justify-content: space-around; z-index: 15; }
+.tab { flex: 1; padding: 8px 4px; background: transparent; border: 0; font: 500 11px/1.2 var(--font-sans); color: var(--ink-3); cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px; transition: color var(--dur); border-radius: var(--r2); letter-spacing: 0.08em; }
+.tab-ico { font-family: var(--font-serif); font-weight: 600; font-size: 20px; font-variation-settings: 'opsz' 144, 'SOFT' 100; color: var(--ink-3); line-height: 1; transition: color var(--dur), transform var(--dur) var(--ease-spring); }
+.tab.active, .tab.active .tab-ico { color: var(--ink); }
+.tab.active .tab-ico { transform: translateY(-1px); }
+.tab:active .tab-ico { transform: scale(0.9); }
+
+/* Shared */
+.greet { font-family: var(--font-serif); font-weight: 500; font-size: clamp(28px, 6vw, 40px); color: var(--ink); line-height: 1.1; letter-spacing: -0.02em; margin: var(--s5) 0 var(--s2); font-variation-settings: 'opsz' 144, 'SOFT' 100; }
+.greet em { font-style: italic; color: var(--ink-2); }
+.sub { color: var(--ink-2); font-size: 15px; margin: 0 0 var(--s6); line-height: 1.5; }
+.sub.tight { margin-bottom: var(--s3); }
+.section-title { font-family: var(--font-serif); font-weight: 600; font-size: 15px; color: var(--ink-2); text-transform: uppercase; letter-spacing: 0.12em; margin: var(--s7) 0 var(--s3); display: flex; align-items: center; gap: var(--s3); }
+.section-title::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--edge) 0%, transparent 100%); }
+.pill { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; background: var(--paper-3); color: var(--ink-2); }
+.pill.night { background: var(--night-2); color: var(--night); }
+.pill.owe { background: var(--owe-2); color: var(--owe); }
+.pill.med { background: var(--medical-2); color: var(--medical); font-weight: 600; }
+.pill.hi { background: var(--highlight-2); color: var(--highlight-ink); }
+.pill.done { background: var(--action); color: white; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; font-size: 14px; font-weight: 500; background: var(--paper-2); border: 1.5px solid var(--edge); cursor: pointer; transition: all var(--dur) var(--ease-spring); color: var(--ink); user-select: none; -webkit-tap-highlight-color: transparent; }
+.chip:hover { border-color: var(--ink-3); }
+.chip.on { background: var(--action); color: white; border-color: var(--action-dark); transform: scale(1.02); box-shadow: 0 2px 6px rgba(106,143,74,0.28); }
+
+/* Day */
+.day-empty { text-align: center; padding: var(--s10) var(--s5); color: var(--ink-2); font-family: var(--font-serif); font-size: 22px; font-style: italic; font-variation-settings: 'opsz' 144, 'SOFT' 100; }
+
+.stay-strip { background: linear-gradient(135deg, var(--night) 0%, #4a4276 100%); color: white; border-radius: var(--r4); padding: var(--s5); margin-bottom: var(--s5); position: relative; overflow: hidden; box-shadow: var(--shadow-md); }
+.stay-strip::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 88% 22%, rgba(255,255,255,0.25) 0, transparent 4px), radial-gradient(circle at 12% 78%, rgba(255,255,255,0.18) 0, transparent 3px), radial-gradient(circle at 60% 88%, rgba(255,255,255,0.15) 0, transparent 3px), radial-gradient(circle at 78% 62%, rgba(255,255,255,0.12) 0, transparent 2px); pointer-events: none; }
+.stay-strip-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.15em; opacity: 0.75; font-weight: 600; margin-bottom: var(--s2); }
+.stay-strip-list { display: flex; flex-direction: column; gap: var(--s2); position: relative; }
+.stay-item { display: flex; align-items: center; gap: var(--s3); padding: var(--s3) 0; border-top: 1px solid rgba(255,255,255,0.12); }
+.stay-item:first-child { border-top: 0; }
+.stay-face { width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; font-size: 22px; overflow: hidden; flex-shrink: 0; }
+.stay-face img { width: 100%; height: 100%; object-fit: cover; }
+.stay-body { flex: 1; min-width: 0; }
+.stay-name { font-family: var(--font-serif); font-weight: 600; font-size: 20px; letter-spacing: -0.01em; }
+.stay-meta { font-size: 12px; opacity: 0.75; margin-top: 2px; }
+.stay-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.stay-actions .btn { background: rgba(255,255,255,0.14); color: white; border-color: transparent; padding: 6px 12px; font-size: 12px; }
+.stay-actions .btn:hover { background: rgba(255,255,255,0.24); }
+
+.dog-card { background: var(--paper-2); border-radius: var(--r4); padding: var(--s5); margin-bottom: var(--s3); border: 1px solid var(--edge-2); box-shadow: var(--shadow-sm); position: relative; overflow: hidden; transition: transform var(--dur) var(--ease-spring), box-shadow var(--dur), background var(--dur); }
+.dog-card:hover { box-shadow: var(--shadow-md); }
+.dog-card.in-care { background: linear-gradient(180deg, #ecf1e2 0%, var(--paper-2) 40%); border-color: #cddab6; }
+.dog-card.done { opacity: 0.55; }
+
+.swipe-wrap { position: relative; margin-bottom: var(--s3); border-radius: var(--r4); }
+.swipe-plate { position: absolute; inset: 0; border-radius: var(--r4); background: linear-gradient(90deg, var(--action) 0%, var(--action-dark) 100%); color: white; display: flex; align-items: center; padding: 0 var(--s5); font-weight: 600; font-size: 15px; overflow: hidden; }
+.swipe-plate .paw { font-size: 24px; margin-right: 10px; }
+.swipe-wrap > .dog-card { transition: transform var(--dur) var(--ease-out); touch-action: pan-y; margin-bottom: 0; }
+.swipe-wrap.swiping > .dog-card { transition: none; }
+.paw-stamp { position: absolute; top: 50%; right: 32px; transform: translate(30px, -50%) rotate(-15deg) scale(0); font-size: 44px; opacity: 0; pointer-events: none; transition: transform 300ms var(--ease-spring), opacity 200ms; }
+.paw-stamp.on { transform: translate(0, -50%) rotate(-15deg) scale(1); opacity: 1; }
+
+.dog-card-top { display: flex; align-items: center; gap: var(--s4); margin-bottom: var(--s3); }
+.dog-face { width: 56px; height: 56px; border-radius: 50%; background: var(--paper-3); display: flex; align-items: center; justify-content: center; font-size: 30px; flex-shrink: 0; border: 2px solid var(--paper-2); box-shadow: inset 0 0 0 1px var(--edge); overflow: hidden; }
+.dog-face img { width: 100%; height: 100%; object-fit: cover; }
+.dog-face.night { background: var(--night-2); box-shadow: inset 0 0 0 1px var(--night); }
+.dog-name { font-family: var(--font-serif); font-variation-settings: 'opsz' 144, 'SOFT' 90; font-weight: 600; font-size: 26px; color: var(--ink); line-height: 1.1; letter-spacing: -0.01em; }
+.dog-sub { color: var(--ink-2); font-size: 13px; margin-top: 2px; }
+.dog-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
+.dog-card-actions { display: flex; gap: var(--s2); flex-wrap: wrap; }
+.dog-card-actions .btn.primary { flex: 1; min-width: 140px; }
+.dog-card .primary-icon { width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,0.22); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; margin-right: 4px; }
+.dog-card .quick-photos { display: flex; gap: 6px; margin-top: 10px; align-items: center; overflow-x: auto; padding-bottom: 4px; }
+.dog-card .quick-photo { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; border: 1.5px solid var(--edge); flex-shrink: 0; }
+.dog-card .quick-add-photo { width: 44px; height: 44px; border-radius: 8px; background: var(--paper-3); border: 1.5px dashed var(--edge); display: flex; align-items: center; justify-content: center; font-size: 20px; color: var(--ink-3); cursor: pointer; flex-shrink: 0; }
+.timestamp { font-size: 12px; color: var(--action-dark); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+
+/* Week */
+.week-day { background: var(--paper-2); border-radius: var(--r3); margin-bottom: var(--s3); padding: var(--s4) var(--s5); border: 1px solid var(--edge-2); transition: background var(--dur); }
+.week-day.today { background: linear-gradient(180deg, #fff8e3 0%, var(--paper-2) 40%); border-color: var(--highlight-2); }
+.week-day.past { opacity: 0.55; }
+.week-day.empty { padding: var(--s3) var(--s5); background: transparent; border: 1px dashed var(--edge); color: var(--ink-3); font-style: italic; display: flex; justify-content: space-between; align-items: center; font-size: 13px; cursor: pointer; }
+.week-day.empty:hover { border-color: var(--ink-2); color: var(--ink-2); }
+.week-day-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--s3); flex-wrap: wrap; gap: 6px; }
+.week-day-name { font-family: var(--font-serif); font-weight: 600; font-size: 20px; color: var(--ink); letter-spacing: -0.01em; }
+.week-day-name .dow { color: var(--ink-3); font-weight: 400; margin-left: 8px; }
+.week-day-cap { font-size: 12px; color: var(--ink-2); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.cap-bar { display: inline-block; width: 40px; height: 5px; background: var(--edge); border-radius: 3px; overflow: hidden; vertical-align: middle; margin-left: 4px; }
+.cap-bar > span { display: block; height: 100%; background: var(--action); border-radius: 3px; transition: width var(--dur); }
+.cap-bar > span.night { background: var(--night); }
+.cap-bar > span.full { background: var(--highlight); }
+.week-day .revenue { color: var(--ink); font-family: var(--font-serif); font-weight: 500; }
+.day-revenue { font-family: var(--font-serif); font-weight: 600; font-size: 18px; color: var(--ink); letter-spacing: -0.01em; }
+.day-revenue .paid-hint { font-size: 11px; color: var(--ink-3); font-weight: 400; letter-spacing: 0; }
+.day-add { width: 26px; height: 26px; border-radius: 50%; background: var(--ink); color: var(--paper); border: 0; font-size: 15px; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: transform var(--dur) var(--ease-spring); }
+.day-add:hover { transform: scale(1.1); }
+.day-add:active { transform: scale(0.9); }
+
+/* Week grouping header */
+.week-header { display: flex; justify-content: space-between; align-items: baseline; padding: var(--s5) 0 var(--s3); margin-top: var(--s3); border-bottom: 1px solid var(--edge); font-family: var(--font-serif); font-weight: 600; font-size: 20px; color: var(--ink); letter-spacing: -0.01em; font-variation-settings: 'opsz' 144, 'SOFT' 90; }
+.week-header:first-of-type { margin-top: var(--s2); padding-top: var(--s3); }
+.week-total { font-family: var(--font-serif); font-size: 16px; color: var(--ink); font-weight: 500; }
+.week-total b { font-weight: 700; }
+.week-total .muted { color: var(--ink-3); font-size: 13px; font-weight: 400; }
+
+/* Week mode switch (upcoming / history) */
+.week-mode-switch { display: inline-flex; background: var(--paper-2); border: 1px solid var(--edge); border-radius: 999px; padding: 3px; margin: 0 0 var(--s5); gap: 3px; }
+.week-mode-btn { padding: 8px 16px; background: transparent; border: 0; border-radius: 999px; font: 500 13px var(--font-sans); color: var(--ink-2); cursor: pointer; transition: all var(--dur); }
+.week-mode-btn.on { background: var(--ink); color: var(--paper); }
+.week-dog-row { display: flex; align-items: center; gap: var(--s3); padding: 8px; margin: 0 -8px; border-top: 1px dashed var(--edge-2); cursor: pointer; transition: background var(--dur); border-radius: 6px; }
+.week-dog-row:first-of-type { border-top: 0; }
+.week-dog-row:hover { background: var(--paper-3); }
+.week-dog-face { width: 34px; height: 34px; border-radius: 50%; background: var(--paper-3); display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; border: 1.5px solid var(--edge); overflow: hidden; }
+.week-dog-face img { width: 100%; height: 100%; object-fit: cover; }
+.week-dog-face.night { background: var(--night-2); border-color: var(--night); }
+.week-dog-body { flex: 1; min-width: 0; }
+.week-dog-name { font-family: var(--font-serif); font-weight: 600; font-size: 15px; color: var(--ink); }
+.week-dog-meta { font-size: 12px; color: var(--ink-2); }
+.week-dog-price { font-family: var(--font-serif); font-weight: 500; color: var(--ink); font-size: 14px; }
+
+.stay-ribbon { display: flex; align-items: center; gap: var(--s3); padding: 10px 12px; background: linear-gradient(135deg, var(--night) 0%, #4a4276 100%); color: white; border-radius: var(--r2); margin: 4px 0; cursor: pointer; }
+.stay-ribbon .stay-face { width: 34px; height: 34px; background: rgba(255,255,255,0.15); }
+.stay-ribbon .body { flex: 1; }
+.stay-ribbon .body .name { font-family: var(--font-serif); font-weight: 600; font-size: 15px; }
+.stay-ribbon .body .meta { font-size: 12px; opacity: 0.8; }
+.stay-ribbon .amount { font-family: var(--font-serif); font-weight: 500; font-size: 15px; }
+
+/* Pack */
+.search-bar { position: sticky; top: var(--appbar-h); z-index: 5; background: var(--paper); padding: var(--s3) 0; }
+.search-input { width: 100%; padding: 12px var(--s5); border: 1px solid var(--edge); border-radius: 999px; font-size: 15px; background: var(--paper-2); font-family: inherit; transition: border-color var(--dur), box-shadow var(--dur); }
+.search-input:focus { outline: none; border-color: var(--ink); box-shadow: 0 0 0 3px rgba(43,26,16,0.08); }
+.pack-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--s3); }
+.pack-card { background: var(--paper-2); border-radius: var(--r3); padding: var(--s4) var(--s3) var(--s3); border: 1px solid var(--edge-2); text-align: center; cursor: pointer; transition: transform var(--dur) var(--ease-spring), box-shadow var(--dur); box-shadow: var(--shadow-sm); }
+.pack-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.pack-face { width: 68px; height: 68px; border-radius: 50%; background: var(--paper-3); margin: 0 auto var(--s3); display: flex; align-items: center; justify-content: center; font-size: 34px; border: 2px solid var(--paper-2); box-shadow: inset 0 0 0 1px var(--edge); overflow: hidden; }
+.pack-face img { width: 100%; height: 100%; object-fit: cover; }
+.pack-name { font-family: var(--font-serif); font-weight: 600; font-size: 18px; color: var(--ink); letter-spacing: -0.01em; font-variation-settings: 'opsz' 144, 'SOFT' 90; }
+.pack-owner { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+.pack-tag { font-size: 11px; color: var(--ink-3); margin-top: 6px; text-transform: uppercase; letter-spacing: 0.08em; }
+.pack-tag.med { color: var(--medical); font-weight: 600; }
+.pack-actions { text-align: center; margin: var(--s5) 0; display: flex; gap: var(--s3); justify-content: center; flex-wrap: wrap; }
+
+/* Ledger */
+.ledger-hero { padding: var(--s6) var(--s5); background: linear-gradient(180deg, var(--paper-3) 0%, transparent 100%); border-radius: var(--r4); margin-bottom: var(--s5); text-align: center; }
+.ledger-num { font-family: var(--font-serif); font-variation-settings: 'opsz' 144, 'SOFT' 80; font-weight: 700; font-size: clamp(48px, 12vw, 72px); color: var(--ink); letter-spacing: -0.03em; line-height: 1; }
+.ledger-caption { color: var(--ink-2); font-family: var(--font-serif); font-style: italic; margin-top: var(--s3); font-size: 15px; }
+.ledger-delta.up { color: var(--action-dark); font-weight: 600; }
+.ledger-delta.down { color: var(--owe); font-weight: 600; }
+.ledger-sub { display: flex; gap: var(--s5); justify-content: center; flex-wrap: wrap; margin-top: var(--s4); font-size: 13px; color: var(--ink-2); }
+.ledger-sub b { font-family: var(--font-serif); font-weight: 600; color: var(--ink); }
+.ledger-row { display: flex; align-items: center; justify-content: space-between; padding: var(--s3) var(--s4); background: var(--paper-2); border-radius: var(--r2); margin-bottom: var(--s2); border: 1px solid var(--edge-2); cursor: pointer; transition: background var(--dur); }
+.ledger-row:hover { background: var(--paper-3); }
+.ledger-row .r-dog { font-family: var(--font-serif); font-weight: 600; font-size: 16px; }
+.ledger-row .r-date { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+.ledger-row .r-amt { font-family: var(--font-serif); font-weight: 600; font-size: 18px; color: var(--ink); }
+.ledger-row .r-amt.owe { color: var(--owe); }
+
+/* Period switcher */
+.period-switch { display: inline-flex; background: var(--paper-2); border: 1px solid var(--edge); border-radius: 999px; padding: 3px; margin: 0 0 var(--s5); gap: 3px; }
+.period-btn { padding: 6px 14px; background: transparent; border: 0; border-radius: 999px; font: 500 13px var(--font-sans); color: var(--ink-2); cursor: pointer; transition: all var(--dur); }
+.period-btn.on { background: var(--ink); color: var(--paper); }
+
+/* Trend chart */
+.trend-chart { display: flex; align-items: flex-end; gap: 8px; height: 140px; padding: var(--s4) var(--s3) 30px; background: var(--paper-2); border: 1px solid var(--edge-2); border-radius: var(--r3); position: relative; }
+.trend-bar { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; position: relative; }
+.trend-fill { width: 100%; max-width: 40px; background: linear-gradient(180deg, var(--action-dark), var(--action)); border-radius: 6px 6px 0 0; min-height: 4px; transition: height var(--dur-slow) var(--ease-out); }
+.trend-bar.current .trend-fill { background: linear-gradient(180deg, var(--highlight), #b8862a); }
+.trend-label { position: absolute; bottom: -22px; font-size: 11px; color: var(--ink-2); font-weight: 500; }
+.trend-value { position: absolute; top: -18px; font-size: 10px; color: var(--ink-3); font-family: var(--font-serif); font-weight: 500; white-space: nowrap; }
+
+/* Service split */
+.split-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); margin-bottom: var(--s3); }
+.split-item { background: var(--paper-2); border: 1px solid var(--edge-2); border-radius: var(--r3); padding: var(--s4); }
+.split-num { font-family: var(--font-serif); font-weight: 700; font-size: 26px; color: var(--ink); letter-spacing: -0.02em; font-variation-settings: 'opsz' 144, 'SOFT' 80; }
+.split-label { font-size: 12px; color: var(--ink-2); margin-top: 4px; }
+.split-bar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: var(--edge); }
+.split-day { background: var(--action); }
+.split-night { background: var(--night); }
+
+/* Occupancy */
+.occupancy-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); }
+.occupancy-item { background: var(--paper-2); border: 1px solid var(--edge-2); border-radius: var(--r3); padding: var(--s4); }
+.occupancy-num { font-family: var(--font-serif); font-weight: 700; font-size: 36px; color: var(--ink); letter-spacing: -0.02em; line-height: 1; font-variation-settings: 'opsz' 144, 'SOFT' 80; }
+.occupancy-num .pct { font-size: 18px; color: var(--ink-2); font-weight: 500; margin-left: 2px; }
+.occupancy-label { font-size: 12px; color: var(--ink-2); margin: 6px 0 10px; }
+
+/* Aging */
+.aging-alert { background: var(--owe-2); color: var(--owe); padding: 10px var(--s4); border-radius: var(--r2); font-size: 13px; font-weight: 600; margin-bottom: var(--s3); border-left: 3px solid var(--owe); }
+.aging-alert.soft { background: var(--highlight-2); color: var(--highlight-ink); border-left-color: var(--highlight); }
+.age-pill { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; background: var(--paper-3); color: var(--ink-2); margin-left: 4px; }
+.age-pill.age-warn { background: var(--highlight-2); color: var(--highlight-ink); }
+.age-pill.age-bad { background: var(--owe-2); color: var(--owe); }
+
+/* Booking price preview */
+.price-preview { background: linear-gradient(135deg, var(--ink) 0%, #3a2418 100%); color: var(--paper); border-radius: var(--r3); padding: var(--s4) var(--s5); margin-bottom: var(--s4); text-align: center; }
+.price-preview-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; opacity: 0.7; }
+.price-preview-num { font-family: var(--font-serif); font-weight: 700; font-size: 40px; letter-spacing: -0.02em; margin: 4px 0; font-variation-settings: 'opsz' 144, 'SOFT' 80; line-height: 1; }
+.price-preview-breakdown { font-size: 12px; opacity: 0.75; font-style: italic; }
+
+/* Repeat booking */
+.repeat-group { background: var(--paper-2); border: 1px dashed var(--edge); border-radius: var(--r2); padding: var(--s3) var(--s4); }
+.repeat-body { padding-top: 8px; }
+.repeat-preview { background: var(--paper-3); padding: 8px 12px; border-radius: var(--r1); margin-top: 8px; color: var(--ink); }
+.repeat-preview b { color: var(--ink); font-weight: 700; }
+
+/* Welcome packs */
+.pack-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--paper-2); border-radius: var(--r2); margin-bottom: 8px; border: 1px solid var(--edge-2); border-left: 4px solid var(--highlight); }
+.pack-row.expired { opacity: 0.55; border-left-color: var(--ink-3); }
+.pack-row.used { border-left-color: var(--action); }
+.pack-row-title { font-family: var(--font-serif); font-weight: 600; font-size: 15px; color: var(--ink); }
+.pack-row-meta { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+.pack-row-amt { font-family: var(--font-serif); font-weight: 600; font-size: 16px; color: var(--ink); }
+.pack-row-wrap { margin-bottom: 12px; }
+.pack-dots { display: flex; gap: 4px; margin-top: 8px; }
+.pack-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--edge); border: 1.5px solid var(--edge); }
+.pack-dot.used { background: var(--highlight); border-color: var(--highlight); }
+.pack-log { padding: 8px 12px; background: var(--paper); border-radius: 0 0 var(--r2) var(--r2); margin-top: -8px; border: 1px solid var(--edge-2); border-top: 0; }
+.pack-log-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; color: var(--ink); cursor: pointer; border-bottom: 1px dashed var(--edge-2); }
+.pack-log-row:last-child { border-bottom: 0; }
+.pack-log-row:hover { color: var(--action-dark); }
+.pack-log-empty { padding: 8px 12px; background: var(--paper); border-radius: 0 0 var(--r2) var(--r2); margin-top: -8px; border: 1px solid var(--edge-2); border-top: 0; font-size: 12px; color: var(--ink-3); font-style: italic; }
+
+.pack-option { border: 1.5px solid var(--edge); border-radius: var(--r2); padding: var(--s4); background: var(--paper-2); text-align: center; transition: all var(--dur); }
+.pack-option.on { border-color: var(--highlight); background: linear-gradient(180deg, #fff8e3 0%, var(--paper-2) 60%); box-shadow: 0 2px 8px rgba(219,166,63,0.15); }
+.pack-option-tier { font-family: var(--font-serif); font-weight: 600; font-size: 15px; color: var(--ink); margin-bottom: 6px; }
+.pack-option-price { font-family: var(--font-serif); font-weight: 700; font-size: 26px; color: var(--ink); letter-spacing: -0.02em; }
+.pack-option-unit { font-size: 11px; color: var(--ink-2); margin-top: 4px; }
+
+.pack-toggle { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--night-2); border: 1.5px solid var(--night); border-radius: var(--r2); cursor: pointer; transition: all var(--dur); }
+.pack-toggle.on { background: var(--night); color: white; }
+.pack-toggle.on .pack-toggle-meta { color: rgba(255,255,255,0.75); }
+.pack-toggle input { width: 18px; height: 18px; accent-color: var(--night); }
+.pack-toggle-title { font-family: var(--font-serif); font-weight: 600; font-size: 15px; }
+.pack-toggle-meta { font-size: 12px; color: var(--night); margin-top: 2px; }
+
+@media (max-width: 480px) {
+  .split-row, .occupancy-row { grid-template-columns: 1fr; }
+  .trend-chart { height: 120px; }
+  .trend-bar .trend-value { font-size: 9px; }
+}
+
+/* Sheet */
+#modalHost { position: fixed; inset: 0; display: none; z-index: 40; align-items: flex-end; justify-content: center; }
+#modalHost.on { display: flex; }
+.sheet-backdrop { position: absolute; inset: 0; background: rgba(43,26,16,0.42); animation: fadeIn var(--dur) var(--ease-out); }
+.sheet { position: relative; width: 100%; max-width: 560px; background: var(--paper); border-radius: var(--r4) var(--r4) 0 0; padding: var(--s6) var(--s5) calc(var(--s6) + env(safe-area-inset-bottom)); max-height: 92vh; overflow-y: auto; animation: slideUp var(--dur-slow) var(--ease-spring); box-shadow: var(--shadow-lg); }
+.sheet-handle { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); width: 40px; height: 4px; background: var(--edge); border-radius: 2px; }
+.sheet-title { font-family: var(--font-serif); font-variation-settings: 'opsz' 144, 'SOFT' 100; font-weight: 600; font-size: 26px; color: var(--ink); letter-spacing: -0.01em; margin: var(--s3) 0 var(--s2); }
+.sheet-sub { color: var(--ink-2); font-size: 14px; margin: 0 0 var(--s5); }
+.sheet-close { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; border-radius: 50%; background: var(--paper-2); border: 1px solid var(--edge); font-size: 20px; color: var(--ink-2); cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1; }
+
+.field-group { margin-bottom: var(--s4); }
+.field-group label { display: block; font-size: 13px; color: var(--ink-2); margin-bottom: 6px; font-weight: 500; }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); }
+.field select, .field textarea { font-family: inherit; }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { transform: translateY(24px); opacity: 0.6; } to { transform: translateY(0); opacity: 1; } }
+@keyframes pop { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+
+/* Ritual */
+.ritual-overlay { position: fixed; inset: 0; background: var(--paper); z-index: 60; display: none; flex-direction: column; animation: fadeIn var(--dur) var(--ease-out); }
+.ritual-overlay.on { display: flex; }
+.ritual-head { padding: var(--s5); padding-top: max(var(--s5), env(safe-area-inset-top)); display: flex; justify-content: space-between; align-items: center; }
+.ritual-progress { font-family: var(--font-serif); font-size: 15px; color: var(--ink-2); font-variation-settings: 'opsz' 144, 'SOFT' 100; }
+.ritual-progress b { color: var(--ink); font-weight: 700; }
+.ritual-close { background: transparent; border: 0; color: var(--ink-2); font-size: 24px; cursor: pointer; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; }
+.ritual-body { flex: 1; overflow-y: auto; padding: 0 var(--s5) var(--s5); max-width: 640px; margin: 0 auto; width: 100%; }
+.ritual-hero { display: flex; align-items: center; gap: var(--s4); padding: var(--s4) 0 var(--s5); }
+.ritual-hero-face { width: 80px; height: 80px; border-radius: 50%; background: var(--paper-3); display: flex; align-items: center; justify-content: center; font-size: 42px; border: 3px solid var(--paper-2); box-shadow: inset 0 0 0 1px var(--edge), var(--shadow-sm); overflow: hidden; }
+.ritual-hero-face img { width: 100%; height: 100%; object-fit: cover; }
+.ritual-hero-name { font-family: var(--font-serif); font-weight: 700; font-variation-settings: 'opsz' 144, 'SOFT' 90; font-size: 36px; letter-spacing: -0.02em; line-height: 1; }
+.ritual-hero-meta { color: var(--ink-2); font-size: 14px; margin-top: 4px; }
+.ritual-question { font-family: var(--font-serif); font-weight: 500; font-size: 18px; color: var(--ink); margin: var(--s5) 0 var(--s3); font-variation-settings: 'opsz' 144, 'SOFT' 100; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: var(--s4); }
+.ritual-notes { width: 100%; padding: var(--s4); border: 1.5px solid var(--edge); border-radius: var(--r3); font-family: inherit; font-size: 15px; min-height: 90px; resize: vertical; background: var(--paper-2); color: var(--ink); }
+.ritual-notes:focus { outline: none; border-color: var(--ink); }
+.ritual-photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 8px; margin-bottom: var(--s4); }
+.ritual-photo-slot { aspect-ratio: 1; border-radius: var(--r2); background: var(--paper-3); overflow: hidden; position: relative; }
+.ritual-photo-slot img { width: 100%; height: 100%; object-fit: cover; }
+.ritual-photo-slot.add { border: 1.5px dashed var(--edge); display: flex; align-items: center; justify-content: center; font-size: 28px; color: var(--ink-3); cursor: pointer; }
+.ritual-photo-slot.add:hover { border-color: var(--ink); color: var(--ink); }
+.ritual-photo-slot .rm { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%; background: rgba(0,0,0,0.6); color: white; border: 0; cursor: pointer; font-size: 12px; }
+.ritual-foot { padding: var(--s4) var(--s5); padding-bottom: calc(var(--s4) + env(safe-area-inset-bottom)); border-top: 1px solid var(--edge); display: flex; gap: var(--s3); background: var(--paper); }
+.ritual-foot .btn { flex: 1; }
+
+/* Day Close scrapbook */
+.close-page { padding: var(--s6) var(--s5); text-align: center; animation: pop var(--dur-slow) var(--ease-spring); max-width: 640px; margin: 0 auto; }
+.close-headline { font-family: var(--font-serif); font-weight: 500; font-style: italic; font-size: clamp(28px, 6vw, 40px); color: var(--ink); letter-spacing: -0.02em; line-height: 1.2; margin-bottom: var(--s4); font-variation-settings: 'opsz' 144, 'SOFT' 100; }
+.close-collage { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 6px; margin: var(--s5) 0; }
+.close-thumb { aspect-ratio: 1; border-radius: var(--r2); overflow: hidden; background: var(--paper-3); border: 2px solid var(--paper); box-shadow: var(--shadow-sm); position: relative; }
+.close-thumb:nth-child(3n) { transform: rotate(-1deg); }
+.close-thumb:nth-child(3n+1) { transform: rotate(1deg); }
+.close-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.close-thumb .caption { position: absolute; bottom: 0; left: 0; right: 0; padding: 3px 6px; background: linear-gradient(0deg, rgba(0,0,0,0.65), transparent); color: white; font-size: 10px; font-weight: 600; text-align: left; }
+.close-mood { font-family: var(--font-serif); font-size: 18px; font-style: italic; color: var(--ink-2); margin: var(--s4) 0; font-variation-settings: 'opsz' 144, 'SOFT' 100; }
+.close-stats { display: flex; gap: var(--s5); justify-content: center; margin: var(--s5) 0; flex-wrap: wrap; }
+.close-stat { padding: var(--s3) var(--s5); background: var(--paper-2); border-radius: 999px; border: 1px solid var(--edge); font-family: var(--font-serif); font-size: 15px; color: var(--ink); }
+.close-stat b { font-weight: 700; font-size: 18px; }
+
+/* Report preview (client-facing) */
+.report-preview { background: white; border-radius: var(--r3); overflow: hidden; box-shadow: var(--shadow-md); border: 1px solid var(--edge); max-width: 380px; margin: var(--s3) auto; }
+.report-preview .rp-photo { width: 100%; aspect-ratio: 4/3; background: var(--paper-3); display: flex; align-items: center; justify-content: center; color: var(--ink-3); font-size: 48px; overflow: hidden; }
+.report-preview .rp-photo img { width: 100%; height: 100%; object-fit: cover; }
+.report-preview .rp-body { padding: var(--s5); text-align: center; }
+.report-preview .rp-name { font-family: var(--font-serif); font-weight: 700; font-size: 30px; letter-spacing: -0.02em; color: var(--ink); font-variation-settings: 'opsz' 144, 'SOFT' 90; }
+.report-preview .rp-mood { font-family: var(--font-serif); font-style: italic; font-size: 16px; color: var(--ink-2); margin: 6px 0 var(--s3); }
+.report-preview .rp-story { background: var(--paper); padding: var(--s3); border-radius: var(--r2); font-size: 13px; line-height: 1.5; text-align: left; margin-bottom: var(--s3); color: var(--ink); border-left: 3px solid var(--highlight); }
+.report-preview .rp-moments { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin-bottom: var(--s3); }
+.report-preview .rp-moment { padding: 4px 10px; background: var(--highlight-2); color: var(--highlight-ink); border-radius: 999px; font-size: 11px; font-weight: 500; }
+.report-preview .rp-foot { padding: var(--s2) var(--s5) var(--s3); border-top: 1px dashed var(--edge); font-size: 10px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.15em; text-align: center; }
+
+/* Toast */
+#toast-host { position: fixed; bottom: calc(90px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); z-index: 80; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+.toast { background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 999px; font-size: 14px; font-weight: 500; animation: slideUp var(--dur) var(--ease-spring), fadeOut 300ms 2.4s forwards; box-shadow: var(--shadow-md); }
+.toast.warn { background: var(--owe); color: white; font-weight: 600; }
+@keyframes fadeOut { to { opacity: 0; transform: translateY(-10px); } }
+
+/* Persistent sync-failure banner — impossible to miss */
+#sync-banner { position: fixed; top: 0; left: 0; right: 0; z-index: 200; background: var(--owe); color: white; padding: 10px var(--s5); font-size: 14px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; gap: var(--s3); box-shadow: 0 2px 8px rgba(60,30,10,0.2); padding-top: max(10px, env(safe-area-inset-top)); }
+#sync-banner .msg { flex: 1; min-width: 0; }
+#sync-banner button { background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.4); padding: 6px 14px; border-radius: var(--r1); font: 600 13px var(--font-sans); cursor: pointer; }
+#sync-banner button:hover { background: rgba(255,255,255,0.3); }
+
+/* Avatar menu */
+.avatar-menu { position: absolute; top: calc(var(--appbar-h) + 4px); right: var(--s5); background: var(--paper); border: 1px solid var(--edge); border-radius: var(--r3); padding: var(--s2); min-width: 220px; box-shadow: var(--shadow-lg); z-index: 25; display: none; animation: slideUp var(--dur) var(--ease-spring); }
+.avatar-menu.on { display: block; }
+.avatar-menu button { display: flex; width: 100%; align-items: center; gap: var(--s3); padding: 10px var(--s3); background: transparent; border: 0; font: 500 14px var(--font-sans); color: var(--ink); border-radius: var(--r2); text-align: left; cursor: pointer; }
+.avatar-menu button:hover { background: var(--paper-2); }
+.avatar-menu button.danger { color: var(--owe); }
+
+/* FAB */
+.fab { position: fixed; bottom: calc(80px + env(safe-area-inset-bottom)); right: var(--s5); width: 56px; height: 56px; border-radius: 50%; background: var(--ink); color: var(--paper); border: 0; font-size: 26px; line-height: 1; box-shadow: var(--shadow-lg); cursor: pointer; z-index: 14; transition: transform var(--dur) var(--ease-spring); }
+.fab:active { transform: scale(0.92); }
+
+/* Utility */
+.hidden { display: none !important; }
+.row-between { display: flex; justify-content: space-between; align-items: center; }
+.muted { color: var(--ink-3); }
+.text-owe { color: var(--owe); }
+.text-night { color: var(--night); }
+.text-medical { color: var(--medical); }
+.small { font-size: 12px; }
+.text-center { text-align: center; }
+.mt-1 { margin-top: var(--s2); }
+.mt-2 { margin-top: var(--s4); }
+
+@media (min-width: 900px) {
+  .week-grid-desktop { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--s2); }
+  .week-grid-desktop .week-day { margin-bottom: 0; padding: var(--s3); }
+  .week-grid-desktop .week-day-head { flex-direction: column; align-items: flex-start; }
+  .week-grid-desktop .week-day-name { font-size: 15px; }
+  .week-grid-desktop .week-day-cap { font-size: 10px; margin-top: 4px; }
+  .week-grid-desktop .week-dog-row { flex-direction: column; align-items: flex-start; gap: 4px; padding: 6px 4px; }
+  .week-grid-desktop .week-dog-face { width: 26px; height: 26px; font-size: 14px; }
+  .week-grid-desktop .week-dog-name { font-size: 12px; }
+  .week-grid-desktop .week-dog-meta { font-size: 10px; }
+  .week-grid-desktop .week-dog-price { font-size: 12px; }
+}
+
+@media (max-width: 480px) {
+  .greet { font-size: 30px; }
+  .dog-name { font-size: 22px; }
+  .stay-name { font-size: 18px; }
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen" role="dialog" aria-labelledby="loginTitle">
+  <form class="login-card" id="loginForm" onsubmit="return doSignIn(event)">
+    <h1 class="login-mark" id="loginTitle">Pansi's Daybook</h1>
+    <p class="login-sub">the day, kept</p>
+    <input class="field" id="emailInput" type="email" autocomplete="username" placeholder="Email" aria-label="Email" required>
+    <input class="field" id="pwdInput" type="password" autocomplete="current-password" placeholder="Password" aria-label="Password" required>
+    <button class="btn primary block big" type="submit">Open the day</button>
+    <p class="sub muted small" id="loginError" style="margin-top: var(--s3); min-height:16px;" role="alert"></p>
+  </form>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <header class="appbar">
+    <div class="brand" onclick="switchTab('day')" role="button" tabindex="0">Pansi's</div>
+    <div class="avatar" id="avatarBtn" role="button" aria-label="Menu" tabindex="0"></div>
+    <div class="avatar-menu" id="avatarMenu">
+      <button onclick="openImportSheet()">📥 Import data</button>
+      <button onclick="exportBackup()">⬇ Export backup</button>
+      <button onclick="openCapacitySheet()">🎯 Capacity limits</button>
+      <button class="danger" onclick="signOutAdmin()">↩ Sign out</button>
+    </div>
+  </header>
+
+  <main id="surface" role="main"></main>
+
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button class="tab active" data-tab="day" role="tab" aria-selected="true"><span class="tab-ico" aria-hidden="true">☀</span>The Day</button>
+    <button class="tab" data-tab="week" role="tab" aria-selected="false"><span class="tab-ico" aria-hidden="true">☾</span>The Week</button>
+    <button class="tab" data-tab="pack" role="tab" aria-selected="false"><span class="tab-ico" aria-hidden="true">♡</span>The Pack</button>
+    <button class="tab" data-tab="ledger" role="tab" aria-selected="false"><span class="tab-ico" aria-hidden="true">§</span>Ledger</button>
+  </nav>
+
+  <button class="fab" onclick="openBookingSheet()" oncontextmenu="event.preventDefault(); openAddMenuSheet();" title="Add booking (long-press for more)" aria-label="Add booking">＋</button>
+</div>
+
+<div id="modalHost"></div>
+<div id="ritualOverlay" class="ritual-overlay" role="dialog" aria-modal="true"></div>
+<div id="toast-host" role="status" aria-live="polite"></div>
+<div id="sync-banner" style="display:none;" role="alert"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDAptLVEs0P5yto1ia_BzvuZqpGwT5kbXo",
+  authDomain: "pansi-paws.firebaseapp.com",
+  projectId: "pansi-paws",
+  storageBucket: "pansi-paws.firebasestorage.app",
+  messagingSenderId: "818843766857",
+  appId: "1:818843766857:web:2f9f2955f133f819d36f98"
+};
+const fbApp = initializeApp(firebaseConfig);
+const fbAuth = getAuth(fbApp);
+const fbDb = getFirestore(fbApp);
+const STATE_DOC = doc(fbDb, "pansis-admin", "state");
+const STORAGE_KEY = "pansis_admin_v1";
+const LAST_SAVE_KEY = "pansis_admin_last_save_ts";
+
+let PRICES = { small:{half:55,extended:70,full:80,overnight:100}, medium:{half:65,extended:80,full:90,overnight:115}, large:{half:75,extended:90,full:100,overnight:130} };
+let ADDONS = { senior:12, puppy:12, med:5, diet:3, taxi:35 };
+let SURCHARGES = { publicHoliday:25, xmasPeakDay:15, xmasPeakNight:30 };
+async function loadPricing() {
+  try {
+    const r = await fetch('pricing.json?t=' + Date.now());
+    if (r.ok) {
+      const p = await r.json();
+      PRICES = p.prices || PRICES;
+      ADDONS = { senior: p.addons?.senior?.amount ?? 12, puppy: p.addons?.puppy?.amount ?? 12, med: p.addons?.med?.amount ?? 5, diet: p.addons?.diet?.amount ?? 3, taxi: p.addons?.taxi?.amount ?? 35 };
+      SURCHARGES = { publicHoliday: p.surcharges?.publicHoliday?.amount ?? 25, xmasPeakDay: p.surcharges?.xmasPeakDay?.amount ?? 15, xmasPeakNight: p.surcharges?.xmasPeakNight?.amount ?? 30 };
+    }
+  } catch {}
+}
+
+const SESSION_LABELS = { half:"Half day", extended:"Extended half", full:"Full day", overnight:"Overnight" };
+const SIZE_LABELS = { small:"Small ≤10kg", medium:"Medium 10–25kg", large:"Large 25kg+" };
+
+const uid = () => Math.random().toString(16).slice(2,10);
+const localISO = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const todayISO = () => localISO(new Date());
+const nowTime = () => { const d = new Date(); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
+const isMeaningfulHealth = v => v && !/^(none|n\/a|nil|no|na|nothing|nope)( known)?[.!]?$/i.test(String(v).trim());
+const fmtDateShort = iso => new Date(iso + "T00:00:00").toLocaleDateString('en-AU', { weekday:'short', day:'numeric', month:'short' });
+const escapeHtml = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+const truncate = (s, n) => { if (!s) return ''; s = String(s); return s.length > n ? s.slice(0, n) + '…' : s; };
+const hapticTap = () => { try { navigator.vibrate?.(15); } catch {} };
+const hapticSuccess = () => { try { navigator.vibrate?.([20, 40, 30]); } catch {} };
+
+function emptyDb() {
+  return { owners: [], dogs: [], bookings: [], packs: [], meta: { version:2, createdAt: new Date().toISOString(), lastBackup: null, capacity:{maxDaycare:5, maxBoarding:3} } };
+}
+function normalizeDb(db) {
+  if (!db || typeof db !== 'object') return emptyDb();
+  db.owners ||= []; db.dogs ||= []; db.bookings ||= []; db.packs ||= []; db.meta ||= {};
+  db.meta.capacity ||= { maxDaycare:5, maxBoarding:3 };
+  if (!(db.meta.capacity.maxDaycare > 0)) db.meta.capacity.maxDaycare = 5;
+  if (!(db.meta.capacity.maxBoarding >= 0)) db.meta.capacity.maxBoarding = 3;
+  return db;
+}
+
+/* ---------- Pack helpers ---------- */
+function packsForDog(dogId) { return DB.packs.filter(p => p.dogId === dogId); }
+function activePacksForDog(dogId) {
+  const today = todayISO();
+  return packsForDog(dogId).filter(p => (p.daysUsed || 0) < p.size && p.expiryDate >= today);
+}
+function packSummary(p) {
+  const used = p.daysUsed || 0;
+  const remaining = p.size - used;
+  const days = Math.ceil((new Date(p.expiryDate + 'T00:00:00') - new Date(todayISO() + 'T00:00:00')) / 86400000);
+  return { used, remaining, expiresInDays: days, expired: days < 0 };
+}
+function calcPackPrice(dogSize, packSize) {
+  const base = PRICES[dogSize]?.full || 90;
+  const discount = packSize === 5 ? 0.10 : packSize === 10 ? 0.15 : 0;
+  return Math.round(base * packSize * (1 - discount));
+}
+function loadFromStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return emptyDb();
+    return normalizeDb(JSON.parse(raw));
+  } catch { return emptyDb(); }
+}
+
+let DB = emptyDb();
+let currentTab = 'day';
+let searchQuery = '';
+let ritualState = null;
+let lastLocalSaveTs = parseInt(localStorage.getItem(LAST_SAVE_KEY) || '0', 10);
+// Unique per-tab id — used for reliable self-write dedup so we don't rely on flaky client clocks
+const CLIENT_ID = (crypto?.randomUUID?.() || Math.random().toString(36).slice(2)) + '-' + Date.now();
+// Buffer for remote snapshots that arrive while a modal is open — applied on close
+let pendingRemoteDb = null;
+
+async function loadFromFirestore() {
+  try {
+    const snap = await getDoc(STATE_DOC);
+    if (snap.exists()) {
+      const r = snap.data();
+      DB = normalizeDb({ owners: r.owners||[], dogs: r.dogs||[], bookings: r.bookings||[], packs: r.packs||[], meta: r.meta });
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); } catch (e) { console.warn('LS write failed', e); }
+      return true;
+    }
+  } catch (e) {
+    console.warn('Firestore load failed, using cache', e);
+    DB = loadFromStorage();
+    toast('Offline · using local cache', 'warn');
+    return true;
+  }
+  return false;
+}
+function pruneOldPhotos(db) {
+  // Drop photos from reports older than 30 days to keep the Firestore doc under 1MB.
+  // The report text (mood, moments, story) stays forever — only images are heavy.
+  const cutoffMs = Date.now() - 30 * 86400000;
+  let dropped = 0;
+  db.bookings.forEach(b => {
+    if (!b.report?.photos?.length) return;
+    const bookingDate = new Date(b.date + 'T00:00:00').getTime();
+    if (bookingDate < cutoffMs) {
+      dropped += b.report.photos.length;
+      b.report.photos = [];
+    }
+  });
+  return dropped;
+}
+// Reconcile the user's in-memory DB with any buffered remote snapshot before writing.
+// For each collection: start from remote (has additions/deletions from other devices),
+// then overlay the user's records — user's edits win on same id; remote records the user didn't touch survive.
+function reconcileWithPending(db) {
+  if (!pendingRemoteDb) return db;
+  const merge = (base = [], mine = []) => {
+    const map = new Map(base.map(x => [x.id, x]));
+    mine.forEach(x => map.set(x.id, x));
+    return [...map.values()];
+  };
+  const merged = normalizeDb({
+    owners:   merge(pendingRemoteDb.owners,   db.owners),
+    dogs:     merge(pendingRemoteDb.dogs,     db.dogs),
+    bookings: merge(pendingRemoteDb.bookings, db.bookings),
+    packs:    merge(pendingRemoteDb.packs,    db.packs),
+    meta: db.meta || pendingRemoteDb.meta
+  });
+  // The user's in-memory DB now reflects the reconciled state
+  DB = merged;
+  pendingRemoteDb = null;
+  return merged;
+}
+
+// Firestore rejects `undefined` values — walk the object and drop any keys whose value is undefined.
+// Also normalises Date objects to ISO strings (Firestore rejects raw Date, would silently corrupt to {}).
+function sanitizeForFirestore(x) {
+  if (x === undefined || x === null) return null;
+  if (x instanceof Date) return x.toISOString();
+  if (typeof x === 'number' && !Number.isFinite(x)) return null; // NaN, Infinity
+  if (Array.isArray(x)) return x.map(sanitizeForFirestore);
+  if (typeof x === 'object') {
+    const out = {};
+    for (const k in x) {
+      if (!Object.prototype.hasOwnProperty.call(x, k)) continue;
+      const v = x[k];
+      if (v === undefined) continue;
+      out[k] = sanitizeForFirestore(v);
+    }
+    return out;
+  }
+  return x;
+}
+
+async function save(db) {
+  db = reconcileWithPending(db);
+  const now = Date.now();
+  lastLocalSaveTs = now;
+  pruneOldPhotos(db);
+  try { localStorage.setItem(LAST_SAVE_KEY, String(now)); } catch {}
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(db)); }
+  catch (e) { console.warn('LS quota', e); toast('Local cache full — cloud only', 'warn'); }
+  try {
+    const approxKB = Math.round(JSON.stringify(db).length / 1024);
+    if (approxKB > 850) toast(`⚠ Data size ${approxKB} KB — approaching cloud limit`, 'warn');
+  } catch {}
+  try {
+    const payload = sanitizeForFirestore({
+      ...db,
+      _updatedAt: new Date().toISOString(),
+      _updatedAtMs: now,
+      _updatedBy: fbAuth.currentUser?.email || 'unknown',
+      _updatedByClientId: CLIENT_ID
+    });
+    await setDoc(STATE_DOC, payload);
+    pendingRemoteDb = null;
+    // Success — clear pending write counter + hide banner
+    failedWriteCount = 0;
+    hideSyncBanner();
+    return true;
+  } catch (e) {
+    console.error('Firestore save failed', e);
+    failedWriteCount++;
+    showSyncBanner(failedWriteCount);
+    toast('⚠ Cloud save failed', 'warn');
+    return false;
+  }
+}
+let failedWriteCount = 0;
+function modalIsOpen() {
+  return document.getElementById('modalHost')?.classList.contains('on') || !!ritualState;
+}
+function startRealtimeSync() {
+  onSnapshot(STATE_DOC, snap => {
+    if (!snap.exists()) return;
+    const r = snap.data();
+    // Reliable dedup: skip ONLY writes from this exact browser tab
+    if (r._updatedByClientId === CLIENT_ID) return;
+    const nextDb = normalizeDb({ owners: r.owners||[], dogs: r.dogs||[], bookings: r.bookings||[], packs: r.packs||[], meta: r.meta });
+    // If a modal is open, buffer the remote update so we don't wipe the in-progress form
+    if (modalIsOpen()) {
+      pendingRemoteDb = nextDb;
+      toast(`Remote changes pending — will apply when you close`, 'info');
+      return;
+    }
+    DB = nextDb;
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); } catch {}
+    render();
+    const who = (r._updatedBy || '').split('@')[0];
+    const me = (fbAuth.currentUser?.email || '').split('@')[0];
+    toast(`Synced from ${who && who !== me ? who : 'other device'}`, 'info');
+  }, err => { console.warn('Snapshot error', err); toast('Sync interrupted', 'warn'); });
+}
+// Apply any deferred remote snapshot when a modal/ritual closes — after the local save has settled
+function drainPendingRemote() {
+  if (!pendingRemoteDb) return;
+  DB = pendingRemoteDb;
+  pendingRemoteDb = null;
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); } catch {}
+  render();
+  toast('Applied remote changes', 'info');
+}
+
+const dogById = id => DB.dogs.find(d => d.id === id);
+const ownerById = id => DB.owners.find(o => o.id === id);
+const ownerOf = dogId => { const d = dogById(dogId); return d ? ownerById(d.ownerId) : null; };
+const dogsOfOwner = ownerId => DB.dogs.filter(d => d.ownerId === ownerId);
+const bookingsForDate = iso => DB.bookings.filter(b => b.date === iso);
+
+function calcTotal(booking, dog) {
+  if (booking.customPrice != null) return booking.customPrice;
+  if (!dog) return 0;
+  let t = PRICES[dog.size]?.[booking.session] || 0;
+  if (booking.addOns?.senior) t += ADDONS.senior;
+  if (booking.addOns?.puppy)  t += ADDONS.puppy;
+  if (booking.addOns?.med)    t += ADDONS.med;
+  if (booking.addOns?.diet)   t += ADDONS.diet;
+  if (booking.addOns?.taxi)   t += ADDONS.taxi;
+  if (booking.surcharges?.publicHoliday) t += SURCHARGES.publicHoliday;
+  if (booking.surcharges?.xmasPeak) t += (booking.session === 'overnight' ? SURCHARGES.xmasPeakNight : SURCHARGES.xmasPeakDay);
+  return t;
+}
+
+function computeStays(bookings) {
+  const nightly = bookings.filter(b => b.session === 'overnight');
+  const byDog = {};
+  nightly.forEach(b => { (byDog[b.dogId] ||= []).push(b); });
+  const stays = [];
+  Object.entries(byDog).forEach(([dogId, arr]) => {
+    arr.sort((a,b) => a.date.localeCompare(b.date));
+    if (!arr.length) return;
+    let group = [arr[0]];
+    for (let i = 1; i < arr.length; i++) {
+      const prev = new Date(arr[i-1].date + 'T00:00:00');
+      const cur  = new Date(arr[i].date + 'T00:00:00');
+      const gap = (cur - prev) / 86400000;
+      if (gap === 1) group.push(arr[i]);
+      else { stays.push({ dogId, bookings: group }); group = [arr[i]]; }
+    }
+    stays.push({ dogId, bookings: group });
+  });
+  return stays;
+}
+function stayForBookingId(bookingId) {
+  const stays = computeStays(DB.bookings);
+  return stays.find(s => s.bookings.some(b => b.id === bookingId));
+}
+
+async function downscalePhoto(file, maxSide=800, quality=0.72) {
+  const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = e => res(e.target.result); r.onerror = rej; r.readAsDataURL(file); });
+  const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl; });
+  let w = img.width, h = img.height;
+  if (w > h && w > maxSide) { h = Math.round(h * maxSide / w); w = maxSide; }
+  else if (h > maxSide) { w = Math.round(w * maxSide / h); h = maxSide; }
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+  return canvas.toDataURL('image/jpeg', quality);
+}
+
+function toast(msg, kind) {
+  const host = document.getElementById('toast-host');
+  const t = document.createElement('div');
+  t.className = 'toast' + (kind === 'warn' ? ' warn' : '');
+  t.textContent = msg;
+  host.appendChild(t);
+  setTimeout(() => t.remove(), kind === 'warn' ? 5000 : 3000);
+}
+
+// Persistent banner for cloud-sync failures — doesn't fade
+function showSyncBanner(pendingWrites) {
+  const el = document.getElementById('sync-banner');
+  if (!el) return;
+  el.innerHTML = `
+    <span class="msg">⚠ Cloud save failed — ${pendingWrites} change${pendingWrites===1?'':'s'} only on this device. Firestore rejected the write.</span>
+    <button onclick="retryPendingSave()">Retry</button>
+    <button onclick="hideSyncBanner()" style="background:transparent;border-color:transparent;padding:6px 8px;">×</button>`;
+  el.style.display = 'flex';
+}
+function hideSyncBanner() { const el = document.getElementById('sync-banner'); if (el) el.style.display = 'none'; }
+async function retryPendingSave() {
+  hideSyncBanner();
+  toast('Retrying…');
+  await save(DB);
+}
+
+async function doSignIn(e) {
+  e?.preventDefault();
+  const email = document.getElementById('emailInput').value.trim();
+  const pwd = document.getElementById('pwdInput').value;
+  const err = document.getElementById('loginError');
+  err.textContent = '';
+  try { await signInWithEmailAndPassword(fbAuth, email, pwd); }
+  catch (e) { err.textContent = e.code === 'auth/invalid-credential' ? 'Wrong email or password.' : e.message; }
+  return false;
+}
+async function signOutAdmin() { try { await signOut(fbAuth); } finally { location.reload(); } }
+
+onAuthStateChanged(fbAuth, async (user) => {
+  if (!user) { document.getElementById('loginScreen').style.display = 'flex'; document.getElementById('app').style.display = 'none'; return; }
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('avatarBtn').textContent = (user.email || 'A')[0].toUpperCase();
+  DB = loadFromStorage();
+  render();
+  await loadPricing();
+  const loaded = await loadFromFirestore();
+  if (!loaded) {
+    const local = loadFromStorage();
+    if (local.owners.length || local.dogs.length || local.bookings.length) {
+      if (confirm(`Welcome ${user.email.split('@')[0]}! Upload your local data (${local.owners.length} clients, ${local.dogs.length} dogs) to the cloud so it syncs to all devices?`)) {
+        DB = local; await save(DB);
+      }
+    }
+  }
+  render();
+  startRealtimeSync();
+});
+
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => switchTab(t.dataset.tab));
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(x => { const on = x.dataset.tab === tab; x.classList.toggle('active', on); x.setAttribute('aria-selected', on ? 'true' : 'false'); });
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+document.getElementById('avatarBtn').onclick = e => { e.stopPropagation(); document.getElementById('avatarMenu').classList.toggle('on'); };
+document.addEventListener('click', () => document.getElementById('avatarMenu').classList.remove('on'));
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (ritualState) { closeRitual(); return; }
+    if (document.getElementById('modalHost').classList.contains('on')) { closeSheet(); return; }
+  }
+});
+
+function render() {
+  const surface = document.getElementById('surface');
+  if (currentTab === 'day')    surface.innerHTML = renderDay();
+  if (currentTab === 'week')   surface.innerHTML = renderWeek();
+  if (currentTab === 'pack')   surface.innerHTML = renderPack();
+  if (currentTab === 'ledger') surface.innerHTML = renderLedger();
+  attach();
+}
+function attach() {
+  document.querySelectorAll('[data-arrive]').forEach(b => b.onclick = () => arriveDog(b.dataset.arrive));
+  document.querySelectorAll('[data-depart]').forEach(b => b.onclick = () => departDog(b.dataset.depart));
+  document.querySelectorAll('[data-pay]').forEach(b => b.onclick = () => markPaid(b.dataset.pay));
+  document.querySelectorAll('[data-openbk]').forEach(b => b.onclick = (e) => { e.stopPropagation(); openBookingSheet(b.dataset.openbk); });
+  document.querySelectorAll('[data-opendog]').forEach(b => b.onclick = (e) => { e.stopPropagation(); openDogSheet(b.dataset.opendog); });
+  document.querySelectorAll('[data-openowner]').forEach(b => b.onclick = (e) => { e.stopPropagation(); openOwnerSheet(b.dataset.openowner || null); });
+  document.querySelectorAll('[data-startritual]').forEach(b => b.onclick = () => startRitual());
+  document.querySelectorAll('[data-adddog]').forEach(b => b.onclick = () => openDogEditSheet(null, b.dataset.adddog || null));
+  document.querySelectorAll('[data-editdog]').forEach(b => b.onclick = (e) => { e.stopPropagation(); openDogEditSheet(b.dataset.editdog); });
+  document.querySelectorAll('[data-emptyday]').forEach(b => b.onclick = () => openBookingSheet(null, b.dataset.emptyday));
+  document.querySelectorAll('[data-openstay]').forEach(b => b.onclick = () => openStaySheet(b.dataset.openstay));
+  document.querySelectorAll('[data-quickcapture]').forEach(el => el.onclick = () => triggerQuickPhoto(el.dataset.quickcapture));
+  document.querySelectorAll('.swipe-wrap').forEach(el => wireSwipe(el));
+  const search = document.getElementById('searchInput');
+  if (search) {
+    search.oninput = e => handleSearch(e.target.value);
+    if (searchQuery && document.activeElement !== search) search.focus();
+  }
+}
+
+function handleSearch(v) {
+  searchQuery = v;
+  if (currentTab === 'pack') updatePackFilter();
+}
+function updatePackFilter() {
+  const q = searchQuery.trim().toLowerCase();
+  document.querySelectorAll('#packGrid > .pack-card').forEach(card => {
+    const hay = card.dataset.hay || '';
+    card.style.display = (!q || hay.includes(q)) ? '' : 'none';
+  });
+}
+
+/* ---------- DAY ---------- */
+function greeting() {
+  const h = new Date().getHours();
+  const dow = new Date().toLocaleDateString('en-AU', { weekday:'long' });
+  const bks = bookingsForDate(todayISO());
+  const n = bks.length;
+  const friendWord = n === 1 ? 'one friend' : `${n} friends`;
+  if (n === 0) return { line: `${dow}. <em>A quiet one.</em>`, sub: 'No dogs on the books today.' };
+  if (h < 11) return { line: `${dow}. <em>${friendWord} today.</em>`, sub: 'Kettle on. Here\'s who\'s coming.' };
+  if (h < 15) return { line: `${dow}. <em>Middle of the day.</em>`, sub: `${friendWord} through the door.` };
+  if (h < 18) return { line: `${dow}. <em>Wrap-up time.</em>`, sub: 'Time to write today\'s stories.' };
+  return { line: `${dow}. <em>Evening.</em>`, sub: 'The day\'s nearly closed.' };
+}
+
+function renderDay() {
+  const iso = todayISO();
+  const bks = bookingsForDate(iso).slice().sort((a,b) => (a.arrivalTime||'99') > (b.arrivalTime||'99') ? 1 : -1);
+  const g = greeting();
+  const overnights = DB.bookings.filter(b => b.session === 'overnight' && b.date === iso);
+
+  let html = `<h1 class="greet">${g.line}</h1><p class="sub">${g.sub}</p>`;
+
+  if (overnights.length) {
+    html += `<div class="stay-strip">
+      <div class="stay-strip-label">Overnight guests</div>
+      <div class="stay-strip-list">${overnights.map(b => renderStayItem(b)).join('')}</div>
+    </div>`;
+  }
+
+  const day = bks.filter(b => b.session !== 'overnight');
+  const upcoming = day.filter(b => !b.arrivalLogged);
+  const inCare = day.filter(b => b.arrivalLogged && !b.departureLogged);
+  const done = day.filter(b => b.departureLogged);
+
+  if (!bks.length && !overnights.length) {
+    html += `<div class="day-empty">Nothing to keep. Take a walk.</div>
+      <p class="text-center"><button class="btn ghost mt-2" onclick="openAddMenuSheet()">＋ Add something</button></p>`;
+    return html;
+  }
+
+  if (upcoming.length) { html += `<div class="section-title">Coming today</div>`; upcoming.forEach(b => html += dogCardWrapped(b, 'upcoming')); }
+  if (inCare.length)   { html += `<div class="section-title">Here now</div>`;   inCare.forEach(b => html += dogCardWrapped(b, 'in-care')); }
+  if (done.length)     { html += `<div class="section-title">Left today</div>`; done.forEach(b => html += dogCardWrapped(b, 'done')); }
+
+  const readyBks = [...day.filter(b => b.arrivalLogged && !b.report?.sentAt), ...overnights.filter(b => !b.report?.sentAt)];
+  if (readyBks.length) {
+    const label = readyBks.length === 1 ? '1 story to write' : `${readyBks.length} stories to write`;
+    html += `<div class="section-title">Ritual</div>
+      <button class="btn primary block big" data-startritual>📖 Wrap up the day · ${label}</button>
+      <p class="sub small text-center" style="margin-top:12px">Photos, mood, moments. One dog after another.</p>`;
+  }
+  return html;
+}
+
+function renderStayItem(b) {
+  const dog = dogById(b.dogId); if (!dog) return '';
+  const owner = ownerOf(b.dogId);
+  const stay = stayForBookingId(b.id);
+  const nights = stay ? stay.bookings.length : 1;
+  const idx = stay ? stay.bookings.findIndex(x => x.id === b.id) + 1 : 1;
+  const nightLabel = nights > 1 ? ` · night ${idx} of ${nights}` : '';
+  const face = photoOrGlyph(dog);
+  const acts = [];
+  if (!b.arrivalLogged) acts.push(`<button class="btn" data-arrive="${b.id}">Arrived</button>`);
+  if (b.arrivalLogged && !b.departureLogged) acts.push(`<button class="btn" data-depart="${b.id}">Picked up</button>`);
+  if (b.paymentStatus !== 'paid') acts.push(`<button class="btn" data-pay="${b.id}">Paid</button>`);
+  acts.push(`<button class="btn" data-openbk="${b.id}">•••</button>`);
+  return `<div class="stay-item">
+    <div class="stay-face">${face}</div>
+    <div class="stay-body">
+      <div class="stay-name">${escapeHtml(dog.name)}</div>
+      <div class="stay-meta">${escapeHtml(owner?.name || '—')}${nightLabel} · $${b.total || calcTotal(b, dog)}</div>
+    </div>
+    <div class="stay-actions">${acts.join('')}</div>
+  </div>`;
+}
+
+function dogCardWrapped(b, state) {
+  if (state === 'upcoming') {
+    return `<div class="swipe-wrap" data-swipe-bk="${b.id}">
+      <div class="swipe-plate"><span class="paw">🐾</span> Mark arrived — swipe →</div>
+      ${dogCard(b, state)}
+      <div class="paw-stamp">🐾</div>
+    </div>`;
+  }
+  return dogCard(b, state);
+}
+function dogCard(b, state) {
+  const dog = dogById(b.dogId); if (!dog) return '';
+  const owner = ownerOf(b.dogId);
+  const face = photoOrGlyph(dog);
+  const total = b.total || calcTotal(b, dog);
+  const isNight = b.session === 'overnight';
+  const pills = [];
+  pills.push(b.paymentStatus === 'paid' ? '<span class="pill done">paid</span>' : '<span class="pill owe">unpaid</span>');
+  if (isMeaningfulHealth(dog.medicalConditions)) pills.push(`<span class="pill med">⚕ ${escapeHtml(truncate(dog.medicalConditions, 24))}</span>`);
+  if (dog.aggression === 'yes') pills.push('<span class="pill med">⚠ aggression</span>');
+  if (b.arrivalLogged) pills.push(`<span class="timestamp">✓ ${b.arrivalLogged}</span>`);
+  if (b.departureLogged) pills.push(`<span class="timestamp">→ ${b.departureLogged}</span>`);
+
+  const primary = state === 'upcoming'
+    ? `<button class="btn primary" data-arrive="${b.id}"><span class="primary-icon">✓</span> Mark arrived</button>`
+    : state === 'in-care'
+      ? `<button class="btn primary" data-depart="${b.id}"><span class="primary-icon">→</span> Picked up</button>`
+      : `<button class="btn ghost" data-openbk="${b.id}">Open</button>`;
+  const secondary = [];
+  if (state !== 'upcoming' && b.paymentStatus !== 'paid') secondary.push(`<button class="btn ghost tiny" data-pay="${b.id}">Mark paid</button>`);
+  secondary.push(`<button class="btn ghost tiny" data-openbk="${b.id}">Edit</button>`);
+
+  let quickStrip = '';
+  if (state === 'in-care') {
+    const photos = (b.report?.photos || []).slice(0, 4);
+    quickStrip = `<div class="quick-photos">
+      ${photos.map(p => `<img class="quick-photo" alt="${escapeHtml(dog.name)}" src="${p.data}">`).join('')}
+      <div class="quick-add-photo" data-quickcapture="${b.id}" title="Add photo" role="button" tabindex="0">📷</div>
+    </div>`;
+  }
+
+  return `
+    <div class="dog-card ${state}">
+      <div class="dog-card-top">
+        <div class="dog-face ${isNight?'night':''}">${face}</div>
+        <div style="flex:1; min-width:0">
+          <div class="dog-name">${escapeHtml(dog.name)}</div>
+          <div class="dog-sub">${escapeHtml(owner?.name || '—')} · ${SESSION_LABELS[b.session]} · $${total}</div>
+          <div class="dog-pills">${pills.join('')}</div>
+        </div>
+      </div>
+      ${quickStrip}
+      <div class="dog-card-actions">${primary}${secondary.join('')}</div>
+    </div>`;
+}
+
+function wireSwipe(wrap) {
+  const card = wrap.querySelector('.dog-card');
+  const stamp = wrap.querySelector('.paw-stamp');
+  const bkId = wrap.dataset.swipeBk;
+  let startX = 0, dx = 0, active = false;
+  const start = e => { active = true; startX = e.touches ? e.touches[0].clientX : e.clientX; wrap.classList.add('swiping'); };
+  const move = e => {
+    if (!active) return;
+    const x = e.touches ? e.touches[0].clientX : e.clientX;
+    dx = Math.max(0, x - startX);
+    card.style.transform = `translateX(${dx}px)`;
+  };
+  const end = () => {
+    if (!active) return;
+    active = false; wrap.classList.remove('swiping');
+    const threshold = wrap.offsetWidth * 0.45;
+    if (dx > threshold) {
+      card.style.transform = `translateX(${wrap.offsetWidth}px)`;
+      stamp?.classList.add('on');
+      hapticSuccess();
+      setTimeout(() => arriveDog(bkId), 260);
+    } else { card.style.transform = ''; }
+    dx = 0;
+  };
+  wrap.addEventListener('touchstart', start, { passive: true });
+  wrap.addEventListener('touchmove', move, { passive: true });
+  wrap.addEventListener('touchend', end);
+  wrap.addEventListener('mousedown', start);
+  wrap.addEventListener('mousemove', move);
+  wrap.addEventListener('mouseup', end);
+  wrap.addEventListener('mouseleave', () => { if (active) end(); });
+}
+
+async function triggerQuickPhoto(bookingId) {
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = 'image/*'; input.capture = 'environment';
+  input.onchange = async e => {
+    const file = e.target.files[0]; if (!file) return;
+    const b = DB.bookings.find(x => x.id === bookingId); if (!b) return;
+    try {
+      const data = await downscalePhoto(file);
+      b.report = b.report || { photos: [], mood: [], moments: [], story: '', sentAt: null };
+      b.report.photos = b.report.photos || [];
+      if (b.report.photos.length >= 8) { toast('Max 8 photos per dog'); return; }
+      b.report.photos.push({ data, addedAt: new Date().toISOString() });
+      await save(DB); render();
+      hapticTap(); toast('Photo saved');
+    } catch (err) { console.error(err); toast('Couldn\'t process photo'); }
+  };
+  input.click();
+}
+
+/* ---------- WEEK ---------- */
+function renderWeek() {
+  const today = new Date(todayISO() + 'T00:00:00');
+  const dow = (today.getDay() + 6) % 7;
+  const monday = new Date(today); monday.setDate(today.getDate() - dow);
+  const cap = DB.meta.capacity;
+  const isDesktop = window.innerWidth >= 900;
+  const isPastMode = weekViewMode === 'past';
+
+  const modeToggle = `<div class="week-mode-switch">
+    <button class="week-mode-btn ${!isPastMode?'on':''}" onclick="setWeekMode('upcoming')">☾ Upcoming</button>
+    <button class="week-mode-btn ${isPastMode?'on':''}" onclick="setWeekMode('past')">◄ History</button>
+  </div>`;
+
+  const title = isPastMode ? 'History' : 'This week <em>&amp; next</em>';
+  const sub = isPastMode
+    ? `Everything that's already happened. Nothing here can be added — only reviewed and edited.`
+    : `Each day is a page. Tap an empty day to add. Empty days keep quiet.`;
+
+  let html = `<h1 class="greet">${title}</h1>
+    <p class="sub tight">${sub}</p>
+    ${modeToggle}`;
+
+  const stays = computeStays(DB.bookings);
+
+  const buildDay = (d, opts={}) => {
+    const iso = localISO(d);
+    const isToday = iso === todayISO();
+    const isPast = iso < todayISO();
+    const bks = bookingsForDate(iso).slice().sort((a,b) => (a.session === 'overnight' ? 1 : 0) - (b.session === 'overnight' ? 1 : 0));
+    if (!bks.length) {
+      return `<div class="week-day empty ${isPast?'past':''}" data-emptyday="${iso}" role="button" tabindex="0">
+        <span>${d.toLocaleDateString('en-AU', { weekday:'short' })} · ${d.getDate()} ${d.toLocaleDateString('en-AU', { month:'short' })}</span>
+        <span>${opts.mini ? '＋' : 'Free — tap to add'}</span>
+      </div>`;
+    }
+    const dayCount = bks.filter(b => b.session !== 'overnight').length;
+    const nightCount = bks.filter(b => b.session === 'overnight').length;
+    const dayPct = Math.min(100, Math.round(dayCount / cap.maxDaycare * 100));
+    const nightPct = cap.maxBoarding ? Math.min(100, Math.round(nightCount / cap.maxBoarding * 100)) : 0;
+    const rev = bks.reduce((s,b) => s + (b.total || 0), 0);
+    const paidRev = bks.filter(b => b.paymentStatus === 'paid').reduce((s,b) => s + (b.total || 0), 0);
+
+    const bookingsRendered = new Set();
+    let rows = '';
+    bks.forEach(b => {
+      if (bookingsRendered.has(b.id)) return;
+      if (b.session === 'overnight') {
+        const stay = stays.find(s => s.bookings[0].id === b.id);
+        if (stay && stay.bookings.length > 1) {
+          const dog = dogById(stay.dogId);
+          const nights = stay.bookings.length;
+          const totalStay = stay.bookings.reduce((s,x) => s + (x.total || calcTotal(x, dog)), 0);
+          rows += `<div class="stay-ribbon" data-openstay="${stay.bookings[0].id}">
+            <div class="stay-face">${photoOrGlyph(dog)}</div>
+            <div class="body">
+              <div class="name">${escapeHtml(dog?.name || '?')}</div>
+              <div class="meta">${nights}-night stay · from ${fmtDateShort(stay.bookings[0].date)}</div>
+            </div>
+            <div class="amount">$${totalStay}</div>
+          </div>`;
+          stay.bookings.forEach(x => bookingsRendered.add(x.id));
+          return;
+        }
+      }
+      rows += weekDogRow(b);
+      bookingsRendered.add(b.id);
+    });
+
+    return `<div class="week-day ${isToday?'today':''} ${isPast&&!isToday?'past':''}">
+      <div class="week-day-head">
+        <div class="week-day-name">${d.getDate()} ${d.toLocaleDateString('en-AU', { month:'short' })}<span class="dow">${d.toLocaleDateString('en-AU', { weekday: opts.mini ? 'short' : 'long' })}</span></div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="day-revenue">$${rev}${paidRev < rev ? ` <span class="paid-hint">· $${paidRev} paid</span>` : ''}</div>
+          <button class="day-add" data-emptyday="${iso}" title="Add booking for this day" aria-label="Add booking">＋</button>
+        </div>
+      </div>
+      <div class="week-day-cap">
+        <span>☀ ${dayCount}/${cap.maxDaycare}<span class="cap-bar"><span style="width:${dayPct}%" class="${dayPct>=100?'full':''}"></span></span></span>
+        ${cap.maxBoarding ? `<span>☾ ${nightCount}/${cap.maxBoarding}<span class="cap-bar"><span style="width:${nightPct}%" class="night ${nightPct>=100?'full':''}"></span></span></span>` : ''}
+      </div>
+      ${rows}
+    </div>`;
+  };
+
+  // Compute per-week revenue
+  const weekRevFor = (weekMonday) => {
+    let bookedRev = 0, paidRev = 0, count = 0;
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(weekMonday); d.setDate(weekMonday.getDate() + i);
+      const iso = localISO(d);
+      const dayBks = bookingsForDate(iso);
+      count += dayBks.length;
+      bookedRev += dayBks.reduce((s,b) => s + (b.total||0), 0);
+      paidRev += dayBks.filter(b => b.paymentStatus === 'paid').reduce((s,b) => s + (b.total||0), 0);
+    }
+    return { bookedRev, paidRev, count };
+  };
+  const weekHeader = (weekMonday, w) => {
+    const stats = weekRevFor(weekMonday);
+    const label = w === 0 ? 'This week' : w === 1 ? 'Next week' : `Week of ${weekMonday.getDate()} ${weekMonday.toLocaleDateString('en-AU',{month:'short'})}`;
+    if (!stats.count) return `<div class="week-header">${label}<span class="week-total muted">Free</span></div>`;
+    return `<div class="week-header">${label}<span class="week-total"><b>$${stats.bookedRev.toLocaleString()}</b>${stats.paidRev < stats.bookedRev ? `<span class="muted"> · $${stats.paidRev.toLocaleString()} paid</span>` : ''}</span></div>`;
+  };
+
+  const weeksToShow = isPastMode ? weekPastWeeks : weekViewWeeks;
+  // In past mode: iterate BACK from the week before this one, most recent first
+  const startWeekOffset = isPastMode ? -1 : 0;
+  const direction = isPastMode ? -1 : 1;
+  const pastLabel = (w, weekStart) => {
+    // For past mode, w is negative offset from current week
+    const absW = Math.abs(w);
+    if (absW === 1) return 'Last week';
+    if (absW === 2) return '2 weeks ago';
+    if (absW === 3) return '3 weeks ago';
+    return `Week of ${weekStart.getDate()} ${weekStart.toLocaleDateString('en-AU',{month:'short'})}`;
+  };
+  const weekHeaderMode = (weekStart, w) => {
+    if (!isPastMode) return weekHeader(weekStart, w);
+    const stats = weekRevFor(weekStart);
+    const label = pastLabel(w, weekStart);
+    if (!stats.count) return `<div class="week-header">${label}<span class="week-total muted">Nothing booked</span></div>`;
+    return `<div class="week-header">${label}<span class="week-total"><b>$${stats.bookedRev.toLocaleString()}</b>${stats.paidRev < stats.bookedRev ? `<span class="muted"> · $${stats.paidRev.toLocaleString()} paid</span>` : ''}</span></div>`;
+  };
+
+  if (isDesktop) {
+    for (let step = 0; step < weeksToShow; step++) {
+      const w = isPastMode ? -(step + 1) : step;
+      const weekStart = new Date(monday); weekStart.setDate(monday.getDate() + w*7);
+      html += weekHeaderMode(weekStart, w);
+      html += `<div class="week-grid-desktop">`;
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(weekStart); d.setDate(weekStart.getDate() + i);
+        html += buildDay(d, { mini: true }) || `<div></div>`;
+      }
+      html += `</div>`;
+    }
+  } else {
+    for (let step = 0; step < weeksToShow; step++) {
+      const w = isPastMode ? -(step + 1) : step;
+      const weekStart = new Date(monday); weekStart.setDate(monday.getDate() + w*7);
+      html += weekHeaderMode(weekStart, w);
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(weekStart); d.setDate(weekStart.getDate() + i);
+        html += buildDay(d);
+      }
+    }
+  }
+  html += `<div class="text-center mt-2">
+    <button class="btn ghost" onclick="showMoreWeeks()">＋ Show 4 more weeks</button>
+  </div>`;
+  return html;
+}
+function showMoreWeeks() {
+  if (weekViewMode === 'past') weekPastWeeks += 4; else weekViewWeeks += 4;
+  render(); window.scrollTo({ top: document.body.scrollHeight, behavior:'smooth' });
+}
+function setWeekMode(m) { weekViewMode = m; render(); window.scrollTo({ top: 0, behavior:'smooth' }); }
+
+function weekDogRow(b) {
+  const dog = dogById(b.dogId); if (!dog) return '';
+  const owner = ownerOf(b.dogId);
+  const isNight = b.session === 'overnight';
+  const unpaidTag = b.paymentStatus !== 'paid' ? ' · <span class="text-owe">unpaid</span>' : '';
+  return `<div class="week-dog-row" data-openbk="${b.id}">
+    <div class="week-dog-face ${isNight?'night':''}">${photoOrGlyph(dog)}</div>
+    <div class="week-dog-body">
+      <div class="week-dog-name">${escapeHtml(dog.name)} <span class="muted small">· ${escapeHtml(owner?.name || '—')}</span></div>
+      <div class="week-dog-meta">${SESSION_LABELS[b.session]}${unpaidTag}</div>
+    </div>
+    <div class="week-dog-price">$${b.total || calcTotal(b, dog)}</div>
+  </div>`;
+}
+
+/* ---------- PACK ---------- */
+function renderPack() {
+  let html = `<h1 class="greet">The pack <em>${DB.dogs.length}</em></h1>
+    <p class="sub tight">Every dog who's ever been through the door.</p>
+    <div class="pack-actions">
+      <button class="btn ghost" data-openowner="">＋ New client</button>
+      <button class="btn ghost" data-adddog="">＋ New dog</button>
+    </div>
+    <div class="search-bar"><input class="search-input" id="searchInput" placeholder="Search a name…" value="${escapeHtml(searchQuery)}" aria-label="Search dogs"></div>`;
+
+  if (!DB.dogs.length) {
+    html += `<div class="day-empty">No dogs yet.</div>
+      <p class="text-center"><button class="btn primary" data-openowner="">＋ Add your first client</button></p>`;
+    return html;
+  }
+
+  const dogs = DB.dogs.slice().sort((a,b) => a.name.localeCompare(b.name));
+  html += `<div class="pack-grid" id="packGrid">`;
+  dogs.forEach(d => {
+    const owner = ownerById(d.ownerId);
+    const face = photoOrGlyph(d);
+    const tag = isMeaningfulHealth(d.medicalConditions) ? '⚕ needs care'
+              : d.aggression === 'yes' ? '⚠ handle carefully'
+              : (SIZE_LABELS[d.size] || d.size || '');
+    const tagClass = (isMeaningfulHealth(d.medicalConditions) || d.aggression === 'yes') ? 'pack-tag med' : 'pack-tag';
+    const hay = `${d.name} ${d.breed||''} ${owner?.name||''}`.toLowerCase();
+    html += `<div class="pack-card" data-opendog="${d.id}" data-hay="${escapeHtml(hay)}" role="button" tabindex="0">
+      <div class="pack-face">${face}</div>
+      <div class="pack-name">${escapeHtml(d.name)}</div>
+      <div class="pack-owner">${escapeHtml(owner?.name || '—')}</div>
+      <div class="${tagClass}">${tag}</div>
+    </div>`;
+  });
+  html += `</div>`;
+  return html;
+}
+
+/* ---------- LEDGER ---------- */
+let ledgerPeriod = 'month';
+let weekViewWeeks = 8;
+let weekViewMode = 'upcoming'; // 'upcoming' | 'past'
+let weekPastWeeks = 8;
+
+function ledgerRange() {
+  const now = new Date();
+  if (ledgerPeriod === 'week') {
+    const dow = (now.getDay() + 6) % 7;
+    const start = new Date(now); start.setDate(now.getDate() - dow); start.setHours(0,0,0,0);
+    const prevStart = new Date(start); prevStart.setDate(start.getDate() - 7);
+    const prevEnd = new Date(start); prevEnd.setDate(start.getDate() - 1);
+    return { start, end: now, prevStart, prevEnd, label: 'this week', prevLabel: 'last week' };
+  }
+  if (ledgerPeriod === 'quarter') {
+    const q = Math.floor(now.getMonth() / 3);
+    const start = new Date(now.getFullYear(), q*3, 1);
+    const prevStart = new Date(now.getFullYear(), q*3 - 3, 1);
+    const prevEnd = new Date(now.getFullYear(), q*3, 0);
+    return { start, end: now, prevStart, prevEnd, label: 'this quarter', prevLabel: 'last quarter' };
+  }
+  if (ledgerPeriod === 'year') {
+    const start = new Date(now.getFullYear(), 0, 1);
+    const prevStart = new Date(now.getFullYear()-1, 0, 1);
+    const prevEnd = new Date(now.getFullYear()-1, 11, 31);
+    return { start, end: now, prevStart, prevEnd, label: now.getFullYear() + ' so far', prevLabel: (now.getFullYear()-1) + ' full year' };
+  }
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const prevStart = new Date(now.getFullYear(), now.getMonth()-1, 1);
+  const prevEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+  return { start, end: now, prevStart, prevEnd, label: now.toLocaleDateString('en-AU',{month:'long'}), prevLabel: prevStart.toLocaleDateString('en-AU',{month:'long'}) };
+}
+
+function renderLedger() {
+  const now = new Date();
+  const R = ledgerRange();
+  const cap = DB.meta.capacity;
+  const inR = (iso, s, e) => iso >= localISO(s) && iso <= localISO(e);
+
+  const currentBks = DB.bookings.filter(b => inR(b.date, R.start, R.end));
+  const prevBks    = DB.bookings.filter(b => inR(b.date, R.prevStart, R.prevEnd));
+  const paidInR    = DB.bookings.filter(b => b.paymentStatus === 'paid' && b.paidAt && b.paidAt.slice(0,10) >= localISO(R.start) && b.paidAt.slice(0,10) <= localISO(R.end));
+
+  const bookedRev = currentBks.reduce((s,b) => s + (b.total||0), 0);
+  const prevRev = prevBks.reduce((s,b) => s + (b.total||0), 0);
+  const paidRev = paidInR.reduce((s,b) => s + (b.total||0), 0);
+  const upcomingBks = DB.bookings.filter(b => b.date > localISO(now));
+  const upcomingRev = upcomingBks.reduce((s,b) => s + (b.total||0), 0);
+  const delta = prevRev ? Math.round((bookedRev - prevRev) / prevRev * 100) : null;
+
+  // Projection (month only)
+  let projectionLine = '';
+  if (ledgerPeriod === 'month') {
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+    const dayOfMonth = now.getDate();
+    if (dayOfMonth < daysInMonth && bookedRev > 0) {
+      const paceProjection = Math.round((bookedRev / dayOfMonth) * daysInMonth);
+      projectionLine = ` · pace $${paceProjection.toLocaleString()}`;
+    }
+  }
+
+  // Service split
+  const daycareBks = currentBks.filter(b => b.session !== 'overnight');
+  const boardingBks = currentBks.filter(b => b.session === 'overnight');
+  const daycareRev = daycareBks.reduce((s,b) => s + (b.total||0), 0);
+  const boardingRev = boardingBks.reduce((s,b) => s + (b.total||0), 0);
+  const dayPct = bookedRev ? Math.round(daycareRev / bookedRev * 100) : 0;
+
+  // Occupancy
+  const daysCovered = Math.max(1, Math.ceil((R.end - R.start) / 86400000) + 1);
+  const totalDaySlots = daysCovered * cap.maxDaycare;
+  const totalNightSlots = daysCovered * cap.maxBoarding;
+  const dayOccupancy = totalDaySlots ? Math.round(daycareBks.length / totalDaySlots * 100) : 0;
+  const nightOccupancy = totalNightSlots ? Math.round(boardingBks.length / totalNightSlots * 100) : 0;
+
+  const avgBooking = currentBks.length ? Math.round(bookedRev / currentBks.length) : 0;
+
+  // Trend — last 6 months booked revenue
+  const trend = [];
+  for (let i = 5; i >= 0; i--) {
+    const s = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const e = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+    const rev = DB.bookings.filter(b => b.date >= localISO(s) && b.date <= localISO(e)).reduce((sum,b) => sum + (b.total||0), 0);
+    trend.push({ label: s.toLocaleDateString('en-AU',{month:'short'}), rev });
+  }
+  const trendMax = Math.max(1, ...trend.map(t => t.rev));
+
+  // Top clients (by revenue in current period)
+  const clientRev = {};
+  currentBks.forEach(b => {
+    const o = ownerOf(b.dogId);
+    if (!o) return;
+    clientRev[o.id] = (clientRev[o.id] || 0) + (b.total||0);
+  });
+  const topClients = Object.entries(clientRev).sort((a,b) => b[1] - a[1]).slice(0, 5);
+
+  // Aging (unpaid, oldest first)
+  const unpaid = DB.bookings.filter(b => b.paymentStatus !== 'paid' && b.date <= localISO(now)).sort((a,b) => a.date.localeCompare(b.date));
+  const unpaidTotal = unpaid.reduce((s,b) => s + (b.total||0), 0);
+  const overdue7 = unpaid.filter(b => (now - new Date(b.date + 'T00:00:00')) / 86400000 > 7);
+  const overdue30 = unpaid.filter(b => (now - new Date(b.date + 'T00:00:00')) / 86400000 > 30);
+
+  const recent = DB.bookings.filter(b => b.paymentStatus === 'paid').sort((a,b) => (b.paidAt||b.date).localeCompare(a.paidAt||a.date)).slice(0, 8);
+
+  const periodBtn = (val, label) => `<button class="period-btn ${ledgerPeriod===val?'on':''}" onclick="setLedgerPeriod('${val}')">${label}</button>`;
+
+  let html = `<h1 class="greet">The ledger</h1>
+    <p class="sub tight">Kept honest.</p>
+
+    <div class="period-switch">
+      ${periodBtn('week','Week')}${periodBtn('month','Month')}${periodBtn('quarter','Quarter')}${periodBtn('year','Year')}
+    </div>
+
+    <div class="ledger-hero">
+      <div class="ledger-num">$${bookedRev.toLocaleString()}</div>
+      <div class="ledger-caption">booked in ${R.label}${projectionLine}${delta !== null ? ` — <span class="ledger-delta ${delta >= 0 ? 'up' : 'down'}">${delta >= 0 ? '↑' : '↓'} ${Math.abs(delta)}% vs ${R.prevLabel}</span>` : ''}</div>
+      <div class="ledger-sub">
+        <span>Paid in: <b>$${paidRev.toLocaleString()}</b></span>
+        <span>Ahead: <b>$${upcomingRev.toLocaleString()}</b></span>
+        <span>Avg booking: <b>$${avgBooking}</b></span>
+      </div>
+    </div>
+
+    <div class="section-title">6-month trend</div>
+    <div class="trend-chart">
+      ${trend.map(t => {
+        const h = Math.round(t.rev / trendMax * 100);
+        const isCurrent = t.label === now.toLocaleDateString('en-AU',{month:'short'});
+        return `<div class="trend-bar ${isCurrent?'current':''}">
+          <div class="trend-value">$${t.rev >= 1000 ? (t.rev/1000).toFixed(1) + 'k' : t.rev}</div>
+          <div class="trend-fill" style="height:${h}%"></div>
+          <div class="trend-label">${t.label}</div>
+        </div>`;
+      }).join('')}
+    </div>
+
+    <div class="section-title">Where the money's coming from</div>
+    <div class="split-row">
+      <div class="split-item">
+        <div class="split-num">$${daycareRev.toLocaleString()}</div>
+        <div class="split-label">Daycare · ${daycareBks.length} bookings</div>
+      </div>
+      <div class="split-item">
+        <div class="split-num">$${boardingRev.toLocaleString()}</div>
+        <div class="split-label">Boarding · ${boardingBks.length} nights</div>
+      </div>
+    </div>
+    <div class="split-bar">
+      <div class="split-day" style="width:${dayPct}%"></div>
+      <div class="split-night" style="width:${100-dayPct}%"></div>
+    </div>
+    <p class="sub small muted text-center" style="margin-top:8px">Daycare ${dayPct}% · Boarding ${100-dayPct}%</p>
+
+    <div class="section-title">Occupancy</div>
+    <div class="occupancy-row">
+      <div class="occupancy-item">
+        <div class="occupancy-num">${dayOccupancy}<span class="pct">%</span></div>
+        <div class="occupancy-label">Daycare · ${daycareBks.length}/${totalDaySlots} slots</div>
+        <div class="cap-bar" style="width:100%; height:6px"><span style="width:${dayOccupancy}%"></span></div>
+      </div>
+      ${cap.maxBoarding ? `<div class="occupancy-item">
+        <div class="occupancy-num">${nightOccupancy}<span class="pct">%</span></div>
+        <div class="occupancy-label">Boarding · ${boardingBks.length}/${totalNightSlots} nights</div>
+        <div class="cap-bar" style="width:100%; height:6px"><span class="night" style="width:${nightOccupancy}%"></span></div>
+      </div>` : ''}
+    </div>
+
+    ${topClients.length ? `<div class="section-title">Top clients this ${ledgerPeriod === 'month' ? 'month' : ledgerPeriod}</div>` : ''}
+    ${topClients.map(([id, rev]) => {
+      const o = ownerById(id);
+      const dogs = dogsOfOwner(id).map(d => d.name).join(', ');
+      return `<div class="ledger-row" data-openowner="${id}">
+        <div><div class="r-dog">${escapeHtml(o?.name || '?')}</div><div class="r-date">${escapeHtml(dogs) || '—'}</div></div>
+        <div class="r-amt">$${rev.toLocaleString()}</div>
+      </div>`;
+    }).join('')}
+
+    <div class="section-title">Owed to you
+      <span class="pill owe" style="margin-left:auto">$${unpaidTotal.toLocaleString()}</span>
+    </div>
+    ${overdue30.length ? `<div class="aging-alert">⚠ ${overdue30.length} booking${overdue30.length===1?'':'s'} 30+ days overdue</div>` : overdue7.length ? `<div class="aging-alert soft">${overdue7.length} booking${overdue7.length===1?'':'s'} 7+ days overdue</div>` : ''}`;
+
+  if (!unpaid.length) html += `<p class="sub muted">All paid up. Rare, isn't it?</p>`;
+  unpaid.slice(0, 15).forEach(b => {
+    const dog = dogById(b.dogId), owner = ownerOf(b.dogId);
+    const days = Math.floor((now - new Date(b.date + 'T00:00:00')) / 86400000);
+    const ageLabel = days > 30 ? `${days}d · overdue` : days > 7 ? `${days}d ago` : days > 0 ? `${days}d` : 'today';
+    const ageClass = days > 30 ? 'age-bad' : days > 7 ? 'age-warn' : '';
+    html += `<div class="ledger-row" data-openbk="${b.id}">
+      <div><div class="r-dog">${escapeHtml(dog?.name || '?')}</div><div class="r-date">${escapeHtml(owner?.name || '—')} · ${fmtDateShort(b.date)} <span class="age-pill ${ageClass}">${ageLabel}</span></div></div>
+      <div class="r-amt owe">$${b.total || 0}</div>
+    </div>`;
+  });
+
+  html += `<div class="section-title">Recent payments</div>`;
+  if (!recent.length) html += `<p class="sub muted">None yet.</p>`;
+  recent.forEach(b => {
+    const dog = dogById(b.dogId), owner = ownerOf(b.dogId);
+    html += `<div class="ledger-row" data-openbk="${b.id}">
+      <div><div class="r-dog">${escapeHtml(dog?.name || '?')}</div><div class="r-date">${escapeHtml(owner?.name || '—')} · ${fmtDateShort(b.date)}</div></div>
+      <div class="r-amt">$${b.total || 0}</div>
+    </div>`;
+  });
+
+  // Welcome packs section
+  const packsInR = DB.packs.filter(p => p.purchaseDate >= localISO(R.start) && p.purchaseDate <= localISO(R.end));
+  const packRev = packsInR.reduce((s,p) => s + (p.paidAmount||0), 0);
+  const activePacks = DB.packs.filter(p => {
+    const s = packSummary(p); return !s.expired && s.remaining > 0;
+  });
+  const activePacksTotal = activePacks.reduce((s,p) => s + (p.size - (p.daysUsed||0)), 0);
+  if (DB.packs.length || packsInR.length) {
+    html += `<div class="section-title">Welcome packs
+      <span class="pill hi" style="margin-left:auto">${activePacks.length} active · ${activePacksTotal} days unused</span>
+    </div>`;
+    if (packRev > 0) {
+      html += `<div class="split-item" style="margin-bottom:12px"><div class="split-num">$${packRev.toLocaleString()}</div><div class="split-label">Sold in ${R.label} · ${packsInR.length} pack${packsInR.length===1?'':'s'}</div></div>`;
+    }
+    if (activePacks.length) {
+      activePacks.forEach(p => {
+        const dog = dogById(p.dogId);
+        const owner = ownerOf(p.dogId);
+        const s = packSummary(p);
+        const soon = s.expiresInDays <= 30;
+        html += `<div class="ledger-row" data-opendog="${p.dogId}">
+          <div><div class="r-dog">${escapeHtml(dog?.name || '?')} <span class="muted small">· ${p.size}-day pack</span></div><div class="r-date">${escapeHtml(owner?.name || '—')} · ${s.remaining} left ${soon ? '· <span class="text-owe">expires ' + s.expiresInDays + 'd</span>' : '· expires ' + fmtDateShort(p.expiryDate)}</div></div>
+          <div class="r-amt">$${p.paidAmount}</div>
+        </div>`;
+      });
+    }
+  }
+
+  html += `<div class="section-title">Take it away</div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap">
+      <button class="btn ghost" onclick="exportLedgerCSV()">⬇ Export ${R.label} (CSV)</button>
+      <button class="btn ghost" onclick="printLedger()">🖨 Printable statement</button>
+    </div>`;
+
+  return html;
+}
+
+function setLedgerPeriod(p) { ledgerPeriod = p; render(); }
+
+function exportLedgerCSV() {
+  const R = ledgerRange();
+  const bks = DB.bookings.filter(b => b.date >= localISO(R.start) && b.date <= localISO(R.end)).sort((a,b) => a.date.localeCompare(b.date));
+  const rows = [['Date','Dog','Owner','Session','Amount','Paid','Paid date']];
+  bks.forEach(b => {
+    const dog = dogById(b.dogId), owner = ownerOf(b.dogId);
+    rows.push([b.date, dog?.name||'?', owner?.name||'—', SESSION_LABELS[b.session]||b.session, b.total||0, b.paymentStatus==='paid'?'yes':'no', b.paidAt ? b.paidAt.slice(0,10) : '']);
+  });
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `pansis-ledger-${localISO(R.start)}-to-${localISO(R.end)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  toast('CSV downloaded');
+}
+
+function printLedger() {
+  const R = ledgerRange();
+  const bks = DB.bookings.filter(b => b.date >= localISO(R.start) && b.date <= localISO(R.end)).sort((a,b) => a.date.localeCompare(b.date));
+  const total = bks.reduce((s,b) => s + (b.total||0), 0);
+  const paid = bks.filter(b => b.paymentStatus === 'paid').reduce((s,b) => s + (b.total||0), 0);
+  const w = window.open('', '_blank');
+  if (!w) { toast('Popup blocked'); return; }
+  w.document.write(`<!DOCTYPE html><html><head><title>Pansi's statement — ${R.label}</title>
+    <style>body{font-family:Georgia,serif; padding:40px; color:#2b1a10; max-width:800px; margin:0 auto}
+    h1{font-size:32px; margin:0 0 8px} .sub{color:#6a5240; margin-bottom:24px}
+    table{width:100%; border-collapse:collapse; margin-top:16px}
+    th{text-align:left; border-bottom:2px solid #2b1a10; padding:8px 4px; font-size:12px; text-transform:uppercase; letter-spacing:0.08em}
+    td{padding:8px 4px; border-bottom:1px solid #eee; font-size:14px}
+    .total-row{font-weight:700; font-size:16px}
+    .r{text-align:right}
+    @media print { body{padding:20px} }</style></head><body>
+    <h1>Pansi's Paws — statement</h1>
+    <div class="sub">${R.label} · ${localISO(R.start)} – ${localISO(R.end)}</div>
+    <table>
+      <thead><tr><th>Date</th><th>Dog</th><th>Owner</th><th>Service</th><th class="r">Amount</th><th class="r">Paid</th></tr></thead>
+      <tbody>
+        ${bks.map(b => { const dog = dogById(b.dogId), owner = ownerOf(b.dogId);
+          return `<tr><td>${b.date}</td><td>${escapeHtml(dog?.name||'?')}</td><td>${escapeHtml(owner?.name||'—')}</td><td>${SESSION_LABELS[b.session]||b.session}</td><td class="r">$${b.total||0}</td><td class="r">${b.paymentStatus==='paid'?'✓':''}</td></tr>`;
+        }).join('')}
+        <tr class="total-row"><td colspan="4">Total</td><td class="r">$${total.toLocaleString()}</td><td class="r">$${paid.toLocaleString()}</td></tr>
+      </tbody>
+    </table>
+    <p style="margin-top:32px; color:#6a5240; font-size:12px">Pansi's Paws · Annandale · pansispaws.com.au · Generated ${new Date().toLocaleDateString('en-AU')}</p>
+    <script>setTimeout(() => window.print(), 500);<\/script>
+    </body></html>`);
+  w.document.close();
+}
+
+/* ---------- ACTIONS ---------- */
+function arriveDog(id) {
+  const b = DB.bookings.find(x => x.id === id); if (!b) return;
+  b.arrivalLogged = nowTime();
+  render(); hapticTap(); toast(`${dogById(b.dogId)?.name || 'Dog'} arrived`);
+  save(DB); // fire-and-forget, offline-safe
+}
+function departDog(id) {
+  const b = DB.bookings.find(x => x.id === id); if (!b) return;
+  b.departureLogged = nowTime();
+  render(); hapticTap();
+  save(DB);
+}
+function markPaid(id) {
+  const b = DB.bookings.find(x => x.id === id); if (!b) return;
+  b.paymentStatus = 'paid'; b.paidAt = new Date().toISOString();
+  render(); hapticTap(); toast('Marked paid');
+  save(DB);
+}
+
+/* ---------- SHEETS ---------- */
+function openSheet(html) {
+  const host = document.getElementById('modalHost');
+  host.innerHTML = `<div class="sheet-backdrop" onclick="closeSheet()"></div>
+    <div class="sheet" role="dialog" aria-modal="true"><div class="sheet-handle"></div><button class="sheet-close" onclick="closeSheet()" aria-label="Close">×</button>${html}</div>`;
+  host.classList.add('on');
+  document.body.classList.add('modal-open');
+}
+function closeSheet() { const h = document.getElementById('modalHost'); h.classList.remove('on'); h.innerHTML=''; document.body.classList.remove('modal-open'); drainPendingRemote(); }
+
+function openAddMenuSheet() {
+  openSheet(`<h2 class="sheet-title">What are we adding?</h2>
+    <p class="sheet-sub">Pick one.</p>
+    <button class="btn primary block big" onclick="closeSheet(); openBookingSheet()">📅 Booking</button>
+    <div style="height:10px"></div>
+    <button class="btn block big" onclick="closeSheet(); openOwnerSheet(null)">👤 New client</button>
+    <div style="height:10px"></div>
+    <button class="btn block big" onclick="closeSheet(); openDogEditSheet(null)">🐶 New dog</button>`);
+}
+
+function openBookingSheet(bookingId, prefillDate) {
+  const bk = bookingId ? DB.bookings.find(b => b.id === bookingId) : null;
+  const isNew = !bk;
+  const b = bk || { id: uid(), dogId: '', date: prefillDate || todayISO(), session: 'full', arrivalTime:'', departureTime:'', arrivalLogged:null, departureLogged:null, addOns:{senior:false,puppy:false,med:false,diet:false,taxi:false}, surcharges:{publicHoliday:false,xmasPeak:false}, customPrice:null, total:0, paymentStatus:'pending', paidAt:null, notes:'', report:null };
+  if (!DB.dogs.length) {
+    openSheet(`<h2 class="sheet-title">No dogs yet</h2><p class="sheet-sub">Add a client and dog first.</p>
+      <button class="btn primary block" onclick="closeSheet(); openOwnerSheet(null)">＋ Add a client</button>`);
+    return;
+  }
+  const dogOptions = DB.dogs.slice().sort((a,b) => a.name.localeCompare(b.name)).map(d => {
+    const o = ownerById(d.ownerId);
+    return `<option value="${d.id}" ${d.id === b.dogId ? 'selected':''}>${escapeHtml(d.name)} — ${escapeHtml(o?.name || '?')} (${d.size||'?'})</option>`;
+  }).join('');
+  openSheet(`
+    <h2 class="sheet-title">${isNew ? 'New booking' : 'Edit booking'}</h2>
+    <form id="bkForm" oninput="updateBookingPrice()" onsubmit="return saveBookingForm(event, '${b.id}', ${isNew})">
+      <div class="field-group"><label>Dog</label><select name="dogId" class="field" required>${dogOptions}</select></div>
+      <div class="field-row">
+        <div class="field-group"><label>Date</label><input class="field" name="date" type="date" value="${b.date}" required></div>
+        <div class="field-group"><label>Session</label>
+          <select name="session" class="field">
+            <option value="half" ${b.session==='half'?'selected':''}>Half day</option>
+            <option value="extended" ${b.session==='extended'?'selected':''}>Extended half (5-6h)</option>
+            <option value="full" ${b.session==='full'?'selected':''}>Full day</option>
+            <option value="overnight" ${b.session==='overnight'?'selected':''}>Overnight</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="price-preview" id="pricePreview">
+        <div class="price-preview-label">Total</div>
+        <div class="price-preview-num" id="priceNum">$0</div>
+        <div class="price-preview-breakdown" id="priceBreak">—</div>
+      </div>
+
+      <div class="field-row">
+        <div class="field-group"><label>Arrival time</label><input class="field" name="arrivalTime" type="time" value="${b.arrivalTime||''}"></div>
+        <div class="field-group"><label>Departure time</label><input class="field" name="departureTime" type="time" value="${b.departureTime||''}"></div>
+      </div>
+      <div class="field-group">
+        <label>Add-ons</label>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <label class="chip"><input type="checkbox" name="senior" ${b.addOns?.senior?'checked':''} style="margin-right:6px">Senior +$${ADDONS.senior}</label>
+          <label class="chip"><input type="checkbox" name="puppy" ${b.addOns?.puppy?'checked':''} style="margin-right:6px">Puppy +$${ADDONS.puppy}</label>
+          <label class="chip"><input type="checkbox" name="med" ${b.addOns?.med?'checked':''} style="margin-right:6px">Meds +$${ADDONS.med}</label>
+          <label class="chip"><input type="checkbox" name="diet" ${b.addOns?.diet?'checked':''} style="margin-right:6px">Diet +$${ADDONS.diet}</label>
+          <label class="chip"><input type="checkbox" name="taxi" ${b.addOns?.taxi?'checked':''} style="margin-right:6px">Taxi +$${ADDONS.taxi}</label>
+        </div>
+      </div>
+      <div class="field-group">
+        <label>Surcharges</label>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <label class="chip"><input type="checkbox" name="ph" ${b.surcharges?.publicHoliday?'checked':''} style="margin-right:6px">Public hol +$${SURCHARGES.publicHoliday}</label>
+          <label class="chip"><input type="checkbox" name="xmas" ${b.surcharges?.xmasPeak?'checked':''} style="margin-right:6px">Xmas peak</label>
+        </div>
+      </div>
+      <div class="field-group" id="packOfferSlot"></div>
+      <div class="field-group"><label>Custom price (blank = auto)</label><input class="field" name="customPrice" type="number" value="${b.customPrice ?? ''}" placeholder="Auto-calculated"></div>
+      <div class="field-group"><label>Notes</label><textarea class="field" name="notes" rows="2">${escapeHtml(b.notes||'')}</textarea></div>
+
+      ${isNew ? `
+      <div class="field-group repeat-group">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer">
+          <input type="checkbox" name="repeat" onchange="toggleRepeatPreview(this)" style="width:16px; height:16px">
+          <span>Repeat this booking</span>
+        </label>
+        <div class="repeat-body hidden" id="repeatBody">
+          <div class="field-row" style="margin-top:12px">
+            <div class="field-group"><label>How often</label>
+              <select name="repeatFreq" class="field">
+                <option value="7">Weekly</option>
+                <option value="14">Fortnightly</option>
+                <option value="1">Every day</option>
+              </select>
+            </div>
+            <div class="field-group"><label>For how many weeks</label>
+              <select name="repeatWeeks" class="field">
+                <option value="4">4 weeks</option>
+                <option value="8">8 weeks</option>
+                <option value="12" selected>12 weeks</option>
+                <option value="26">6 months</option>
+                <option value="52">A year</option>
+              </select>
+            </div>
+          </div>
+          <div class="repeat-preview t-caption" id="repeatPreview">Preview:</div>
+        </div>
+      </div>` : ''}
+
+      <div class="field-row">
+        <div class="field-group"><label>Payment</label>
+          <select name="paymentStatus" class="field">
+            <option value="pending" ${b.paymentStatus==='pending'?'selected':''}>Pending</option>
+            <option value="paid" ${b.paymentStatus==='paid'?'selected':''}>Paid</option>
+          </select>
+        </div>
+        <div class="field-group" style="display:flex; align-items:end;">
+          <button type="submit" class="btn primary block">${isNew?'Add booking':'Save'}</button>
+        </div>
+      </div>
+      ${!isNew ? `<button type="button" class="btn danger block" onclick="deleteBooking('${b.id}')">Delete booking</button>` : ''}
+    </form>`);
+  updateBookingPrice();
+}
+
+function updateBookingPrice() {
+  const f = document.getElementById('bkForm');
+  if (!f) return;
+  const dog = dogById(f.dogId.value);
+  if (!dog) { document.getElementById('priceNum').textContent = '$0'; document.getElementById('priceBreak').textContent = 'Pick a dog'; return; }
+  const session = f.session.value;
+  const base = PRICES[dog.size]?.[session] || 0;
+  const parts = [`${SIZE_LABELS[dog.size]||dog.size} ${SESSION_LABELS[session]||session}: $${base}`];
+  let total = base;
+  if (f.senior.checked) { total += ADDONS.senior; parts.push(`+ Senior $${ADDONS.senior}`); }
+  if (f.puppy.checked)  { total += ADDONS.puppy;  parts.push(`+ Puppy $${ADDONS.puppy}`); }
+  if (f.med.checked)    { total += ADDONS.med;    parts.push(`+ Meds $${ADDONS.med}`); }
+  if (f.diet.checked)   { total += ADDONS.diet;   parts.push(`+ Diet $${ADDONS.diet}`); }
+  if (f.taxi.checked)   { total += ADDONS.taxi;   parts.push(`+ Taxi $${ADDONS.taxi}`); }
+  if (f.ph.checked)     { total += SURCHARGES.publicHoliday; parts.push(`+ Public hol $${SURCHARGES.publicHoliday}`); }
+  if (f.xmas.checked)   { const s = session==='overnight' ? SURCHARGES.xmasPeakNight : SURCHARGES.xmasPeakDay; total += s; parts.push(`+ Xmas $${s}`); }
+  const customVal = f.customPrice.value;
+
+  // Pack offer — show if the selected dog has active pack days AND session is a daycare session
+  const packSlot = document.getElementById('packOfferSlot');
+  if (packSlot && session !== 'overnight') {
+    const activePacks = activePacksForDog(dog.id);
+    if (activePacks.length) {
+      const p = activePacks[0];
+      const rem = p.size - (p.daysUsed || 0);
+      const isChecked = f.usePack && f.usePack.checked;
+      packSlot.innerHTML = `<label class="pack-toggle ${isChecked?'on':''}">
+        <input type="checkbox" name="usePack" ${isChecked?'checked':''}>
+        <div>
+          <div class="pack-toggle-title">🎟 Redeem from ${p.size}-day pack</div>
+          <div class="pack-toggle-meta">${rem} of ${p.size} days left · expires ${fmtDateShort(p.expiryDate)}</div>
+        </div>
+      </label>`;
+    } else {
+      packSlot.innerHTML = '';
+    }
+  } else if (packSlot) { packSlot.innerHTML = ''; }
+
+  let displayTotal = total;
+  let label = '';
+  if (f.usePack && f.usePack.checked) {
+    displayTotal = 0;
+    label = `<span style="color:var(--night)">Redeemed from pack · normally $${total}</span>`;
+  } else if (customVal !== '' && !isNaN(parseFloat(customVal))) {
+    displayTotal = parseFloat(customVal);
+    label = `<span class="text-owe">Custom (auto: $${total})</span>`;
+  } else { label = parts.join(' '); }
+  document.getElementById('priceNum').textContent = '$' + displayTotal;
+  document.getElementById('priceBreak').innerHTML = label;
+  updateRepeatPreview();
+}
+
+function toggleRepeatPreview(cb) {
+  document.getElementById('repeatBody').classList.toggle('hidden', !cb.checked);
+  updateRepeatPreview();
+}
+function updateRepeatPreview() {
+  const f = document.getElementById('bkForm'); if (!f) return;
+  const cb = f.repeat; if (!cb || !cb.checked) return;
+  const startDate = f.date.value;
+  const freq = parseInt(f.repeatFreq.value, 10);
+  const weeks = parseInt(f.repeatWeeks.value, 10);
+  const priceNum = parseFloat(document.getElementById('priceNum').textContent.replace(/[^\d.]/g,'')) || 0;
+  const daysTotal = Math.ceil(weeks * 7 / freq);
+  const totalRev = priceNum * daysTotal;
+  const end = new Date(startDate + 'T00:00:00'); end.setDate(end.getDate() + (daysTotal-1) * freq);
+  const preview = document.getElementById('repeatPreview');
+  if (preview) preview.innerHTML = `<b>${daysTotal} bookings</b> · through ${fmtDateShort(localISO(end))} · <b>$${totalRev.toLocaleString()}</b> total`;
+}
+async function saveBookingForm(e, id, isNew) {
+  e.preventDefault();
+  const f = e.target;
+  const dog = dogById(f.dogId.value); if (!dog) return false;
+  const custom = f.customPrice.value === '' ? null : parseFloat(f.customPrice.value);
+  const existing = isNew ? null : DB.bookings.find(b => b.id === id);
+  const bk = {
+    id, dogId: f.dogId.value, date: f.date.value, session: f.session.value,
+    arrivalTime: f.arrivalTime.value, departureTime: f.departureTime.value,
+    arrivalLogged: existing?.arrivalLogged || null, departureLogged: existing?.departureLogged || null,
+    addOns: { senior: f.senior.checked, puppy: f.puppy.checked, med: f.med.checked, diet: f.diet.checked, taxi: f.taxi.checked },
+    surcharges: { publicHoliday: f.ph.checked, xmas: false, xmasPeak: f.xmas.checked },
+    customPrice: (custom != null && !isNaN(custom)) ? custom : null,
+    total: 0, paymentStatus: f.paymentStatus.value, paidAt: existing?.paidAt || null,
+    notes: f.notes.value, createdAt: existing?.createdAt || new Date().toISOString(),
+    seriesId: existing?.seriesId, seriesPattern: existing?.seriesPattern,
+    report: existing?.report || null
+  };
+  delete bk.surcharges.xmas;
+  bk.total = calcTotal(bk, dog);
+
+  // Pack redemption
+  const usingPack = f.usePack && f.usePack.checked && bk.session !== 'overnight';
+  if (usingPack) {
+    const active = activePacksForDog(dog.id);
+    const pack = active[0];
+    if (pack) {
+      // Was this booking previously redeemed against a different pack? Return that day.
+      if (existing?.packId && existing.packId !== pack.id) {
+        const oldPack = DB.packs.find(p => p.id === existing.packId);
+        if (oldPack && oldPack.daysUsed > 0) oldPack.daysUsed -= 1;
+      }
+      // Only increment if this is a new redemption (not editing an existing one that was already redeemed on this pack)
+      if (existing?.packId !== pack.id) pack.daysUsed = (pack.daysUsed || 0) + 1;
+      bk.packId = pack.id;
+      bk.total = 0;
+      bk.customPrice = 0;
+      bk.paymentStatus = 'paid';
+      bk.paidAt = existing?.paidAt || new Date().toISOString();
+      bk.notes = (bk.notes ? bk.notes + ' · ' : '') + `Redeemed from ${pack.size}-day pack`;
+    }
+  } else if (existing?.packId) {
+    // Was redeemed, now unchecking — return the day to the pack
+    const oldPack = DB.packs.find(p => p.id === existing.packId);
+    if (oldPack && oldPack.daysUsed > 0) oldPack.daysUsed -= 1;
+    bk.packId = null;
+  }
+
+  // Recurring bookings
+  const wantRepeat = isNew && f.repeat && f.repeat.checked;
+  if (wantRepeat) {
+    const freq = parseInt(f.repeatFreq.value, 10);
+    const weeks = parseInt(f.repeatWeeks.value, 10);
+    const daysTotal = Math.ceil(weeks * 7 / freq);
+    const seriesId = uid();
+    const startDate = new Date(bk.date + 'T00:00:00');
+    let added = 0, skipped = 0;
+    for (let i = 0; i < daysTotal; i++) {
+      const d = new Date(startDate); d.setDate(startDate.getDate() + i * freq);
+      const iso = localISO(d);
+      // skip if a booking already exists for this dog + date + session
+      const dup = DB.bookings.find(x => x.dogId === bk.dogId && x.date === iso && (x.session||'full') === bk.session);
+      if (dup) { skipped++; continue; }
+      const clone = { ...bk, id: uid(), date: iso, seriesId, createdAt: new Date().toISOString(), report: null, arrivalLogged: null, departureLogged: null, paymentStatus: 'pending', paidAt: null };
+      clone.surcharges = { ...bk.surcharges };
+      clone.addOns = { ...bk.addOns };
+      DB.bookings.push(clone);
+      added++;
+    }
+    await save(DB); closeSheet(); render();
+    toast(`${added} bookings added${skipped ? ' · ' + skipped + ' skipped (dupes)' : ''}`);
+    return false;
+  }
+
+  if (isNew) DB.bookings.push(bk);
+  else { const i = DB.bookings.findIndex(x => x.id === id); if (i >= 0) DB.bookings[i] = bk; }
+  await save(DB); closeSheet(); render();
+  toast(isNew ? 'Booking added' : 'Saved');
+  return false;
+}
+async function deleteBooking(id) {
+  if (!confirm('Delete this booking?')) return;
+  const bk = DB.bookings.find(b => b.id === id);
+  if (bk?.packId) {
+    const p = DB.packs.find(p => p.id === bk.packId);
+    if (p && p.daysUsed > 0) p.daysUsed -= 1;
+  }
+  DB.bookings = DB.bookings.filter(b => b.id !== id);
+  await save(DB); closeSheet(); render();
+}
+
+function openStaySheet(bookingIdInStay) {
+  const stay = stayForBookingId(bookingIdInStay);
+  if (!stay) return openBookingSheet(bookingIdInStay);
+  const dog = dogById(stay.dogId); const owner = ownerOf(stay.dogId);
+  const nights = stay.bookings.length;
+  const totalStay = stay.bookings.reduce((s,x) => s + (x.total || 0), 0);
+  const unpaid = stay.bookings.filter(b => b.paymentStatus !== 'paid').length;
+  openSheet(`
+    <h2 class="sheet-title">${escapeHtml(dog?.name || '?')} · ${nights}-night stay</h2>
+    <p class="sheet-sub">${escapeHtml(owner?.name || '—')} · ${fmtDateShort(stay.bookings[0].date)} – ${fmtDateShort(stay.bookings.at(-1).date)}</p>
+    <div class="ledger-hero" style="margin-bottom:20px">
+      <div class="ledger-num" style="font-size:48px">$${totalStay}</div>
+      <div class="ledger-caption">${unpaid ? unpaid + ' night(s) unpaid' : 'all paid'}</div>
+    </div>
+    <div class="section-title">Nights</div>
+    ${stay.bookings.map(b => `<div class="ledger-row" data-openbk="${b.id}">
+      <div><div class="r-dog">${fmtDateShort(b.date)}</div><div class="r-date">${b.paymentStatus === 'paid' ? '✓ paid' : 'pending'}${b.arrivalLogged ? ' · in ' + b.arrivalLogged : ''}${b.departureLogged ? ' · out ' + b.departureLogged : ''}</div></div>
+      <div class="r-amt ${b.paymentStatus==='paid'?'':'owe'}">$${b.total||0}</div>
+    </div>`).join('')}`);
+}
+
+function openDogSheet(dogId) {
+  const d = dogById(dogId); if (!d) return;
+  const owner = ownerById(d.ownerId);
+  const upcoming = DB.bookings.filter(b => b.dogId === d.id && b.date >= todayISO()).sort((a,b) => a.date.localeCompare(b.date)).slice(0, 5);
+  const past = DB.bookings.filter(b => b.dogId === d.id && b.date < todayISO()).length;
+  const dogPacks = packsForDog(d.id).sort((a,b) => b.purchaseDate.localeCompare(a.purchaseDate));
+
+  const packRow = (p) => {
+    const s = packSummary(p);
+    const stateClass = s.expired ? 'expired' : s.remaining === 0 ? 'used' : 'active';
+    const stateLabel = s.expired ? 'Expired' : s.remaining === 0 ? 'Fully used' : `${s.remaining} of ${p.size} left`;
+    const expiryLabel = s.expired ? `expired ${fmtDateShort(p.expiryDate)}` : `expires ${fmtDateShort(p.expiryDate)}`;
+    // Redemption log — bookings that consumed a day from this pack
+    const redemptions = DB.bookings.filter(b => b.packId === p.id).sort((a,b) => a.date.localeCompare(b.date));
+    // Visual dot grid (used vs remaining)
+    const usedCount = s.used;
+    const dots = Array.from({length: p.size}, (_, i) => `<span class="pack-dot ${i < usedCount ? 'used' : ''}"></span>`).join('');
+    const log = redemptions.length
+      ? `<div class="pack-log">${redemptions.map(b => `<div class="pack-log-row" data-openbk="${b.id}"><span>${fmtDateShort(b.date)} · ${SESSION_LABELS[b.session]||'day'}</span><span class="muted small">day ${redemptions.indexOf(b)+1}</span></div>`).join('')}</div>`
+      : '<div class="pack-log-empty">No days redeemed yet</div>';
+    return `<div class="pack-row-wrap">
+      <div class="pack-row ${stateClass}">
+        <div class="pack-row-body">
+          <div class="pack-row-title">${p.size}-day Welcome Pack</div>
+          <div class="pack-row-meta">${stateLabel} · ${expiryLabel}</div>
+          <div class="pack-dots" title="${usedCount} used / ${s.remaining} left">${dots}</div>
+        </div>
+        <div class="pack-row-amt">$${p.paidAmount}</div>
+      </div>
+      ${log}
+    </div>`;
+  };
+
+  openSheet(`
+    <h2 class="sheet-title">${escapeHtml(d.name)}</h2>
+    <p class="sheet-sub">${escapeHtml(owner?.name || '—')} · ${escapeHtml(d.breed || '')} · ${escapeHtml(SIZE_LABELS[d.size] || '')} ${d.age ? '· ' + escapeHtml(d.age) : ''}</p>
+    ${isMeaningfulHealth(d.medicalConditions) ? `<div class="pill med" style="margin-bottom:12px">⚕ ${escapeHtml(d.medicalConditions)}</div>` : ''}
+    ${isMeaningfulHealth(d.allergies) ? `<div class="pill med" style="margin-bottom:12px">🌿 Allergies: ${escapeHtml(d.allergies)}</div>` : ''}
+    ${d.aggression === 'yes' ? `<div class="pill med" style="margin-bottom:12px">⚠ Aggression: ${escapeHtml(d.aggressionExplain || 'noted')}</div>` : ''}
+    ${d.separation === 'yes' ? `<div class="pill hi" style="margin-bottom:12px">Separation anxiety noted</div>` : ''}
+    ${d.feedingSchedule ? `<div class="field-group"><label>🍽 Feeding</label><div>${escapeHtml(d.feedingSchedule)}</div></div>` : ''}
+    ${d.toiletRoutine ? `<div class="field-group"><label>🚽 Toilet</label><div>${escapeHtml(d.toiletRoutine)}</div></div>` : ''}
+    ${d.additionalBehaviours ? `<div class="field-group"><label>📝 Notes</label><div>${escapeHtml(d.additionalBehaviours)}</div></div>` : ''}
+    ${d.vetName ? `<div class="field-group"><label>🩺 Vet</label><div>${escapeHtml(d.vetName)}</div></div>` : ''}
+
+    <div class="section-title" style="margin-top:24px">Welcome packs</div>
+    ${dogPacks.length ? dogPacks.map(packRow).join('') : '<p class="sub muted small">No packs sold yet.</p>'}
+    <button class="btn ghost block mt-2" onclick="openSellPackSheet('${d.id}')">＋ Sell a welcome pack</button>
+
+    <div class="section-title" style="margin-top:24px">Upcoming</div>
+    ${upcoming.length ? upcoming.map(b => `<div class="ledger-row" data-openbk="${b.id}"><div><div class="r-dog">${fmtDateShort(b.date)}</div><div class="r-date">${SESSION_LABELS[b.session]}${b.packId ? ' · <span class="text-medical" style="color:var(--night)">from pack</span>' : ''}</div></div><div class="r-amt">$${b.total||0}</div></div>`).join('') : '<p class="sub muted small">None booked.</p>'}
+    <p class="sub small muted" style="margin-top:12px">${past} past ${past===1?'booking':'bookings'}.</p>
+
+    <div style="display:flex; gap:8px; margin-top:20px; flex-wrap:wrap">
+      ${owner?.email ? `<a class="btn ghost" href="mailto:${escapeHtml(owner.email)}">📧 Email ${escapeHtml((owner.name||'').split(' ')[0])}</a>` : ''}
+      ${owner?.phone ? `<a class="btn ghost" href="tel:${escapeHtml(owner.phone)}">📞 Call</a>` : ''}
+      <button class="btn ghost" data-editdog="${d.id}">✎ Edit dog</button>
+      ${owner ? `<button class="btn primary" data-openowner="${owner.id}">Edit client</button>` : ''}
+    </div>`);
+}
+
+/* ---------- Sell / manage welcome pack ---------- */
+function openSellPackSheet(dogId) {
+  const d = dogById(dogId); if (!d) return;
+  const owner = ownerById(d.ownerId);
+  const isFirstTime = DB.bookings.filter(b => b.dogId === dogId).length === 0 && packsForDog(dogId).length === 0;
+  const price5 = calcPackPrice(d.size, 5);
+  const price10 = calcPackPrice(d.size, 10);
+  const base = PRICES[d.size]?.full || 90;
+  const today = todayISO();
+  const expiry = new Date(); expiry.setMonth(expiry.getMonth() + 6);
+  openSheet(`
+    <h2 class="sheet-title">Sell a welcome pack</h2>
+    <p class="sheet-sub">For ${escapeHtml(d.name)} · ${escapeHtml(owner?.name || '—')} · ${SIZE_LABELS[d.size]}</p>
+    ${!isFirstTime ? `<div class="pill hi" style="margin-bottom:12px">⚠ This dog has bookings or packs on record. Welcome packs are usually first-time-only — proceed with intent.</div>` : ''}
+    <form onsubmit="return savePackForm(event, '${dogId}')">
+      <div class="field-group">
+        <label>Which pack?</label>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:6px">
+          <label class="pack-option" style="cursor:pointer">
+            <input type="radio" name="size" value="5" checked style="display:none">
+            <div class="pack-option-body">
+              <div class="pack-option-tier">5-day pack</div>
+              <div class="pack-option-price">$${price5}</div>
+              <div class="pack-option-unit">$${Math.round(price5/5)}/day · 10% off std $${base}</div>
+            </div>
+          </label>
+          <label class="pack-option" style="cursor:pointer">
+            <input type="radio" name="size" value="10" style="display:none">
+            <div class="pack-option-body">
+              <div class="pack-option-tier">10-day pack</div>
+              <div class="pack-option-price">$${price10}</div>
+              <div class="pack-option-unit">$${Math.round(price10/10)}/day · 15% off std $${base}</div>
+            </div>
+          </label>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field-group"><label>Purchase date</label><input class="field" name="purchaseDate" type="date" value="${today}" required></div>
+        <div class="field-group"><label>Expires</label><input class="field" name="expiryDate" type="date" value="${localISO(expiry)}" required></div>
+      </div>
+      <div class="field-group"><label>Amount paid</label><input class="field" name="paidAmount" type="number" value="${price5}" required></div>
+      <div class="field-group"><label>Payment method / notes</label><input class="field" name="notes" placeholder="Bank transfer · reference…"></div>
+      <button type="submit" class="btn primary block">Record pack</button>
+    </form>
+  `);
+  // Wire pack option selection
+  document.querySelectorAll('.pack-option').forEach(el => {
+    const input = el.querySelector('input');
+    const sync = () => {
+      document.querySelectorAll('.pack-option').forEach(x => x.classList.toggle('on', x.querySelector('input').checked));
+      const size = parseInt(el.querySelector('input').checked ? el.querySelector('input').value : 5, 10);
+      const price = size === 5 ? price5 : price10;
+      const paidInput = document.querySelector('input[name="paidAmount"]');
+      if (paidInput && input.checked) paidInput.value = price;
+    };
+    input.addEventListener('change', sync);
+    el.addEventListener('click', () => { input.checked = true; sync(); });
+    if (input.checked) el.classList.add('on');
+  });
+}
+async function savePackForm(e, dogId) {
+  e.preventDefault();
+  const f = e.target;
+  const pack = {
+    id: uid(),
+    dogId,
+    size: parseInt(f.size.value, 10),
+    purchaseDate: f.purchaseDate.value,
+    expiryDate: f.expiryDate.value,
+    paidAmount: parseFloat(f.paidAmount.value) || 0,
+    daysUsed: 0,
+    notes: f.notes.value.trim(),
+    createdAt: new Date().toISOString()
+  };
+  DB.packs.push(pack);
+  await save(DB); closeSheet(); render();
+  toast(`${pack.size}-day pack recorded · $${pack.paidAmount}`);
+  return false;
+}
+
+function openDogEditSheet(dogId, prefillOwnerId) {
+  const d = dogId ? dogById(dogId) : null;
+  const isNew = !d;
+  const rec = d || { id: uid(), ownerId: prefillOwnerId || '', name:'', size:'medium', breed:'', sex:'', weight:'', age:'', vaccinated:'', vaccDate:'', medicalConditions:'', allergies:'', vetName:'', aggression:'no', aggressionExplain:'', friendlyDogs:'yes', separation:'no', toiletRoutine:'', additionalBehaviours:'', feedingSchedule:'' };
+  if (!DB.owners.length) {
+    openSheet(`<h2 class="sheet-title">Add a client first</h2><p class="sheet-sub">Every dog needs an owner attached.</p>
+      <button class="btn primary block" onclick="closeSheet(); openOwnerSheet(null)">＋ Add client</button>`);
+    return;
+  }
+  const ownerOptions = DB.owners.slice().sort((a,b) => a.name.localeCompare(b.name)).map(o =>
+    `<option value="${o.id}" ${o.id === rec.ownerId ? 'selected':''}>${escapeHtml(o.name)}</option>`
+  ).join('');
+  openSheet(`
+    <h2 class="sheet-title">${isNew ? 'New dog' : 'Edit dog'}</h2>
+    <form onsubmit="return saveDogForm(event, '${rec.id}', ${isNew})">
+      <div class="field-group"><label>Owner</label><select name="ownerId" class="field" required>${ownerOptions}</select></div>
+      <div class="field-row">
+        <div class="field-group"><label>Dog name</label><input class="field" name="name" value="${escapeHtml(rec.name)}" required></div>
+        <div class="field-group"><label>Breed</label><input class="field" name="breed" value="${escapeHtml(rec.breed||'')}"></div>
+      </div>
+      <div class="field-row">
+        <div class="field-group"><label>Size</label>
+          <select name="size" class="field">
+            <option value="small" ${rec.size==='small'?'selected':''}>Small (≤10kg)</option>
+            <option value="medium" ${rec.size==='medium'?'selected':''}>Medium (10-25kg)</option>
+            <option value="large" ${rec.size==='large'?'selected':''}>Large (25kg+)</option>
+          </select>
+        </div>
+        <div class="field-group"><label>Age</label><input class="field" name="age" value="${escapeHtml(rec.age||'')}"></div>
+      </div>
+      <div class="field-row">
+        <div class="field-group"><label>Sex</label>
+          <select name="sex" class="field">
+            <option value="">—</option>
+            <option value="male" ${rec.sex==='male'?'selected':''}>Male</option>
+            <option value="female" ${rec.sex==='female'?'selected':''}>Female</option>
+            <option value="desexed" ${rec.sex==='desexed'?'selected':''}>Desexed</option>
+          </select>
+        </div>
+        <div class="field-group"><label>Weight</label><input class="field" name="weight" value="${escapeHtml(rec.weight||'')}" placeholder="e.g. 18kg"></div>
+      </div>
+      <div class="field-row">
+        <div class="field-group"><label>Vaccinated</label>
+          <select name="vaccinated" class="field">
+            <option value="">—</option>
+            <option value="yes" ${rec.vaccinated==='yes'?'selected':''}>Yes</option>
+            <option value="no" ${rec.vaccinated==='no'?'selected':''}>No</option>
+          </select>
+        </div>
+        <div class="field-group"><label>Vacc date</label><input class="field" name="vaccDate" type="date" value="${escapeHtml(rec.vaccDate||'')}"></div>
+      </div>
+      <div class="field-group"><label>Medical conditions</label><textarea class="field" name="medicalConditions" rows="2">${escapeHtml(rec.medicalConditions||'')}</textarea></div>
+      <div class="field-group"><label>Allergies</label><textarea class="field" name="allergies" rows="2">${escapeHtml(rec.allergies||'')}</textarea></div>
+      <div class="field-group"><label>Vet</label><input class="field" name="vetName" value="${escapeHtml(rec.vetName||'')}"></div>
+      <div class="field-row">
+        <div class="field-group"><label>Aggression history</label>
+          <select name="aggression" class="field">
+            <option value="no" ${rec.aggression!=='yes'?'selected':''}>No</option>
+            <option value="yes" ${rec.aggression==='yes'?'selected':''}>Yes</option>
+          </select>
+        </div>
+        <div class="field-group"><label>Separation anxiety</label>
+          <select name="separation" class="field">
+            <option value="no" ${rec.separation!=='yes'?'selected':''}>No</option>
+            <option value="yes" ${rec.separation==='yes'?'selected':''}>Yes</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-group"><label>Aggression details (if any)</label><textarea class="field" name="aggressionExplain" rows="2">${escapeHtml(rec.aggressionExplain||'')}</textarea></div>
+      <div class="field-group"><label>Feeding schedule</label><textarea class="field" name="feedingSchedule" rows="2">${escapeHtml(rec.feedingSchedule||'')}</textarea></div>
+      <div class="field-group"><label>Toilet routine</label><textarea class="field" name="toiletRoutine" rows="2">${escapeHtml(rec.toiletRoutine||'')}</textarea></div>
+      <div class="field-group"><label>Additional behaviours / notes</label><textarea class="field" name="additionalBehaviours" rows="2">${escapeHtml(rec.additionalBehaviours||'')}</textarea></div>
+      <button type="submit" class="btn primary block">${isNew ? 'Add dog' : 'Save'}</button>
+      ${!isNew ? `<button type="button" class="btn danger block mt-2" onclick="deleteDog('${rec.id}')">Delete dog</button>` : ''}
+    </form>`);
+}
+async function saveDogForm(e, id, isNew) {
+  e.preventDefault();
+  const f = e.target;
+  const existing = isNew ? null : DB.dogs.find(d => d.id === id);
+  const rec = {
+    id, ownerId: f.ownerId.value, name: f.name.value.trim(),
+    size: f.size.value, breed: f.breed.value.trim(), sex: f.sex.value,
+    weight: f.weight.value.trim(), age: f.age.value.trim(),
+    vaccinated: f.vaccinated.value, vaccDate: f.vaccDate.value,
+    medicalConditions: f.medicalConditions.value.trim(),
+    allergies: f.allergies.value.trim(),
+    vetName: f.vetName.value.trim(),
+    aggression: f.aggression.value, aggressionExplain: f.aggressionExplain.value.trim(),
+    separation: f.separation.value,
+    feedingSchedule: f.feedingSchedule.value.trim(),
+    toiletRoutine: f.toiletRoutine.value.trim(),
+    additionalBehaviours: f.additionalBehaviours.value.trim(),
+    friendlyDogs: existing?.friendlyDogs || 'yes',
+    photoUrl: existing?.photoUrl || '',
+    createdAt: existing?.createdAt || new Date().toISOString()
+  };
+  if (isNew) DB.dogs.push(rec);
+  else { const i = DB.dogs.findIndex(d => d.id === id); if (i >= 0) DB.dogs[i] = rec; }
+  await save(DB); closeSheet(); render();
+  toast(isNew ? 'Dog added' : 'Saved');
+  return false;
+}
+async function deleteDog(id) {
+  if (!confirm('Delete this dog and all their bookings?')) return;
+  DB.dogs = DB.dogs.filter(d => d.id !== id);
+  DB.bookings = DB.bookings.filter(b => b.dogId !== id);
+  await save(DB); closeSheet(); render();
+}
+
+function openOwnerSheet(ownerId) {
+  const o = (ownerId && ownerId !== 'null' && ownerId !== 'undefined') ? ownerById(ownerId) : null;
+  const isNew = !o;
+  const rec = o || { id: uid(), name:'', phone:'', email:'', emergencyContact:'', notes:'', source:'manual', createdAt: new Date().toISOString() };
+  openSheet(`
+    <h2 class="sheet-title">${isNew?'New client':'Edit client'}</h2>
+    <form onsubmit="return saveOwnerForm(event, '${rec.id}', ${isNew})">
+      <div class="field-group"><label>Owner name</label><input class="field" name="name" value="${escapeHtml(rec.name)}" required></div>
+      <div class="field-row">
+        <div class="field-group"><label>Phone</label><input class="field" name="phone" value="${escapeHtml(rec.phone)}"></div>
+        <div class="field-group"><label>Email</label><input class="field" name="email" type="email" value="${escapeHtml(rec.email)}"></div>
+      </div>
+      <div class="field-group"><label>Emergency contact</label><input class="field" name="emergencyContact" value="${escapeHtml(rec.emergencyContact||'')}"></div>
+      <div class="field-group"><label>Notes</label><textarea class="field" name="notes" rows="2">${escapeHtml(rec.notes||'')}</textarea></div>
+      <button type="submit" class="btn primary block">${isNew?'Add client':'Save'}</button>
+      ${!isNew ? `<button type="button" class="btn ghost block mt-2" onclick="closeSheet(); openDogEditSheet(null, '${rec.id}')">＋ Add a dog for ${escapeHtml(rec.name || 'this client')}</button>` : ''}
+      ${!isNew ? `<button type="button" class="btn danger block mt-2" onclick="deleteOwner('${rec.id}')">Delete client + all their dogs</button>` : ''}
+    </form>`);
+}
+async function saveOwnerForm(e, id, isNew) {
+  e.preventDefault();
+  const f = e.target;
+  const existing = isNew ? null : DB.owners.find(o => o.id === id);
+  const rec = {
+    id, name: f.name.value.trim(), phone: f.phone.value.trim(), email: f.email.value.trim(),
+    emergencyContact: f.emergencyContact.value.trim(), notes: f.notes.value.trim(),
+    source: existing?.source || 'manual', createdAt: existing?.createdAt || new Date().toISOString()
+  };
+  if (isNew) DB.owners.push(rec);
+  else { const i = DB.owners.findIndex(o => o.id === id); if (i >= 0) DB.owners[i] = rec; }
+  await save(DB); closeSheet(); render();
+  toast(isNew?'Client added':'Saved');
+  return false;
+}
+async function deleteOwner(id) {
+  if (!confirm('Delete this client and all their dogs?')) return;
+  const dogIds = DB.dogs.filter(d => d.ownerId === id).map(d => d.id);
+  DB.owners = DB.owners.filter(o => o.id !== id);
+  DB.dogs = DB.dogs.filter(d => d.ownerId !== id);
+  DB.bookings = DB.bookings.filter(b => !dogIds.includes(b.dogId));
+  await save(DB); closeSheet(); render();
+}
+
+function openCapacitySheet() {
+  const c = DB.meta.capacity;
+  openSheet(`<h2 class="sheet-title">Capacity limits</h2>
+    <p class="sheet-sub">The most Andressa can comfortably handle.</p>
+    <div class="field-row">
+      <div class="field-group"><label>Max daycare / day</label><input class="field" id="capDay" type="number" min="1" max="20" value="${c.maxDaycare}"></div>
+      <div class="field-group"><label>Max boarding / night</label><input class="field" id="capNight" type="number" min="0" max="10" value="${c.maxBoarding}"></div>
+    </div>
+    <button class="btn primary block" onclick="saveCapacityForm()">Save</button>`);
+}
+async function saveCapacityForm() {
+  const d = parseInt(document.getElementById('capDay').value, 10);
+  const n = parseInt(document.getElementById('capNight').value, 10);
+  if (!(d > 0)) return toast('Daycare capacity must be at least 1');
+  if (!(n >= 0)) return toast('Boarding capacity must be 0 or more');
+  DB.meta.capacity = { maxDaycare: d, maxBoarding: n };
+  await save(DB); closeSheet(); render();
+  toast('Capacity saved');
+}
+
+function openImportSheet() {
+  openSheet(`<h2 class="sheet-title">Import data</h2>
+    <p class="sheet-sub">Merge a JSON backup — dedupes by phone.</p>
+    <label class="btn primary block big" style="cursor:pointer">
+      🔀 Merge import <input type="file" accept="application/json" style="display:none" onchange="importDataFile(event, 'merge')">
+    </label>
+    <div style="height:10px"></div>
+    <label class="btn ghost block" style="cursor:pointer">
+      ⚠ Replace all data <input type="file" accept="application/json" style="display:none" onchange="importDataFile(event, 'replace')">
+    </label>`);
+}
+function importDataFile(e, mode) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async ev => {
+    try {
+      const data = normalizeDb(JSON.parse(ev.target.result));
+      if (mode === 'replace') {
+        if (!confirm(`Replace all with ${data.owners.length} clients, ${data.dogs.length} dogs, ${data.bookings.length} bookings?`)) return;
+        DB = data; await save(DB); closeSheet(); render();
+        return;
+      }
+      const normPhone = p => (p || '').toString().replace(/\s+|-/g, '');
+      const normName = n => (n || '').toString().trim().toLowerCase();
+      let addOwner=0, mergeOwner=0, addDog=0, mergeDog=0, addBk=0, skipBk=0;
+      const ownerIdMap = {};
+      data.owners.forEach(newO => {
+        const phone = normPhone(newO.phone);
+        const existing = phone ? DB.owners.find(o => normPhone(o.phone) === phone) : DB.owners.find(o => normName(o.name) === normName(newO.name));
+        if (existing) {
+          ['email','address','notes','emergencyContact','source'].forEach(k => { if (!existing[k] && newO[k]) existing[k] = newO[k]; });
+          ownerIdMap[newO.id] = existing.id; mergeOwner++;
+        } else { DB.owners.push({...newO}); ownerIdMap[newO.id] = newO.id; addOwner++; }
+      });
+      const dogIdMap = {};
+      data.dogs.forEach(newD => {
+        const oid = ownerIdMap[newD.ownerId] || newD.ownerId;
+        const existing = DB.dogs.find(d => d.ownerId === oid && normName(d.name) === normName(newD.name));
+        if (existing) { Object.keys(newD).forEach(k => { if (k==='id'||k==='ownerId') return; if (!existing[k] && newD[k]) existing[k] = newD[k]; }); dogIdMap[newD.id] = existing.id; mergeDog++; }
+        else { DB.dogs.push({...newD, ownerId: oid}); dogIdMap[newD.id] = newD.id; addDog++; }
+      });
+      data.bookings.forEach(newB => {
+        const did = dogIdMap[newB.dogId] || newB.dogId;
+        const exists = DB.bookings.find(b => b.dogId === did && b.date === newB.date && (b.session||'full') === (newB.session||'full'));
+        if (exists) skipBk++; else { DB.bookings.push({...newB, dogId: did}); addBk++; }
+      });
+      await save(DB); closeSheet(); render();
+      alert(`Merged.\nClients: +${addOwner} new, ${mergeOwner} merged\nDogs: +${addDog} new, ${mergeDog} merged\nBookings: +${addBk} new, ${skipBk} skipped`);
+    } catch (err) { alert('Invalid file: ' + err.message); }
+  };
+  reader.readAsText(file);
+}
+function exportBackup() {
+  const stamp = todayISO();
+  const blob = new Blob([JSON.stringify(DB, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `pansis-backup-${stamp}.json`;
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  DB.meta.lastBackup = new Date().toISOString(); save(DB);
+  toast('Backup downloaded');
+}
+
+/* ---------- RITUAL ---------- */
+const MOOD_WORDS = ['Playful','Chill','Napper','Adventurous','Bossy','Cuddly','Shy','Curious','Snuggly','Zoomy','Sleepy','Chatty'];
+const MOMENT_CHIPS = ['Made a new friend','Napped hard','Big garden zoomies','Full meal','Half meal','Extra cuddles','First time with the pack','Had a swim','Chased a leaf','Went to the park','Slept on the couch','Got a hug at pickup'];
+
+function ritualQueue() {
+  const iso = todayISO();
+  const arrivedToday = DB.bookings.filter(b => b.date === iso && b.arrivalLogged && !b.report?.sentAt);
+  const overnights = DB.bookings.filter(b => b.session === 'overnight' && b.date === iso && !b.report?.sentAt);
+  const combined = [...arrivedToday, ...overnights.filter(o => !arrivedToday.find(a => a.id === o.id))];
+  return combined.sort((a,b) => (a.arrivalTime||'') > (b.arrivalTime||'') ? 1 : -1);
+}
+function startRitual() {
+  const queue = ritualQueue();
+  if (!queue.length) { toast('No dogs to report on'); return; }
+  ritualState = {
+    queueIds: queue.map(b => b.id),
+    index: 0,
+    sent: 0,
+    sentIds: [],
+    drafts: queue.reduce((m,b) => { m[b.id] = { mood: (b.report?.mood||[]).slice(), moments: (b.report?.moments||[]).slice(), story: b.report?.story||'', photos: (b.report?.photos || []).slice() }; return m; }, {})
+  };
+  renderRitual();
+  document.getElementById('ritualOverlay').classList.add('on');
+  document.body.classList.add('modal-open');
+}
+function closeRitual() {
+  document.getElementById('ritualOverlay').classList.remove('on');
+  document.body.classList.remove('modal-open');
+  ritualState = null;
+  drainPendingRemote();
+}
+function currentRitualBooking() {
+  if (!ritualState) return null;
+  const id = ritualState.queueIds[ritualState.index];
+  return DB.bookings.find(b => b.id === id) || null;
+}
+function renderRitual() {
+  if (!ritualState) return;
+  const overlay = document.getElementById('ritualOverlay');
+  const total = ritualState.queueIds.length;
+  const index = ritualState.index;
+  if (index >= total) return renderRitualClose();
+  const b = currentRitualBooking();
+  if (!b) { ritualState.index++; return renderRitual(); }
+  const dog = dogById(b.dogId);
+  const owner = ownerOf(b.dogId);
+  const d = ritualState.drafts[b.id] || { mood:[], moments:[], story:'', photos:[] };
+  const remaining = total - index - 1;
+  const face = photoOrGlyph(dog);
+  const heroPhoto = d.photos[0]?.data;
+
+  overlay.innerHTML = `
+    <div class="ritual-head">
+      <div class="ritual-progress"><b>${index + 1}</b> of ${total}${remaining>0 ? ` · ${remaining} to go` : ' · last one'}</div>
+      <button class="ritual-close" onclick="closeRitual()" aria-label="Close">×</button>
+    </div>
+    <div class="ritual-body">
+      <div class="ritual-hero">
+        <div class="ritual-hero-face">${heroPhoto ? `<img alt="${escapeHtml(dog?.name||'')}" src="${heroPhoto}">` : face}</div>
+        <div>
+          <div class="ritual-hero-name">${escapeHtml(dog?.name || '?')}</div>
+          <div class="ritual-hero-meta">${escapeHtml(owner?.name || '—')} · ${SESSION_LABELS[b.session]} · $${b.total || calcTotal(b, dog)}</div>
+        </div>
+      </div>
+      <div class="ritual-question">Photos from today</div>
+      <div class="ritual-photo-grid">
+        ${d.photos.map((p, i) => `<div class="ritual-photo-slot"><img alt="" src="${p.data}"><button class="rm" onclick="removeRitualPhoto(${i})" aria-label="Remove">×</button></div>`).join('')}
+        ${d.photos.length < 4 ? `<label class="ritual-photo-slot add">＋<input type="file" accept="image/*" style="display:none" onchange="onRitualPhoto(event)"></label>` : ''}
+      </div>
+      <div class="ritual-question">How did the day feel?</div>
+      <div class="chip-row">${MOOD_WORDS.map(w => `<div class="chip ${d.mood.includes(w)?'on':''}" onclick="toggleMood('${w}')">${w}</div>`).join('')}</div>
+      <div class="ritual-question">Moments worth sharing</div>
+      <div class="chip-row">${MOMENT_CHIPS.map(m => `<div class="chip ${d.moments.includes(m)?'on':''}" onclick="toggleMoment(${JSON.stringify(m).replace(/"/g,'&quot;')})">${escapeHtml(m)}</div>`).join('')}</div>
+      <div class="ritual-question">Anything else for ${escapeHtml((owner?.name||'').split(' ')[0] || 'them')}?</div>
+      <textarea class="ritual-notes" id="storyText" placeholder="Optional — a sentence or two.">${escapeHtml(d.story||'')}</textarea>
+      <div class="ritual-question">Preview</div>
+      ${renderReportPreview(b, dog, owner, d)}
+    </div>
+    <div class="ritual-foot">
+      <button class="btn ghost" onclick="skipRitualCard()">Skip</button>
+      <button class="btn primary" onclick="sendRitualCard()">Send${dog ? ' ' + escapeHtml(dog.name) : ''}'s report →</button>
+    </div>`;
+}
+function renderReportPreview(b, dog, owner, d) {
+  const moodLine = d.mood.length ? d.mood.join(' + ') : 'a good day';
+  const storyLine = d.story ? d.story : (d.moments.length ? d.moments.slice(0,2).join(', then ') + '.' : '');
+  const heroPhoto = d.photos[0]?.data;
+  return `<div class="report-preview">
+    <div class="rp-photo">${heroPhoto ? `<img alt="${escapeHtml(dog?.name||'')}" src="${heroPhoto}">` : '🐾'}</div>
+    <div class="rp-body">
+      <div class="rp-name">${escapeHtml(dog?.name || '?')}</div>
+      <div class="rp-mood">${escapeHtml(moodLine)}</div>
+      ${storyLine ? `<div class="rp-story">${escapeHtml(storyLine)}</div>` : ''}
+      ${d.moments.length ? `<div class="rp-moments">${d.moments.map(m => `<span class="rp-moment">${escapeHtml(m)}</span>`).join('')}</div>` : ''}
+      <div style="border-top:1px dashed var(--edge); padding-top:8px; text-align:left; font-size:12px; color:var(--ink-2)">
+        <div style="display:flex; justify-content:space-between"><span>${fmtDateShort(b.date)} · ${SESSION_LABELS[b.session]}</span><span>$${b.total || 0}</span></div>
+      </div>
+    </div>
+    <div class="rp-foot">Pansi's Paws · pansispaws.com.au</div>
+  </div>`;
+}
+async function onRitualPhoto(e) {
+  const file = e.target.files[0]; if (!file) return;
+  captureRitualStory();
+  try {
+    const data = await downscalePhoto(file);
+    const b = currentRitualBooking(); if (!b) return;
+    ritualState.drafts[b.id].photos.push({ data, addedAt: new Date().toISOString() });
+    renderRitual();
+  } catch (err) { console.error(err); toast('Couldn\'t process photo'); }
+}
+function removeRitualPhoto(i) {
+  captureRitualStory();
+  const b = currentRitualBooking(); if (!b) return;
+  ritualState.drafts[b.id].photos.splice(i, 1);
+  renderRitual();
+}
+function captureRitualStory() {
+  const el = document.getElementById('storyText');
+  if (!el) return;
+  const b = currentRitualBooking(); if (!b) return;
+  ritualState.drafts[b.id].story = el.value;
+}
+function toggleMood(word) {
+  captureRitualStory();
+  const b = currentRitualBooking(); if (!b) return;
+  const d = ritualState.drafts[b.id];
+  const i = d.mood.indexOf(word);
+  if (i >= 0) d.mood.splice(i, 1);
+  else if (d.mood.length < 2) d.mood.push(word);
+  else { d.mood.shift(); d.mood.push(word); }
+  renderRitual();
+}
+function toggleMoment(m) {
+  captureRitualStory();
+  const b = currentRitualBooking(); if (!b) return;
+  const d = ritualState.drafts[b.id];
+  const i = d.moments.indexOf(m);
+  if (i >= 0) d.moments.splice(i, 1); else d.moments.push(m);
+  renderRitual();
+}
+function skipRitualCard() { ritualState.index++; renderRitual(); }
+async function sendRitualCard() {
+  const b = currentRitualBooking();
+  if (!b) { ritualState.index++; return renderRitual(); }
+  const dog = dogById(b.dogId);
+  const owner = ownerOf(b.dogId);
+  const d = ritualState.drafts[b.id];
+  d.story = document.getElementById('storyText')?.value.trim() || d.story;
+
+  // Re-look-up booking by id in case of sync
+  const fresh = DB.bookings.find(x => x.id === b.id);
+  if (!fresh) { toast('Booking gone — skipping'); ritualState.index++; return renderRitual(); }
+  fresh.report = { mood: d.mood, moments: d.moments, story: d.story, photos: d.photos, sentAt: new Date().toISOString() };
+  try { await save(DB); } catch (e) { console.warn(e); toast('Save failed — continuing'); }
+
+  if (dog) {
+    try { generateInvoicePDF(fresh, dog, owner); } catch (e) { console.warn('PDF failed', e); }
+    if (owner?.email) {
+      const body = buildRitualEmail(d, dog, owner, fresh);
+      const subject = `${dog.name}'s day at Pansi's Paws`;
+      window.location.href = `mailto:${owner.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      toast('PDF downloaded — attach it before sending', 'info');
+    } else {
+      toast(`${dog.name}: no email on file — PDF in Downloads`);
+    }
+  }
+
+  ritualState.sent++;
+  ritualState.sentIds.push(b.id);
+  hapticSuccess();
+  toast(`Sent ${dog?.name || 'report'}`);
+  ritualState.index++;
+  renderRitual();
+}
+function renderRitualClose() {
+  const overlay = document.getElementById('ritualOverlay');
+  const sent = ritualState.sent;
+  const total = ritualState.queueIds.length;
+  const sentBookings = ritualState.sentIds.map(id => DB.bookings.find(b => b.id === id)).filter(Boolean);
+  const takings = sentBookings.reduce((s,b) => s + (b.total||0), 0);
+  const allMoods = sentBookings.map(b => (b.report?.mood || [])[0]).filter(Boolean);
+  const counts = {};
+  allMoods.forEach(m => counts[m] = (counts[m]||0) + 1);
+  const dominantMood = Object.keys(counts).sort((a,b) => counts[b]-counts[a])[0];
+  const dominantLine = dominantMood ? `Mostly a ${dominantMood.toLowerCase()} day.` : '';
+  const thumbs = sentBookings.map(b => {
+    const dog = dogById(b.dogId);
+    const p = b.report?.photos?.[0]?.data;
+    if (!p) return '';
+    return `<div class="close-thumb"><img alt="${escapeHtml(dog?.name||'')}" src="${p}"><div class="caption">${escapeHtml(dog?.name||'')}</div></div>`;
+  }).join('');
+
+  overlay.innerHTML = `
+    <div class="ritual-head">
+      <div class="ritual-progress"><b>Day closed.</b></div>
+      <button class="ritual-close" onclick="closeRitual()" aria-label="Close">×</button>
+    </div>
+    <div class="ritual-body">
+      <div class="close-page">
+        <div class="close-headline">${sent === 0 ? 'Nothing sent today.' : sent === 1 ? 'One story sent.' : `${sent} stories sent.`}</div>
+        ${dominantLine ? `<div class="close-mood">${escapeHtml(dominantLine)}</div>` : ''}
+        ${thumbs ? `<div class="close-collage">${thumbs}</div>` : ''}
+        <div class="close-stats">
+          <div class="close-stat"><b>$${takings.toLocaleString()}</b> takings</div>
+          <div class="close-stat"><b>${sent}</b>/${total} reports</div>
+        </div>
+        <p class="sub muted small">Well done. Sleep well.</p>
+      </div>
+    </div>
+    <div class="ritual-foot">
+      <button class="btn primary block big" onclick="closeRitual()">Close the daybook</button>
+    </div>`;
+  render();
+}
+
+function buildRitualEmail(d, dog, owner, booking) {
+  const firstName = (owner?.name || '').split(' ')[0] || 'there';
+  const moodLine = d.mood.length ? d.mood.join(' + ') : 'a good day';
+  const momentsLine = d.moments.length ? '\n\n' + d.moments.map(m => '• ' + m).join('\n') : '';
+  const storyLine = d.story ? `\n\n${d.story}` : '';
+  return `Hi ${firstName},
+
+${dog.name}'s day was ${moodLine.toLowerCase()}.${momentsLine}${storyLine}
+
+Today's invoice ($${booking.total}) is attached. Bank details are on the invoice.
+
+Andressa
+Pansi's Paws — Home Dog Daycare
+Annandale`;
+}
+
+/* ---------- INVOICE PDF ---------- */
+function generateInvoicePDF(booking, dog, owner) {
+  const { jsPDF } = window.jspdf || {};
+  if (!jsPDF) { toast('PDF library not loaded'); return; }
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+
+  pdf.setFontSize(28); pdf.setTextColor(43, 26, 16);
+  pdf.text("Pansi's Paws", 20, 26);
+  pdf.setFontSize(10); pdf.setTextColor(120, 100, 80);
+  pdf.text('Home Dog Daycare · Annandale · pansispaws.com.au', 20, 32);
+
+  pdf.setFontSize(20); pdf.setTextColor(43, 26, 16);
+  pdf.text('INVOICE', 150, 26);
+  pdf.setFontSize(10); pdf.setTextColor(80, 80, 80);
+  const invNum = 'INV-' + booking.date.replace(/-/g,'') + '-' + booking.id.slice(0,4).toUpperCase();
+  pdf.text(`Invoice #: ${invNum}`, 150, 33);
+  pdf.text(`Date: ${new Date().toLocaleDateString('en-AU')}`, 150, 39);
+
+  pdf.setDrawColor(220, 200, 170); pdf.line(20, 45, 190, 45);
+  pdf.setFontSize(10); pdf.setTextColor(120, 100, 80);
+  pdf.text('BILL TO', 20, 53);
+  pdf.setTextColor(30, 30, 30); pdf.setFontSize(11);
+  pdf.text(owner?.name || 'Client', 20, 60);
+  if (owner?.email) pdf.text(owner.email, 20, 66);
+  if (owner?.phone) pdf.text(owner.phone, 20, 72);
+
+  const startY = 90;
+  pdf.setFillColor(43, 26, 16); pdf.rect(20, startY, 170, 8, 'F');
+  pdf.setTextColor(255, 255, 255); pdf.setFontSize(10);
+  pdf.text('Description', 24, startY + 5.5);
+  pdf.text('Amount', 175, startY + 5.5, { align: 'right' });
+
+  pdf.setTextColor(30, 30, 30);
+  let y = startY + 15;
+  const desc = `${dog?.name || '?'} — ${SESSION_LABELS[booking.session]} · ${fmtDateShort(booking.date)}`;
+  pdf.setFontSize(10);
+  pdf.text(desc, 24, y);
+  pdf.text('$' + (booking.total||0).toFixed(2), 186, y, { align: 'right' });
+  y += 6;
+
+  const addOns = [];
+  if (booking.addOns?.senior) addOns.push('Senior +$'+ADDONS.senior);
+  if (booking.addOns?.puppy)  addOns.push('Puppy +$'+ADDONS.puppy);
+  if (booking.addOns?.med)    addOns.push('Medication +$'+ADDONS.med);
+  if (booking.addOns?.diet)   addOns.push('Diet prep +$'+ADDONS.diet);
+  if (booking.addOns?.taxi)   addOns.push('Pickup/dropoff +$'+ADDONS.taxi);
+  if (booking.surcharges?.publicHoliday) addOns.push('Public holiday +$'+SURCHARGES.publicHoliday);
+  if (booking.surcharges?.xmasPeak) addOns.push('Xmas peak +$' + (booking.session === 'overnight' ? SURCHARGES.xmasPeakNight : SURCHARGES.xmasPeakDay));
+  if (addOns.length) {
+    pdf.setTextColor(100, 100, 100); pdf.setFontSize(9);
+    pdf.text('   inc: ' + addOns.join(' · '), 24, y); y += 6;
+  }
+  y += 8;
+  pdf.line(20, y - 4, 190, y - 4);
+  pdf.setFontSize(12); pdf.setTextColor(43, 26, 16);
+  pdf.text('TOTAL DUE', 130, y);
+  pdf.setFontSize(14);
+  pdf.text('$' + (booking.total||0).toFixed(2), 186, y, { align: 'right' });
+
+  y += 20;
+  pdf.setFontSize(10); pdf.setTextColor(120, 100, 80);
+  pdf.text('PAYMENT DETAILS', 20, y); pdf.setTextColor(30,30,30);
+  y += 6; pdf.setFontSize(9);
+  pdf.text('Bank transfer:', 20, y); y += 5;
+  pdf.text("Account name:  Pansi's Paws", 25, y); y += 4;
+  pdf.text('BSB:           062-000', 25, y); y += 4;
+  pdf.text('Account:       12345678', 25, y); y += 4;
+  pdf.text(`Reference:     ${invNum}`, 25, y);
+
+  pdf.setFontSize(8); pdf.setTextColor(150, 130, 100);
+  pdf.text('Thank you for choosing Pansi\'s Paws · andressa.ubf@hotmail.com', 105, 285, { align: 'center' });
+
+  pdf.save(`invoice-${(dog?.name || 'dog').replace(/\W+/g,'')}-${booking.date}.pdf`);
+}
+
+function photoOrGlyph(dog) {
+  if (dog?.photoUrl) return `<img alt="${escapeHtml(dog.name||'')}" src="${escapeHtml(dog.photoUrl)}">`;
+  const glyphs = ['🐕','🐶','🦮','🐕‍🦺'];
+  const idx = (dog?.name || '').split('').reduce((s,c) => s + c.charCodeAt(0), 0) % glyphs.length;
+  return glyphs[idx];
+}
+
+Object.assign(window, {
+  doSignIn, signOutAdmin, switchTab,
+  openAddMenuSheet, openBookingSheet, saveBookingForm, deleteBooking,
+  openStaySheet,
+  openDogSheet, openDogEditSheet, saveDogForm, deleteDog,
+  openOwnerSheet, saveOwnerForm, deleteOwner,
+  openCapacitySheet, saveCapacityForm,
+  openImportSheet, importDataFile, exportBackup,
+  closeSheet, closeRitual, startRitual,
+  toggleMood, toggleMoment, skipRitualCard, sendRitualCard, onRitualPhoto, removeRitualPhoto,
+  triggerQuickPhoto,
+  setLedgerPeriod, exportLedgerCSV, printLedger,
+  updateBookingPrice, toggleRepeatPreview, showMoreWeeks, setWeekMode,
+  openSellPackSheet, savePackForm,
+  hideSyncBanner, retryPendingSave
+});
+
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if (currentTab === 'week') render(); }, 150);
+});
+</script>
+</body>
+</html>

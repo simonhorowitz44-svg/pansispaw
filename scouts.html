@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scouts Club | Pansi's Paws — a weekly adventure club for Sydney dogs</title>
+<meta name="description" content="A little adventure club made with big love — for very loved Sydney dogs. Every Scout gets a bandana, and takes home a new collectible patch from every adventure. Four dogs, two mornings a week, from Pansi's Paws Annandale.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://pansispaws.com.au/scouts.html">
+<link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Fraunces:opsz,wght,SOFT@9..144,500;9..144,600;9..144,700;9..144,800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #3f2814; --ink-2: #7a5e3f; --ink-3: #a89680;
+    --paper: #faf6ed; --paper-2: #fffefc; --kraft: #f6efdd;
+    --edge: #ead9b8; --edge-2: #f0e3c4;
+    --sage: #6a8f4a; --sage-dark: #4d6d34; --sage-soft: #eef2e6;
+    --pine: #3d5232;
+    --honey: #dba63f; --honey-text: #a8791f; --honey-soft: #f5e2a7;
+    --cream: #fef3c7;
+  }
+
+  /* -------- Hero -------- */
+  .sc-hero { position: relative; background: linear-gradient(180deg, #f2ead8 0%, var(--paper) 60%); padding: 4rem 1.5rem 3.5rem; overflow: hidden; }
+  .sc-hero-inner { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: 55% 45%; gap: 3rem; align-items: center; }
+  .sc-ribbon { display: inline-block; padding: 6px 14px; background: var(--sage); color: var(--cream); font: 600 12px "DM Sans", sans-serif; letter-spacing: 0.14em; text-transform: uppercase; border-radius: 999px; margin-bottom: 1.2rem; }
+  .sc-h1 { font-family: "Fraunces", serif; font-variation-settings: 'opsz' 144, 'SOFT' 100; font-weight: 500; font-size: clamp(40px, 5.8vw, 62px); color: var(--ink); letter-spacing: -0.02em; line-height: 1.05; margin: 0 0 1rem; }
+  .sc-h1 em { font-style: italic; color: var(--ink-2); }
+  .sc-lede { color: var(--ink-2); font-size: 17px; line-height: 1.55; max-width: 480px; margin: 0 0 1.6rem; }
+  .sc-cta-row { display: flex; gap: 1.2rem; align-items: center; flex-wrap: wrap; margin-bottom: 1.4rem; }
+  .sc-btn { display: inline-block; padding: 14px 28px; background: var(--ink); color: var(--cream); border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 15px; transition: transform 0.15s, background 0.2s; border: 0; cursor: pointer; font-family: inherit; }
+  .sc-btn:hover { background: #241610; transform: translateY(-1px); }
+  .sc-btn.sage { background: var(--sage); }
+  .sc-btn.sage:hover { background: var(--sage-dark); }
+  .sc-btn.block { display: block; width: 100%; text-align: center; }
+  .sc-ghost { color: var(--ink-2); font-size: 14px; text-decoration: none; font-weight: 500; }
+  .sc-ghost:hover { color: var(--ink); }
+  .sc-strap { font-size: 13px; color: var(--ink-2); }
+  .sc-strap span { margin: 0 6px; opacity: 0.5; }
+  .sc-hero-logo { text-align: center; }
+  .sc-hero-logo img { max-width: 100%; width: 460px; height: auto; }
+
+  /* -------- Section wrapper -------- */
+  .sc-section { padding: 4rem 1.5rem; max-width: 1080px; margin: 0 auto; }
+  .sc-eyebrow { display: inline-block; font: 600 11px "DM Sans", sans-serif; text-transform: uppercase; letter-spacing: 0.16em; color: var(--sage); margin-bottom: 0.6rem; }
+  .sc-h2 { font-family: "Fraunces", serif; font-variation-settings: 'opsz' 144, 'SOFT' 90; font-weight: 600; font-size: clamp(28px, 4vw, 36px); color: var(--ink); letter-spacing: -0.02em; margin: 0 0 0.8rem; }
+  .sc-sec-lede { color: var(--ink-2); font-size: 16px; line-height: 1.6; max-width: 560px; }
+  .sc-sec-head { text-align: center; margin-bottom: 2.5rem; }
+  .sc-sec-head .sc-sec-lede { margin: 0 auto; }
+  .sc-quote { font-family: "Fraunces", serif; font-style: italic; font-weight: 500; font-size: clamp(22px, 3vw, 26px); color: var(--ink); letter-spacing: -0.01em; text-align: center; max-width: 640px; margin: 0 auto 3rem; line-height: 1.35; }
+
+  /* -------- Differentiator cards -------- */
+  .sc-diff { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; max-width: 1000px; margin: 0 auto; }
+  .sc-diff-card { background: var(--paper-2); border: 1px solid var(--edge); border-radius: 14px; padding: 2rem 1.5rem; }
+  .sc-stamp { width: 48px; height: 48px; border-radius: 50%; border: 2px dashed var(--sage); display: flex; align-items: center; justify-content: center; margin-bottom: 1.2rem; color: var(--sage); font-size: 22px; }
+  .sc-diff-card .sc-eyebrow { display: block; margin-bottom: 4px; }
+  .sc-diff-card h3 { font-family: "Fraunces", serif; font-weight: 600; font-size: 20px; color: var(--ink); margin: 0 0 0.6rem; letter-spacing: -0.01em; }
+  .sc-diff-card p { color: var(--ink-2); font-size: 15px; line-height: 1.6; margin: 0; }
+  .sc-diff-strap { text-align: center; margin-top: 2rem; color: var(--ink-2); font-size: 14px; font-style: italic; font-family: "Fraunces", serif; }
+
+  /* -------- The Bandana (dark band) -------- */
+  .sc-bandana-band { background: var(--ink); padding: 5rem 1.5rem; text-align: center; }
+  .sc-bandana-eyebrow { display: inline-block; font: 600 12px "DM Sans", sans-serif; text-transform: uppercase; letter-spacing: 0.2em; color: var(--honey); margin-bottom: 0.6rem; }
+  .sc-bandana-h { font-family: "Fraunces", serif; font-variation-settings: 'opsz' 144, 'SOFT' 90; font-weight: 500; font-style: italic; font-size: clamp(28px, 4vw, 36px); color: var(--cream); letter-spacing: -0.01em; margin: 0 0 2.5rem; line-height: 1.2; }
+  .sc-bandana-wrap { max-width: 520px; margin: 0 auto; }
+  .sc-bandana-svg { width: 100%; height: auto; display: block; filter: drop-shadow(0 20px 40px rgba(0,0,0,0.35)); }
+  .sc-bandana-caption { color: var(--cream); font-family: "Fraunces", serif; font-style: italic; font-size: 17px; margin-top: 2rem; opacity: 0.85; }
+  .sc-bandana-sizes { color: var(--honey); font-size: 12px; letter-spacing: 0.15em; text-transform: uppercase; margin-top: 1.5rem; font-family: "DM Sans", sans-serif; font-weight: 600; }
+  .sc-bandana-sizes span { margin: 0 8px; opacity: 0.6; }
+
+  /* -------- Patch Ledger -------- */
+  .sc-patch-panel { background: var(--kraft); border: 1.5px dashed var(--edge); border-radius: 16px; padding: 2.5rem 1.5rem; max-width: 1000px; margin: 0 auto; }
+  .sc-patch-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.8rem 1.2rem; }
+  .sc-patch-item { text-align: center; position: relative; }
+  .sc-patch-svg { width: 100%; max-width: 130px; height: auto; display: block; margin: 0 auto 0.7rem; filter: drop-shadow(0 3px 6px rgba(60,30,10,0.12)); }
+  .sc-patch-name { font-family: "Fraunces", serif; font-weight: 600; font-size: 15px; color: var(--ink); letter-spacing: -0.01em; }
+  .sc-patch-earn { font-size: 12px; color: var(--ink-2); line-height: 1.4; margin-top: 3px; padding: 0 4px; }
+  .sc-patch-tick { position: absolute; top: -3px; right: 8px; width: 9px; height: 9px; border-radius: 50%; }
+  .sc-patch-tick.attend { background: var(--sage); }
+  .sc-patch-tick.milestone { background: var(--honey); }
+  .sc-patch-tick.seasonal { background: var(--pine); }
+  .sc-patch-legend { display: flex; justify-content: center; flex-wrap: wrap; gap: 14px; margin-top: 2rem; padding-top: 1.5rem; border-top: 1px dashed var(--edge); }
+  .sc-patch-legend-chip { display: inline-flex; align-items: center; gap: 6px; font: 500 12px "DM Sans", sans-serif; color: var(--ink-2); }
+  .sc-patch-legend-chip .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .sc-patch-legend-chip .dot.attend { background: var(--sage); }
+  .sc-patch-legend-chip .dot.milestone { background: var(--honey); }
+  .sc-patch-legend-chip .dot.seasonal { background: var(--pine); }
+  .sc-patch-footnote { text-align: center; color: var(--ink-2); font-size: 13px; font-style: italic; margin-top: 1.2rem; font-family: "Fraunces", serif; }
+
+  /* -------- Pricing -------- */
+  .sc-pricing-grid { display: grid; grid-template-columns: 6fr 4fr; gap: 1.5rem; max-width: 900px; margin: 0 auto; }
+  .sc-rates { background: var(--paper-2); border: 1px solid var(--edge); border-radius: 14px; padding: 1.8rem; }
+  .sc-rates h3 { font-family: "Fraunces", serif; font-weight: 600; font-size: 18px; color: var(--ink); margin: 0 0 1rem; }
+  .sc-rate-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px dotted var(--edge); font-size: 15px; }
+  .sc-rate-row:last-child { border-bottom: 0; }
+  .sc-rate-label .save { display: inline-block; font-size: 12px; color: var(--sage-dark); font-weight: 600; margin-left: 6px; }
+  .sc-rate-price { font-family: "Fraunces", serif; font-weight: 600; color: var(--ink); }
+  .sc-founding { background: var(--paper); border: 2px solid var(--sage); border-radius: 14px; padding: 1.8rem; position: relative; text-align: center; display: flex; flex-direction: column; justify-content: center; }
+  .sc-founding-stamp { position: absolute; top: 12px; right: 12px; transform: rotate(-8deg); font: 700 10px "DM Sans", sans-serif; text-transform: uppercase; letter-spacing: 0.15em; color: var(--sage); border: 1.5px solid var(--sage); padding: 3px 8px; border-radius: 4px; }
+  .sc-founding h3 { font-family: "Fraunces", serif; font-weight: 600; color: var(--sage-dark); margin: 0 0 0.5rem; text-transform: uppercase; font-size: 12px; letter-spacing: 0.16em; }
+  .sc-founding .price { font-family: "Fraunces", serif; font-variation-settings: 'opsz' 144, 'SOFT' 80; font-weight: 700; font-size: 44px; color: var(--ink); line-height: 1; letter-spacing: -0.02em; }
+  .sc-founding .unit { color: var(--ink-2); font-size: 13px; margin: 4px 0 1.2rem; }
+  .sc-founding p { color: var(--ink-2); font-size: 13px; line-height: 1.5; margin: 0 0 1.2rem; }
+
+  /* -------- Enrol: The Club Register -------- */
+  .sc-enrol-band { background: var(--sage-soft); padding: 5rem 1.5rem; }
+  .sc-enrol-inner { max-width: 620px; margin: 0 auto; text-align: center; }
+  .sc-enrol-card { background: var(--kraft); border: 1.5px dashed var(--edge); border-radius: 14px; padding: 2.5rem 2rem; text-align: left; margin-top: 2rem; transform: rotate(-0.4deg); box-shadow: 0 10px 30px rgba(60,30,10,0.08); }
+  .sc-enrol-card-head { text-align: center; padding-bottom: 1.5rem; margin-bottom: 1.5rem; border-bottom: 1px dashed var(--edge); }
+  .sc-enrol-card-head .tag { display: inline-block; font: 700 10px "DM Sans", sans-serif; letter-spacing: 0.22em; color: var(--sage-dark); text-transform: uppercase; margin-bottom: 4px; }
+  .sc-enrol-card-head .stamp { display: inline-block; margin-top: 8px; padding: 3px 10px; border: 1.5px solid var(--sage); color: var(--sage); font: 700 10px "DM Sans", sans-serif; letter-spacing: 0.14em; text-transform: uppercase; transform: rotate(2deg); border-radius: 3px; opacity: 0.7; }
+  .sc-enrol-card h2 { font-family: "Fraunces", serif; font-weight: 600; font-size: 22px; color: var(--ink); margin: 4px 0 0; letter-spacing: 0.02em; }
+  .sc-field-group { margin-bottom: 1.2rem; }
+  .sc-field-label { display: block; font: 600 11px "DM Sans", sans-serif; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); margin-bottom: 6px; }
+  .sc-field-input { width: 100%; padding: 8px 0; border: 0; border-bottom: 1.5px dashed var(--edge); background: transparent; font: 400 16px "DM Sans", sans-serif; color: var(--ink); font-family: inherit; }
+  .sc-field-input:focus { outline: none; border-bottom-color: var(--sage); border-bottom-style: solid; }
+  .sc-field-input::placeholder { color: var(--ink-3); font-style: italic; }
+  textarea.sc-field-input { resize: vertical; min-height: 72px; padding: 8px 0; border: 1.5px dashed var(--edge); padding: 10px 12px; border-radius: 6px; }
+  textarea.sc-field-input:focus { border-color: var(--sage); border-style: solid; }
+  .sc-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .sc-radio-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .sc-radio-pill { display: inline-block; }
+  .sc-radio-pill input { position: absolute; opacity: 0; }
+  .sc-radio-pill label { display: inline-block; padding: 8px 16px; background: var(--paper-2); border: 1.5px solid var(--edge); border-radius: 999px; font: 500 14px "DM Sans", sans-serif; color: var(--ink); cursor: pointer; transition: all 0.15s; }
+  .sc-radio-pill input:checked + label { background: var(--sage); color: var(--cream); border-color: var(--sage-dark); }
+  .sc-rules { background: var(--paper); border: 1px solid var(--edge); border-radius: 8px; padding: 1.2rem 1.4rem; margin: 1.5rem 0 1rem; }
+  .sc-rules-head { font-family: "Fraunces", serif; font-weight: 700; font-size: 15px; color: var(--ink); margin-bottom: 0.6rem; }
+  .sc-rules p { font-size: 13px; line-height: 1.55; color: var(--ink-2); margin: 0.5rem 0; }
+  .sc-rules p strong { color: var(--ink); font-weight: 700; }
+  .sc-checkbox { display: flex; align-items: flex-start; gap: 10px; margin-top: 0.8rem; cursor: pointer; }
+  .sc-checkbox input { margin-top: 3px; width: 18px; height: 18px; accent-color: var(--sage); flex-shrink: 0; }
+  .sc-checkbox span { font-size: 13.5px; color: var(--ink); line-height: 1.5; }
+  .sc-consent-block { background: var(--kraft); border: 1.5px solid var(--sage); border-radius: 8px; padding: 1.2rem 1.4rem; margin-top: 1.2rem; }
+  .sc-consent-head { font-family: "Fraunces", serif; font-weight: 700; font-size: 14px; color: var(--sage-dark); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.4rem; }
+  .sc-consent-block .sc-checkbox:first-of-type { margin-top: 0.8rem; }
+  .sc-form-submit { margin-top: 1.5rem; }
+  .sc-form-fine { text-align: center; font-size: 12px; color: var(--ink-2); margin-top: 1rem; }
+
+  /* Success card (?enrolled=1) */
+  .sc-success { background: var(--kraft); border: 1.5px dashed var(--sage); border-radius: 14px; padding: 3rem 2rem; text-align: center; }
+  .sc-success .mark { font-size: 48px; margin-bottom: 1rem; }
+  .sc-success h3 { font-family: "Fraunces", serif; font-style: italic; font-weight: 500; font-size: 24px; color: var(--ink); margin: 0 0 1rem; line-height: 1.3; }
+  .sc-success p { color: var(--ink-2); font-size: 15px; line-height: 1.6; margin: 0; }
+
+  /* -------- Trust chips + FAQ -------- */
+  .sc-trust-band { padding: 2rem 1.5rem; background: var(--paper); border-top: 1px solid var(--edge); border-bottom: 1px solid var(--edge); }
+  .sc-chip-row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; max-width: 800px; margin: 0 auto; }
+  .sc-chip { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; background: var(--paper-2); border: 1px solid var(--edge); border-radius: 999px; font-size: 13px; color: var(--ink); font-weight: 500; }
+  .sc-chip::before { content: '✓'; color: var(--sage); font-weight: 700; }
+  .sc-faq { max-width: 680px; margin: 0 auto; }
+  .sc-faq details { border-bottom: 1px solid var(--edge); padding: 1.2rem 0; }
+  .sc-faq details:first-of-type { border-top: 1px solid var(--edge); }
+  .sc-faq summary { cursor: pointer; font-family: "Fraunces", serif; font-weight: 600; font-size: 17px; color: var(--ink); list-style: none; padding-right: 2rem; position: relative; }
+  .sc-faq summary::-webkit-details-marker { display: none; }
+  .sc-faq summary::after { content: '＋'; position: absolute; right: 0; top: 0; color: var(--sage); font-weight: 400; font-size: 20px; }
+  .sc-faq details[open] summary::after { content: '−'; }
+  .sc-faq details p { color: var(--ink-2); font-size: 15px; line-height: 1.6; margin: 0.8rem 0 0; }
+
+  @media (max-width: 720px) {
+    .sc-hero-inner { grid-template-columns: 1fr; text-align: center; }
+    .sc-hero-text { order: 2; }
+    .sc-hero-logo { order: 1; }
+    .sc-hero-logo img { width: 260px; }
+    .sc-lede, .sc-strap, .sc-cta-row { margin-left: auto; margin-right: auto; justify-content: center; }
+    .sc-diff { grid-template-columns: 1fr; }
+    .sc-diff-card { display: grid; grid-template-columns: 60px 1fr; gap: 1rem; padding: 1.4rem; }
+    .sc-stamp { margin-bottom: 0; }
+    .sc-patch-grid { grid-template-columns: repeat(2, 1fr); gap: 1.5rem 1rem; }
+    .sc-pricing-grid { grid-template-columns: 1fr; }
+    .sc-founding { order: -1; }
+    .sc-field-row { grid-template-columns: 1fr; }
+    .sc-enrol-card { transform: none; padding: 2rem 1.4rem; }
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <nav class="nav">
+    <a href="index.html">Home</a>
+    <a href="services.html">Services</a>
+    <a href="scouts.html">Scouts Club</a>
+    <a href="index.html#contact">Contact</a>
+  </nav>
+  <a href="tel:0410151509" class="header-phone">0410 151 509</a>
+  <button class="mobile-menu-btn" aria-label="Open menu">☰</button>
+</header>
+
+<main>
+
+<!-- §1 Hero -->
+<section class="sc-hero">
+  <div class="sc-hero-inner">
+    <div class="sc-hero-text">
+      <span class="sc-ribbon">Now enrolling — just four dogs per adventure</span>
+      <h1 class="sc-h1">A little adventure club <em>made with big love.</em></h1>
+      <p class="sc-lede">Four dogs. Two mornings a week. Real Sydney trails. Every Scout gets their own bandana — and brings home a new collectible patch from every adventure.</p>
+      <div class="sc-cta-row">
+        <a href="#enrol" class="sc-btn">Join the club</a>
+        <a href="#enrol" class="sc-ghost">Join the club ↓</a>
+      </div>
+      <p class="sc-strap">Mon + Fri mornings<span>·</span>Max 4 dogs<span>·</span>Pickup &amp; drop-off included</p>
+    </div>
+    <div class="sc-hero-logo">
+      <img src="scouts-club-logo.png" alt="Pansi's Paws Scouts Club — a chocolate labrador in scout uniform">
+    </div>
+  </div>
+</section>
+
+<!-- §2 Why it's a club -->
+<section class="sc-section">
+  <p class="sc-quote">"Anyone can walk your dog. We wanted to give them a little club of their own."</p>
+  <div class="sc-diff">
+    <div class="sc-diff-card">
+      <div class="sc-stamp">🧣</div>
+      <span class="sc-eyebrow">Wear it</span>
+      <h3>A bandana, not a report card</h3>
+      <p>Every Scout gets a green gingham bandana on enrolment. Each dog brings home a new collectible patch from every adventure, building a little collection of memories on their bandana.</p>
+    </div>
+    <div class="sc-diff-card">
+      <div class="sc-stamp">🏞</div>
+      <span class="sc-eyebrow">Roam it</span>
+      <h3>A different adventure each week</h3>
+      <p>Trails, nature walks, parks, beaches — a different carefully-chosen spot every week. Never the same park on repeat.</p>
+    </div>
+    <div class="sc-diff-card">
+      <div class="sc-stamp">📍</div>
+      <span class="sc-eyebrow">Track it</span>
+      <h3>A tracker on every Scout</h3>
+      <p>Every dog wears a GPS tracker for the whole adventure — an extra layer of security. Not a guarantee, but real peace of mind.</p>
+    </div>
+  </div>
+  <p class="sc-diff-strap">Mon + Fri · pickup around 7:30, home by midday, happy and a little muddy · pickup &amp; drop-off included in every membership.</p>
+</section>
+
+
+<!-- §4 The Patch Ledger — coming soon -->
+<section class="sc-section" id="patches">
+  <div class="sc-sec-head">
+    <span class="sc-eyebrow">The Patch Ledger · Coming Soon</span>
+    <h2 class="sc-h2">The first patches are being drawn.</h2>
+    <p class="sc-sec-lede">A new adventure, a new patch. Every Scout takes home a little collectible patch to add to their bandana and remember the day. We're designing the very first set right now.</p>
+  </div>
+  <div class="sc-patch-panel" style="text-align: center;">
+    <svg viewBox="0 0 320 140" style="width: 100%; max-width: 320px; height: auto; display: block; margin: 0 auto;">
+      <g fill="none" stroke="#c4b49a" stroke-width="1.8" stroke-dasharray="4 4" opacity="0.75">
+        <circle cx="55" cy="70" r="42"/>
+        <circle cx="160" cy="70" r="42"/>
+        <circle cx="265" cy="70" r="42"/>
+      </g>
+      <g font-family="Fraunces, serif" font-style="italic" font-size="16" fill="#a89478" text-anchor="middle">
+        <text x="55" y="76">soon</text>
+        <text x="160" y="76">soon</text>
+        <text x="265" y="76">soon</text>
+      </g>
+    </svg>
+    <p class="sc-patch-footnote" style="margin-top: 1.4rem;">Enrol now and your Scout is one of the very first — the first patches arrive as soon as the ink dries.</p>
+    <div style="text-align: center; margin-top: 1.2rem;">
+      <a href="#enrol" class="sc-btn sage">Join the club</a>
+    </div>
+  </div>
+</section>
+
+<!-- §5 Pricing -->
+<section class="sc-section" id="pricing">
+  <div class="sc-sec-head">
+    <span class="sc-eyebrow">Membership rates</span>
+    <h2 class="sc-h2">One rate. Everything included.</h2>
+    <p class="sc-sec-lede">Per adventure or by pack. Patches are keepsakes, never billed.</p>
+  </div>
+  <div class="sc-pricing-grid">
+    <div class="sc-rates">
+      <h3>Standard membership</h3>
+      <div class="sc-rate-row"><span class="sc-rate-label">Single adventure</span><span class="sc-rate-price">$95</span></div>
+      <div class="sc-rate-row"><span class="sc-rate-label">5-pack <span class="save">save $25</span> <span style="display:block; font-size:11px; color:var(--ink-3); font-weight:400; letter-spacing:0.02em; margin-top:2px;">One-time intro offer, per member</span></span><span class="sc-rate-price">$450</span></div>
+      <div class="sc-rate-row"><span class="sc-rate-label">10-pack <span class="save">save $100</span> <span style="display:block; font-size:11px; color:var(--ink-3); font-weight:400; letter-spacing:0.02em; margin-top:2px;">One-time intro offer, per member</span></span><span class="sc-rate-price">$850</span></div>
+      <div class="sc-rate-row"><span class="sc-rate-label">Second household dog</span><span class="sc-rate-price">$75</span></div>
+      <div class="sc-rate-row"><span class="sc-rate-label">Pickup, drop-off &amp; tracker</span><span class="sc-rate-price" style="color: var(--sage-dark); font-size: 14px;">included</span></div>
+    </div>
+    <div class="sc-founding" style="text-align: left;">
+      <h3 style="text-align: center;">What's in every adventure</h3>
+      <ul style="list-style: none; padding: 0; margin: 0 0 1.2rem; font-size: 14px; color: var(--ink); line-height: 1.9;">
+        <li>🚐 Door-to-door pickup &amp; drop-off</li>
+        <li>📍 GPS tracker on every Scout</li>
+        <li>🌿 A carefully-chosen trail — never repeats</li>
+        <li>🧣 Green gingham bandana (on enrolment)</li>
+        <li>🎖 A collectible patch after every adventure</li>
+        <li>📸 Photos sent home the same day</li>
+      </ul>
+      <a href="#enrol" class="sc-btn sage">Join the club</a>
+    </div>
+  </div>
+</section>
+
+<!-- §6 Enrol — The Club Register -->
+<section class="sc-enrol-band" id="enrol">
+  <div class="sc-enrol-inner">
+    <span class="sc-eyebrow">Enrolment</span>
+    <h2 class="sc-h2">Put a name in the register.</h2>
+    <p class="sc-sec-lede" style="margin: 0 auto;">Just four spots per adventure. When you sign up, your Scout's bandana is ready and waiting for their very first adventure. Every membership starts with a free meet &amp; greet.</p>
+
+    <div id="scoutFormWrap">
+      <div class="sc-enrol-card">
+        <div class="sc-enrol-card-head">
+          <div class="tag">Club Register · Pansi's Paws</div>
+          <h2>Sign the book</h2>
+        </div>
+
+        <form id="scoutForm" action="https://formspree.io/f/xzdaajpb" method="POST">
+          <input type="hidden" name="_subject" value="[Pansi's Paw] Scouts Club enrolment">
+          <input type="hidden" name="form_type" value="scouts">
+          <input type="hidden" name="_next" value="https://pansispaws.com.au/scouts.html?enrolled=1">
+
+          <div class="sc-field-row">
+            <div class="sc-field-group">
+              <label class="sc-field-label" for="dog_name">Scout's name</label>
+              <input class="sc-field-input" id="dog_name" name="dog_name" type="text" required placeholder="Biscuit">
+            </div>
+            <div class="sc-field-group">
+              <label class="sc-field-label" for="breed">Breed</label>
+              <input class="sc-field-input" id="breed" name="breed" type="text" required placeholder="Labrador">
+            </div>
+          </div>
+
+          <div class="sc-field-row">
+            <div class="sc-field-group">
+              <label class="sc-field-label" for="size">Weight</label>
+              <select class="sc-field-input" id="size" name="size" required>
+                <option value="">Choose…</option>
+                <option value="Under 10kg">Under 10kg</option>
+                <option value="10-25kg">10–25kg</option>
+                <option value="25kg+">25kg+</option>
+              </select>
+            </div>
+            <div class="sc-field-group">
+              <label class="sc-field-label" for="age">Age</label>
+              <input class="sc-field-input" id="age" name="age" type="text" required placeholder="2 years">
+            </div>
+          </div>
+
+          <div class="sc-field-group">
+            <label class="sc-field-label" for="owner_name">Your name</label>
+            <input class="sc-field-input" id="owner_name" name="owner_name" type="text" required placeholder="Andressa">
+          </div>
+
+          <div class="sc-field-row">
+            <div class="sc-field-group">
+              <label class="sc-field-label" for="phone">Phone</label>
+              <input class="sc-field-input" id="phone" name="phone" type="tel" required placeholder="0410 000 000">
+            </div>
+            <div class="sc-field-group">
+              <label class="sc-field-label" for="email">Email</label>
+              <input class="sc-field-input" id="email" name="email" type="email" required placeholder="hello@example.com">
+            </div>
+          </div>
+
+          <div class="sc-field-group">
+            <label class="sc-field-label" for="notes">Anything we should know? (medical, behavioural, recall, water confidence, mobility)</label>
+            <textarea class="sc-field-input" id="notes" name="notes" placeholder="Medications, allergies, injuries, reactivity, prey drive, deep-seated feelings about cockatoos…"></textarea>
+          </div>
+
+          <div class="sc-field-row">
+            <div class="sc-field-group">
+              <label class="sc-field-label" for="emergency_contact">Emergency contact (name &amp; phone)</label>
+              <input class="sc-field-input" id="emergency_contact" name="emergency_contact" type="text" required placeholder="Partner · 0410 000 000">
+            </div>
+            <div class="sc-field-group">
+              <label class="sc-field-label" for="vet_details">Your vet (name &amp; phone)</label>
+              <input class="sc-field-input" id="vet_details" name="vet_details" type="text" required placeholder="Annandale Vet · 9550 9600">
+            </div>
+          </div>
+
+          <div class="sc-field-group">
+            <label class="sc-field-label">Preferred day</label>
+            <div class="sc-radio-row">
+              <span class="sc-radio-pill"><input type="radio" name="preferred_day" id="pd_mon" value="Monday" required><label for="pd_mon">Monday</label></span>
+              <span class="sc-radio-pill"><input type="radio" name="preferred_day" id="pd_fri" value="Friday"><label for="pd_fri">Friday</label></span>
+              <span class="sc-radio-pill"><input type="radio" name="preferred_day" id="pd_either" value="Either" checked><label for="pd_either">Either</label></span>
+            </div>
+          </div>
+
+          <div class="sc-rules">
+            <div class="sc-rules-head">The Field Rules — Adventure Consent &amp; Risk Acknowledgement</div>
+
+            <p><strong>The adventures.</strong> Scouts Club adventures take place in real outdoor environments — trails, bushland, beaches, parks, rocks, water and uneven natural terrain. Every adventure includes small-group supervision, transport in the Pansi's Paws vehicle (dogs appropriately secured), and a GPS tracker on every Scout for the whole trip.</p>
+
+            <p><strong>Inherent outdoor risks.</strong> Outdoor adventures naturally carry risks that cannot be completely eliminated: scratches, small cuts, grazes, insect bites or stings, ticks, grass seeds, slippery or uneven surfaces, rocks, branches, falls, water and other natural or environmental hazards. Pansi's Paws will take reasonable safety precautions and supervise dogs carefully, and remains responsible for taking reasonable care and following appropriate safety procedures.</p>
+
+            <p><strong>The tracker.</strong> Every Scout wears a GPS tracker during adventures as an additional safety layer. A tracker is an extra measure and cannot guarantee that a dog will never become lost or separated.</p>
+
+            <p><strong>Owner disclosure.</strong> You'll tell us about any medical conditions, injuries, allergies, medications, behavioural concerns, poor recall, reactivity, mobility issues or anything else that could affect your dog's safety or the safety of the group. Honesty here keeps everyone safer.</p>
+
+            <p><strong>Right to modify.</strong> Pansi's Paws may change the location or activity, keep a dog on leash, stop a dog's participation, or return them home if conditions or the dog's behaviour make continuing unsafe.</p>
+
+            <p><strong>Vet care &amp; expenses.</strong> If your dog becomes injured or unwell and needs veterinary attention, Pansi's Paws may take them to a vet or emergency hospital and authorise urgent treatment if you can't be reached. You are responsible for reasonable veterinary expenses associated with illness, pre-existing conditions, or the ordinary risks of participating in outdoor adventures, subject to applicable Australian law.</p>
+
+            <p><strong>Cancellations.</strong> 48 hours' notice: full credit. 24–48 hours: $20 admin fee, waived if we fill the spot. Same-day: the adventure is forfeited unless there's a genuinely good reason. Weather cancellations from our side are always full credit.</p>
+
+            <p><strong>Photos.</strong> We take a lot of them. By joining you're happy for your Scout to appear on our website and social channels. Ask and we'll leave your dog out — no hard feelings.</p>
+
+            <div class="sc-consent-block">
+              <div class="sc-consent-head">I agree, and I specifically consent to:</div>
+              <label class="sc-checkbox">
+                <input type="checkbox" name="consent_main" required>
+                <span>The Adventure Consent &amp; Risk Acknowledgement above, including inherent outdoor risks.</span>
+              </label>
+              <label class="sc-checkbox">
+                <input type="checkbox" name="consent_offleash" required>
+                <span><strong>Off-leash &amp; long-line activities</strong> once my dog has passed the recall assessment, on trails where it is safe and legal.</span>
+              </label>
+              <label class="sc-checkbox">
+                <input type="checkbox" name="consent_water" required>
+                <span><strong>Swimming &amp; water-based activities</strong> where the environment is assessed as safe by Pansi's Paws.</span>
+              </label>
+              <label class="sc-checkbox">
+                <input type="checkbox" name="consent_transport" required>
+                <span><strong>Transport in the Pansi's Paws vehicle</strong> to and from adventure locations, with my dog appropriately secured.</span>
+              </label>
+              <label class="sc-checkbox">
+                <input type="checkbox" name="consent_vet" required>
+                <span><strong>Emergency veterinary care</strong> to be arranged and authorised by Pansi's Paws if my dog needs urgent treatment and I cannot be reached.</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="sc-form-submit">
+            <button type="submit" class="sc-btn sage block">Sign them up — reserve their bandana</button>
+          </div>
+          <p class="sc-form-fine">Andressa will call within a day to book your meet &amp; greet.</p>
+        </form>
+      </div>
+
+      <div id="scoutSuccess" class="sc-success" style="display: none;">
+        <div class="mark">🐾</div>
+        <h3>Welcome to the club.</h3>
+        <p>Andressa will call within a day to book your meet &amp; greet. Your Scout's bandana will be ready for their very first adventure.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- §7 Trust chips + FAQ -->
+<section class="sc-trust-band">
+  <div class="sc-chip-row">
+    <span class="sc-chip">Fully insured</span>
+    <span class="sc-chip">Pet first-aid trained</span>
+    <span class="sc-chip">Meet &amp; greet required</span>
+    <span class="sc-chip">Recall-tested before off-leash</span>
+    <span class="sc-chip">30°C heat rule</span>
+  </div>
+</section>
+
+<section class="sc-section">
+  <div class="sc-sec-head">
+    <span class="sc-eyebrow">Common questions</span>
+    <h2 class="sc-h2">Before you enrol.</h2>
+  </div>
+  <div class="sc-faq">
+    <details>
+      <summary>What's the bandana deal?</summary>
+      <p>Every enrolled Scout gets a Neck of the Woods bandana — soft green gingham with a sage stitched hem and honey paw crest. The bandana arrives empty. After each adventure, Andressa hands you a new collectible patch to take home and add to your Scout's growing collection.</p>
+    </details>
+    <details>
+      <summary>Is pickup and drop-off really included?</summary>
+      <p>Yes. Transport in the Pansi's Paws vehicle is part of every membership — dogs are appropriately secured for the drive. Pickup around 7:30 AM, home by midday. No optional add-on fee for it.</p>
+    </details>
+    <details>
+      <summary>What if my dog fails the recall test?</summary>
+      <p>They still get to be a Scout — just on-lead. Off-leash trust is built over time, not gated at the door. Once you're comfortable with recall training we retest and unlock more trail options.</p>
+    </details>
+    <details>
+      <summary>What happens in bad weather or 30°C+ heat?</summary>
+      <p>We cancel or swap to a shorter cool-shaded walk. Weather cancellations are always full credit — never a lost pack day. Nov–Feb we start at 6:30 AM to stay under the heat.</p>
+    </details>
+    <details>
+      <summary>What days do adventures actually run?</summary>
+      <p>Monday and Friday mornings. Adventures are ~4 hours end-to-end including pickup/drop-off, roughly 8 AM to 12 PM. If neither day works for your routine, get in touch — we may add days as demand grows.</p>
+    </details>
+    <details>
+      <summary>How do packs and credits work?</summary>
+      <p>The 5-pack and 10-pack are a one-time intro offer — one pack per member, to help new Scouts get into a rhythm. After that it's the single-adventure rate. Packs are valid for 6 months from purchase, weather-cancelled days always return to your pack, and days can be used flexibly across Mondays and Fridays. Second dog from the same household is $75 (a $20 saving) — they travel together and count as two spots in the cap of four.</p>
+    </details>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <p class="footer-copy">&copy; 2026 Pansi's Paw Home Daycare • Annandale, NSW • 0410 151 509 · <a href="terms.html">Terms &amp; Conditions</a> · <a href="https://www.instagram.com/pansispawsdaycare/" target="_blank" rel="noopener">Instagram</a></p>
+</footer>
+
+<script src="script.js"></script>
+<script>
+  // Show success card when returned from Formspree submission
+  if (window.location.search.includes('enrolled=1')) {
+    var form = document.getElementById('scoutForm');
+    var success = document.getElementById('scoutSuccess');
+    if (form && success) {
+      form.parentElement.style.display = 'none';
+      success.style.display = 'block';
+      success.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+</script>
+</body>
+</html>

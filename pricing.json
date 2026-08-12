@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "updated": "2026-06-13",
+  "prices": {
+    "small":  { "half": 55, "extended": 70, "full": 80,  "overnight": 100 },
+    "medium": { "half": 65, "extended": 80, "full": 90,  "overnight": 115 },
+    "large":  { "half": 75, "extended": 90, "full": 100, "overnight": 130 }
+  },
+  "addons": {
+    "senior":     { "amount": 12, "label": "Senior Care",          "unit": "day"   },
+    "puppy":      { "amount": 12, "label": "Puppy Care",           "unit": "day"   },
+    "med":        { "amount": 5,  "label": "Medication (oral)",    "unit": "visit" },
+    "diet":       { "amount": 3,  "label": "Special diet",         "unit": "day"   },
+    "taxi":       { "amount": 35, "label": "Pickup & dropoff ≤5km","unit": "trip"  },
+    "taxi10":     { "amount": 50, "label": "Pickup & dropoff 5–10km","unit": "trip" }
+  },
+  "surcharges": {
+    "publicHoliday":     { "amount": 25, "label": "NSW public holiday" },
+    "xmasPeakDay":       { "amount": 15, "label": "Christmas/Summer peak (daycare)" },
+    "xmasPeakNight":     { "amount": 30, "label": "Christmas/Summer peak (boarding)" },
+    "latePickupPer30":   { "amount": 10, "label": "Late pickup per 30 min after 5:30 PM" },
+    "latePickupCapDay":  { "amount": 40, "label": "Late pickup daily cap" }
+  },
+  "discounts": {
+    "pack5":    { "pct": 10, "label": "5-day pack" },
+    "pack10":   { "pct": 15, "label": "10-day pack" },
+    "sibling":  { "pct": 10, "label": "Sibling rate (2 dogs same household)" }
+  },
+  "xmasPeakWindow": { "startMonth": 12, "startDay": 20, "endMonth": 1, "endDay": 28 }
+}

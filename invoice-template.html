@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invoice — Pansi's Paw</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Georgia', serif; font-size: 14px; color: #2c2c2c; background: #fff; padding: 3rem 2rem; max-width: 720px; margin: 0 auto; }
+
+    /* Header */
+    .invoice-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2.5rem; border-bottom: 2px solid #6b4423; padding-bottom: 1.5rem; }
+    .business-name { font-size: 1.6rem; font-weight: bold; color: #6b4423; letter-spacing: 0.02em; }
+    .business-tagline { font-size: 0.85rem; color: #78716c; margin-top: 0.2rem; font-style: italic; }
+    .business-details { font-size: 0.85rem; color: #57534e; margin-top: 0.75rem; line-height: 1.7; }
+    .invoice-label { text-align: right; }
+    .invoice-label h1 { font-size: 2rem; color: #6b4423; font-weight: bold; letter-spacing: 0.05em; }
+    .invoice-label .invoice-number { font-size: 0.85rem; color: #78716c; margin-top: 0.25rem; }
+    .invoice-label .invoice-dates { font-size: 0.85rem; color: #57534e; margin-top: 0.4rem; line-height: 1.7; }
+
+    /* Bill to / from grid */
+    .invoice-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2.5rem; }
+    .meta-block h3 { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: #78716c; margin-bottom: 0.5rem; border-bottom: 1px solid #e7e5e4; padding-bottom: 0.3rem; }
+    .meta-block p { font-size: 0.9rem; color: #2c2c2c; line-height: 1.7; }
+    .meta-block .dog-name { font-size: 0.8rem; color: #78716c; margin-top: 0.2rem; }
+
+    /* Line items */
+    table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; }
+    thead { background: #6b4423; color: #fff; }
+    thead th { padding: 0.75rem 1rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600; }
+    thead th:last-child { text-align: right; }
+    tbody tr { border-bottom: 1px solid #e7e5e4; }
+    tbody tr:last-child { border-bottom: 2px solid #6b4423; }
+    tbody td { padding: 0.85rem 1rem; font-size: 0.9rem; vertical-align: top; }
+    tbody td:last-child { text-align: right; font-weight: 500; }
+    tbody td .item-desc { font-size: 0.8rem; color: #78716c; margin-top: 0.2rem; }
+
+    /* Totals */
+    .totals { display: flex; justify-content: flex-end; margin-bottom: 2rem; }
+    .totals-block { width: 240px; }
+    .totals-row { display: flex; justify-content: space-between; padding: 0.4rem 0; font-size: 0.9rem; color: #57534e; }
+    .totals-row.total { border-top: 2px solid #6b4423; margin-top: 0.5rem; padding-top: 0.7rem; font-size: 1.1rem; font-weight: bold; color: #6b4423; }
+    .totals-row.gst-note { font-size: 0.78rem; color: #78716c; border: none; padding-top: 0.3rem; }
+
+    /* Payment */
+    .payment-section { background: #faf7f4; border: 1px solid #e7e5e4; border-radius: 8px; padding: 1.25rem 1.5rem; margin-bottom: 2rem; }
+    .payment-section h3 { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: #78716c; margin-bottom: 0.75rem; }
+    .payment-section p { font-size: 0.88rem; line-height: 1.7; color: #2c2c2c; }
+    .payment-section .pay-link { color: #6b4423; font-weight: bold; text-decoration: underline; word-break: break-all; }
+    .bank-details { margin-top: 0.5rem; font-size: 0.85rem; color: #57534e; }
+    .bank-details span { font-weight: 600; color: #2c2c2c; }
+
+    /* Notes */
+    .notes-section { font-size: 0.85rem; color: #78716c; border-top: 1px solid #e7e5e4; padding-top: 1rem; margin-bottom: 1.5rem; line-height: 1.7; }
+
+    /* Footer */
+    .invoice-footer { text-align: center; font-size: 0.8rem; color: #a8a29e; border-top: 1px solid #e7e5e4; padding-top: 1rem; font-style: italic; }
+
+    /* Print */
+    @media print {
+      body { padding: 1rem; }
+      .print-hide { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- PRINT BUTTON (hidden when printing) -->
+  <div class="print-hide" style="text-align: right; margin-bottom: 1.5rem;">
+    <button onclick="window.print()" style="background: #6b4423; color: white; border: none; padding: 0.6rem 1.4rem; border-radius: 6px; font-size: 0.9rem; cursor: pointer;">Save / Print PDF</button>
+  </div>
+
+  <!-- HEADER -->
+  <div class="invoice-header">
+    <div>
+      <div class="business-name">Pansi's Paw</div>
+      <div class="business-tagline">Home Dog Daycare · Annandale, NSW</div>
+      <div class="business-details">
+        Andressa &amp; Pansi<br>
+        Annandale, NSW 2038<br>
+        0410 151 509<br>
+        pansispaws.com.au
+      </div>
+    </div>
+    <div class="invoice-label">
+      <h1>INVOICE</h1>
+      <!-- EDIT: Invoice number (e.g. INV-001) -->
+      <div class="invoice-number">No. INV-001</div>
+      <div class="invoice-dates">
+        <!-- EDIT: Date issued and due date -->
+        Date: 7 March 2026<br>
+        Due: 7 March 2026
+      </div>
+    </div>
+  </div>
+
+  <!-- BILL TO -->
+  <div class="invoice-meta">
+    <div class="meta-block">
+      <h3>Bill To</h3>
+      <p>
+        <!-- EDIT: Client name, address if known, email -->
+        [Client Full Name]<br>
+        [Email Address]<br>
+        [Phone Number]
+      </p>
+      <p class="dog-name">Dog: [Dog's Name]</p>
+    </div>
+    <div class="meta-block">
+      <h3>Invoice Details</h3>
+      <p>
+        <!-- EDIT: Reference (e.g. booking date or pack name) -->
+        Ref: [Date of Service / Pack Name]<br>
+        Session: [Half-day / Full-day]<br>
+        Size: [Small / Medium / Large]
+      </p>
+    </div>
+  </div>
+
+  <!-- LINE ITEMS -->
+  <table>
+    <thead>
+      <tr>
+        <th>Description</th>
+        <th>Date</th>
+        <th>Qty</th>
+        <th>Unit Price</th>
+        <th>Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- EDIT: Add or remove rows as needed -->
+      <tr>
+        <td>
+          Full-day dog daycare – Medium
+          <div class="item-desc">Home daycare · Annandale · Mon–Fri 7:30am–5:30pm</div>
+        </td>
+        <td>[DD/MM/YYYY]</td>
+        <td>1</td>
+        <td>$80.00</td>
+        <td>$80.00</td>
+      </tr>
+      <!-- Example second line (e.g. additional day or pack discount) -->
+      <!--
+      <tr>
+        <td>
+          5-day pack discount – Medium full-day
+          <div class="item-desc">~10% saving</div>
+        </td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td>−$36.00</td>
+      </tr>
+      -->
+    </tbody>
+  </table>
+
+  <!-- TOTALS -->
+  <div class="totals">
+    <div class="totals-block">
+      <div class="totals-row">
+        <span>Subtotal</span>
+        <span>$80.00</span>
+      </div>
+      <!-- If not GST registered, delete the GST row -->
+      <!--
+      <div class="totals-row">
+        <span>GST (10%)</span>
+        <span>$8.00</span>
+      </div>
+      -->
+      <div class="totals-row total">
+        <span>Total</span>
+        <span>$80.00</span>
+      </div>
+      <div class="totals-row gst-note">
+        <!-- EDIT: Change if GST registered -->
+        GST not applicable (not registered)
+      </div>
+    </div>
+  </div>
+
+  <!-- PAYMENT DETAILS -->
+  <div class="payment-section">
+    <h3>How to Pay</h3>
+    <p>
+      Please pay via bank transfer or PayID by the due date.
+    </p>
+    <div class="bank-details">
+      <strong>Or bank transfer:</strong><br>
+      Bank: <span>Commonwealth Bank</span><br>
+      BSB: <span>062-948</span> &nbsp;·&nbsp; Account: <span>14027698</span><br>
+      Account name: <span>Andressa Fernandes</span><br>
+      PayID: <span>+61410151509</span><br>
+      Reference: <span>INV-001 · [Dog's Name]</span>
+    </div>
+  </div>
+
+  <!-- NOTES -->
+  <div class="notes-section">
+    <strong>Notes:</strong> Payment is due on or before the date of service unless other arrangements have been made. For multi-day packs, payment is required upfront to secure your days. Thank you for choosing Pansi's Paw — we love having [Dog's Name] with us!
+  </div>
+
+  <!-- FOOTER -->
+  <div class="invoice-footer">
+    Pansi's Paw Home Daycare · Annandale, NSW · 0410 151 509 · pansispaws.com.au<br>
+    We're insured and have first aid for pets.
+  </div>
+
+</body>
+</html>
