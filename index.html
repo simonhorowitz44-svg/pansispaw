@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pansi's Paw Home Daycare | Annandale</title>
-  <meta name="description" content="A small home dog daycare in Annandale, Inner West Sydney. Small groups, daily walks and gentle care in a real home. Enquiries: 0410 151 509.">
+  <title>Dog Daycare Annandale | Pansi's Paw Home Daycare | Inner West Sydney</title>
+  <meta name="description" content="Home dog daycare in Annandale, Inner West Sydney. Small groups, daily walks & premium care in a real home — not a kennel. Book online or call 0410 151 509.">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://pansispaws.com.au/">
 
   <!-- Open Graph -->
   <meta property="og:title" content="Pansi's Paw Home Daycare | Dog Daycare Annandale">
-  <meta property="og:description" content="A small home dog daycare in Annandale, Inner West Sydney. Small groups, daily walks, gentle care.">
+  <meta property="og:description" content="Boutique home dog daycare in Annandale, Inner West Sydney. Small groups, daily walks, premium care. Book online.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://pansispaws.com.au/">
   <meta property="og:image" content="https://pansispaws.com.au/images/pansi.jpg">
@@ -21,7 +21,7 @@
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
     "name": "Pansi's Paw Home Daycare",
-    "description": "A small home dog daycare in Annandale, Inner West Sydney. Small groups, daily walks, gentle care in a real home environment.",
+    "description": "Boutique home dog daycare in Annandale, Inner West Sydney. Small groups, daily walks, premium care in a real home environment.",
     "url": "https://pansispaws.com.au/",
     "telephone": "+61410151509",
     "address": {
@@ -37,6 +37,14 @@
       "latitude": -33.8844,
       "longitude": 151.1704
     },
+    "openingHoursSpecification": [
+      {
+        "@type": "OpeningHoursSpecification",
+        "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"],
+        "opens": "07:30",
+        "closes": "17:30"
+      }
+    ],
     "priceRange": "$$",
     "image": "https://pansispaws.com.au/images/pansi.jpg",
     "sameAs": ["https://www.instagram.com/pansispawsdaycare/"]
@@ -50,6 +58,33 @@
     .launch-banner { background: #5d3a1a; color: #fef3c7; text-align: center; padding: 0.6rem 1rem; font-size: 0.9rem; }
     .launch-banner p { margin: 0; max-width: 900px; margin-left: auto; margin-right: auto; }
     .launch-banner a { color: #fcd34d; font-weight: 600; }
+    /* Price calculator */
+    .calc-section { padding: 3rem 1.5rem; background: linear-gradient(135deg, #fef7ed 0%, #fdf4e2 100%); border-top: 1px solid #f0dfc0; border-bottom: 1px solid #f0dfc0; }
+    .calc-inner { max-width: 720px; margin: 0 auto; }
+    .calc-heading { text-align: center; font-family: var(--font-display, 'Nunito', sans-serif); font-size: 1.6rem; color: var(--primary-dark, #5d3a1a); margin: 0 0 0.4rem; }
+    .calc-sub { text-align: center; font-family: 'Georgia', serif; font-style: italic; color: var(--text-muted, #7a5c49); font-size: 0.95rem; margin: 0 0 1.75rem; }
+    .calc-card { background: #fff; border: 1px solid #ece3d4; border-radius: 14px; box-shadow: 0 6px 20px rgba(107,68,35,0.08); padding: 1.5rem; }
+    .calc-row { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; margin-bottom: 1rem; }
+    .calc-row .calc-label { width: 100%; text-align: center; font-size: 0.78rem; letter-spacing: 0.14em; text-transform: uppercase; color: #8b6f50; margin-bottom: 0.5rem; font-family: 'Georgia', serif; }
+    .calc-chip { background: #faf8f5; border: 1.5px solid #e7d8bf; border-radius: 999px; padding: 0.55rem 1.15rem; cursor: pointer; font-size: 0.9rem; color: #5d3a1a; font-weight: 600; transition: all 0.15s ease; user-select: none; }
+    .calc-chip:hover { border-color: #d4a574; background: #fef7ed; }
+    .calc-chip.active { background: #5d3a1a; color: #fef3c7; border-color: #5d3a1a; }
+    .calc-chip input { display: none; }
+    .calc-addons { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; margin-bottom: 1.25rem; }
+    .calc-addon { display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.75rem; border: 1.5px solid #e7d8bf; border-radius: 10px; cursor: pointer; background: #faf8f5; font-size: 0.85rem; color: #3d2817; transition: all 0.15s ease; }
+    .calc-addon:hover { border-color: #d4a574; }
+    .calc-addon input { accent-color: #5d3a1a; }
+    .calc-addon.active { background: #fef7ed; border-color: #d4a574; }
+    .calc-addon .addon-cost { margin-left: auto; color: #8b6f50; font-size: 0.78rem; }
+    .calc-total { text-align: center; padding: 1.25rem 1rem 1rem; background: linear-gradient(135deg, #5d3a1a 0%, #7a4a25 100%); border-radius: 12px; color: #fef3c7; }
+    .calc-total .tlbl { font-family: 'Georgia', serif; font-style: italic; font-size: 0.95rem; color: #fcd34d; margin-bottom: 0.2rem; }
+    .calc-total .tnum { font-family: 'Georgia', serif; font-size: 2.6rem; line-height: 1; letter-spacing: 0.02em; }
+    .calc-total .tnote { font-size: 0.75rem; opacity: 0.78; margin-top: 0.5rem; font-style: italic; }
+    .calc-cta { text-align: center; margin-top: 1.25rem; }
+    .calc-cta a { color: var(--primary, #8b5a2b); font-weight: 700; font-size: 0.92rem; }
+    @media (max-width: 600px) { .calc-addons { grid-template-columns: 1fr; } .calc-total .tnum { font-size: 2.1rem; } }
+
+    
   </style>
 </head>
 <body>
@@ -74,6 +109,8 @@
       <a href="#services">Our Daycare</a>
       <a href="services.html">Services</a>
       <a href="scouts.html">Scouts Club</a>
+      <a href="book.html">Book</a>
+      <a href="enrol.html">Enrol</a>
       <a href="#contact">Contact</a>
     </nav>
     <a href="tel:0410151509" class="header-phone">0410 151 509</a>
@@ -85,11 +122,13 @@
     <section class="hero">
       <div class="hero-content">
         <h1 class="hero-enter">Pansi's Paw Home Daycare</h1>
-        <p class="hero-tagline hero-enter">A calm, secure home. Personalised care.</p>
-        <p class="hero-sub hero-enter">Small groups • Daily walks & enrichment • Senior dogs &amp; medication welcome • Annandale, NSW</p>
+        <p class="hero-tagline hero-enter">A calm, secure home. Personalised care. Only the best.</p>
+        <p class="hero-sub hero-enter">Small groups • Daily walks & enrichment • Premium treats • Senior dogs &amp; medication welcome • Annandale, NSW</p>
+        <p class="hero-flow-hint">New? Enrol your dog first, then book.</p>
         <div class="hero-buttons hero-enter">
-          <a href="#meet" class="btn btn-primary">Meet Pansi & Andressa</a>
-          <a href="#contact" class="btn btn-secondary">Get in Touch</a>
+          <a href="enrol.html" class="btn btn-primary">Enrol Your Dog</a>
+          <a href="book.html" class="btn btn-secondary">Book Day Care</a>
+          <a href="#meet" class="btn btn-secondary">Meet Pansi & Andressa</a>
         </div>
       </div>
       <div class="hero-image">
@@ -97,7 +136,99 @@
       </div>
     </section>
 
+    
 
+    <!-- Quick price calculator -->
+    <section class="calc-section animate-on-scroll" aria-label="Quick price estimate">
+      <div class="calc-inner">
+        <h2 class="calc-heading">What will it cost?</h2>
+        <p class="calc-sub">A quick estimate — pick your dog and your day.</p>
+        <div class="calc-card" id="priceCalc">
+
+          <div class="calc-row">
+            <span class="calc-label">Dog size</span>
+            <label class="calc-chip active" data-group="size" data-value="small"><input type="radio" name="calc-size" value="small" checked>Small · ≤10kg</label>
+            <label class="calc-chip" data-group="size" data-value="medium"><input type="radio" name="calc-size" value="medium">Medium · 10–25kg</label>
+            <label class="calc-chip" data-group="size" data-value="large"><input type="radio" name="calc-size" value="large">Large · 25kg+</label>
+          </div>
+
+          <div class="calc-row">
+            <span class="calc-label">Session</span>
+            <label class="calc-chip" data-group="session" data-value="half"><input type="radio" name="calc-session" value="half">Half day</label>
+            <label class="calc-chip active" data-group="session" data-value="full"><input type="radio" name="calc-session" value="full" checked>Full day</label>
+            <label class="calc-chip" data-group="session" data-value="extended"><input type="radio" name="calc-session" value="extended">Extended ½</label>
+          </div>
+
+          <div class="calc-row">
+            <span class="calc-label">Add-ons</span>
+          </div>
+          <div class="calc-addons">
+            <label class="calc-addon" data-key="senior"><input type="checkbox" data-key="senior"> Senior Care <span class="addon-cost">+$12/day</span></label>
+            <label class="calc-addon" data-key="puppy"><input type="checkbox" data-key="puppy"> Puppy Care (under 6 mo) <span class="addon-cost">+$12/day</span></label>
+            <label class="calc-addon" data-key="med"><input type="checkbox" data-key="med"> Medication (oral) <span class="addon-cost">+$5/visit</span></label>
+            <label class="calc-addon" data-key="diet"><input type="checkbox" data-key="diet"> Special diet <span class="addon-cost">+$3/day</span></label>
+            <label class="calc-addon" data-key="taxi"><input type="checkbox" data-key="taxi"> Pickup &amp; dropoff (within 5km) <span class="addon-cost">+$35</span></label>
+          </div>
+
+          <div class="calc-total">
+            <div class="tlbl">Estimated total</div>
+            <div class="tnum" id="calcTotal">$80</div>
+            <div class="tnote">Estimate only — final price confirmed at booking.</div>
+          </div>
+
+          <div class="calc-cta">
+            <a href="enrol.html">Book a free meet &amp; greet →</a>
+          </div>
+        </div>
+      </div>
+    </section>
+    <script>
+      (function () {
+        // Pricing model — fetches from pricing.json (single source of truth) with safe fallback
+        var PRICES = {
+          small:     { half: 55, full: 80,  extended: 70 },
+          medium:    { half: 65, full: 90,  extended: 80 },
+          large:     { half: 75, full: 100, extended: 90 }
+        };
+        fetch('pricing.json?t=' + Date.now())
+          .then(function(r){ return r.ok ? r.json() : null; })
+          .then(function(p){ if (p && p.prices) { PRICES = p.prices; recalc(); } })
+          .catch(function(){});
+        var state = { size: 'small', session: 'full', addons: {} };
+
+        function recalc() {
+          var base = PRICES[state.size][state.session];
+          if (state.addons.senior) base += 12;
+          if (state.addons.puppy)  base += 12;
+          if (state.addons.med)    base += 5;
+          if (state.addons.diet)   base += 3;
+          if (state.addons.taxi)   base += 35;
+          document.getElementById('calcTotal').textContent = '$' + base;
+        }
+
+        document.querySelectorAll('.calc-chip').forEach(function (chip) {
+          chip.addEventListener('click', function (e) {
+            var group = chip.dataset.group;
+            var value = chip.dataset.value;
+            document.querySelectorAll('.calc-chip[data-group="' + group + '"]').forEach(function (c) { c.classList.remove('active'); });
+            chip.classList.add('active');
+            var input = chip.querySelector('input'); if (input) input.checked = true;
+            state[group] = value;
+            recalc();
+          });
+        });
+
+        document.querySelectorAll('.calc-addon input').forEach(function (input) {
+          input.addEventListener('change', function () {
+            var key = input.dataset.key;
+            state.addons[key] = input.checked;
+            input.closest('.calc-addon').classList.toggle('active', input.checked);
+            recalc();
+          });
+        });
+        recalc();
+      })();
+    </script>
 
     <!-- Meet Andressa & Pansi -->
     <section id="meet" class="meet-section animate-on-scroll">
@@ -132,7 +263,7 @@
           <p>My name is Andressa, and I am the founder of Pansi's Paw Home Daycare — a boutique home dog daycare in Annandale, lovingly serving families across Sydney's Inner West.</p>
           <p>Dogs have been part of my world for as long as I can remember. Growing up with them taught me something that has stayed with me my whole life: dogs don't just need care — they need presence, patience, safety, and love.</p>
           <p>Pansi's Paw was born from that belief.</p>
-          <p>What started as unconditional love for my own Labrador, Pansi, gently grew into a small home-based dog daycare created for families who want something more personal than a large facility. I wanted to build a space where dogs feel calm, understood, and truly at home — not overstimulated, not overlooked.</p>
+          <p>What started as unconditional love for my own Labrador, Pansi, gently grew into a premium home-based dog daycare created for families who want something more personal than a large facility. I wanted to build a space where dogs feel calm, understood, and truly at home — not overstimulated, not overlooked.</p>
           <p>At Pansi's Paw, we offer small group dog daycare in Annandale, intentionally limited so every dog receives real attention, affection, and supervision. Each day is thoughtfully structured with enrichment, outdoor park walks, rest time, and plenty of quiet moments in a peaceful home environment.</p>
           <p>Here, your dog is welcomed into my home — not into a kennel or commercial centre — but into a safe, warm space built around emotional wellbeing and gentle care.</p>
           <p>My philosophy is simple:</p>
@@ -144,7 +275,7 @@
             <li>Honest, transparent communication with pet parents</li>
           </ul>
           <p>I understand how hard it is to leave your dog in someone else's hands. They are family. That trust means everything to me. That is why I keep things personal, consistent, and open — with regular updates so you can feel confident and at ease.</p>
-          <p>If you are looking for a softer, more personal kind of dog care in the Inner West of Sydney, Pansi's Paw offers a gentler alternative.</p>
+          <p>If you are looking for a boutique dog daycare in Annandale in the Inner West of Sydney, Pansi's Paw offers a softer, more intentional alternative.</p>
           <p>Together with Pansi, I've created a space where dogs feel safe, balanced, and genuinely loved — just as they should.</p>
           <p>Thank you for trusting this little dream of mine 🤍</p>
           <p class="modal-signature">— Andressa</p>
@@ -258,7 +389,7 @@
               <rect x="24" y="32" width="24" height="4" rx="2" fill="#ffffff" fill-opacity="0.55"/>
             </svg>
           </span>
-          <h3>Treats & Gentle Care</h3>
+          <h3>Premium Treats & Care</h3>
           <p>Quality treats and care, tailored to each dog. Honest, transparent communication with pet parents—regular updates so you feel confident and at ease.</p>
         </div>
       </div>
@@ -268,8 +399,8 @@
 
     <!-- Gallery -->
     <section class="gallery-section animate-on-scroll" aria-label="Photo gallery">
-      <h2>Our Friends</h2>
-      <p class="gallery-intro">A few moments from our walks.</p>
+      <h2>Our Pack</h2>
+      <p class="gallery-intro">A few moments from the daycare.</p>
       <div class="gallery-grid" id="galleryGrid"></div>
       <p class="gallery-footer">See more daily on <a href="https://www.instagram.com/pansispawsdaycare/" target="_blank" rel="noopener noreferrer">@pansispawsdaycare</a></p>
     </section>
@@ -307,16 +438,18 @@
       <div class="contact-details">
         <p><strong>Location:</strong> Annandale, NSW</p>
         <p><strong>Phone:</strong> <a href="tel:0410151509">0410 151 509</a></p>
-        <p><strong>Hours:</strong> By appointment</p>
+        <p><strong>Hours:</strong> 7 days · 7:30AM–5:30PM</p>
       </div>
-      <a href="tel:0410151509" class="btn btn-primary">Call Us</a>
+      <a href="tel:0410151509" class="btn btn-primary">Call to Book</a>
     </section>
   </main>
 
   <footer class="footer">
     <div class="footer-content">
-      <p class="footer-tagline">A small home daycare with time and care for every dog.</p>
+      <p class="footer-tagline">Boutique daycare with only the best: premium treats, premium walks, and premium time for every dog.</p>
       <div class="footer-links">
+        <a href="book.html">Book</a>
+        <a href="enrol.html">Enrolment</a>
         <a href="https://www.instagram.com/pansispawsdaycare/" target="_blank" rel="noopener noreferrer">Instagram</a>
       </div>
       <p class="footer-copy">&copy; 2026 Pansi's Paw Home Daycare · <a href="terms.html">Terms &amp; Conditions</a></p>

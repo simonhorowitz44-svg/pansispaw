@@ -3,48 +3,239 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Get in Touch | Pansi's Paw Home Daycare</title>
-  <meta name="description" content="Get in touch with Pansi's Paw Home Daycare, Annandale. Call or email to arrange a visit.">
-  <meta name="robots" content="noindex, follow">
+  <title>Book Dog Daycare Annandale | Pansi's Paw Home Daycare</title>
+  <meta name="description" content="Book home dog daycare in Annandale, Inner West Sydney. Choose your dog's size, pick a date and pay securely online. Half-day and full-day sessions available.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://pansispaws.com.au/book.html">
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    .launch-banner { background: #5d3a1a; color: #fef3c7; text-align: center; padding: 0.6rem 1rem; font-size: 0.9rem; }
+    .launch-banner p { margin: 0; max-width: 900px; margin-left: auto; margin-right: auto; }
+    .launch-banner a { color: #fcd34d; font-weight: 600; }
+    .pricing-packs { background: #f8f6f3; border: 1px solid #e7e5e4; border-radius: 12px; padding: 1.5rem; margin-bottom: 2rem; }
+    .pricing-packs h2 { font-family: 'Nunito', sans-serif; font-size: 1.1rem; color: #1c1917; margin-bottom: 0.25rem; }
+    .pricing-intro { color: #57534e; font-size: 0.9rem; margin-bottom: 1rem; }
+    .pack-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+    .pack-card { background: #fffefc; border: 1px solid #e7e5e4; border-radius: 10px; padding: 1rem; }
+    .pack-card h3 { font-family: 'Nunito', sans-serif; font-size: 1rem; color: #1c1917; margin-bottom: 0.25rem; }
+    .pack-save { color: #b45309; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.25rem; }
+    .pack-desc { color: #57534e; font-size: 0.85rem; }
+    .pricing-note { font-size: 0.85rem; color: #78716c; }
+    .pricing-note a { color: #d97706; font-weight: 600; text-decoration: none; }
+    .pricing-note a:hover { text-decoration: underline; }
+    .pricing-packs-inline { margin: 1.5rem 0 2rem; padding: 1.5rem; background: #fef7ed; border: 1px solid #fcd34d; border-radius: 12px; }
+    @media (max-width: 600px) { .pack-grid { grid-template-columns: 1fr; } }
+  </style>
 </head>
-<body>
+<body class="page-booking">
 
   <header class="header">
     <nav class="nav">
       <a href="index.html">Home</a>
       <a href="index.html#meet">Meet Us</a>
+      <a href="index.html#services">Our Daycare</a>
       <a href="services.html">Services</a>
       <a href="scouts.html">Scouts Club</a>
+      <a href="book.html">Book</a>
+      <a href="enrol.html">Enrol</a>
       <a href="index.html#contact">Contact</a>
     </nav>
     <a href="tel:0410151509" class="header-phone">0410 151 509</a>
     <button class="mobile-menu-btn" aria-label="Open menu">☰</button>
   </header>
 
-  <main>
-    <section id="contact" class="contact-section" style="padding-top: 4rem;">
-      <h2>Get in Touch</h2>
-      <p style="max-width: 480px; margin: 0 auto 1.5rem; color: #555; line-height: 1.6;">The easiest way to arrange anything is a quick call or email — we'll take it from there.</p>
-      <div class="contact-details">
-        <p><strong>Phone:</strong> <a href="tel:0410151509">0410 151 509</a></p>
-        <p><strong>Email:</strong> <a href="mailto:andressa@pansispaws.com.au">andressa@pansispaws.com.au</a></p>
-        <p><strong>Location:</strong> Annandale, NSW</p>
+
+  <main class="booking-main">
+    <div class="booking-container">
+      <div class="form-success-msg" id="bookingSuccess" style="display: none;">
+        <p><strong>Thank you!</strong> We've received your booking request. Andressa will call you shortly to confirm.</p>
       </div>
-      <a href="tel:0410151509" class="btn btn-primary">Call Us</a>
-    </section>
+      <div class="form-success-msg" id="bookingPaidSuccess" style="display: none;">
+        <p><strong>Thanks for paying!</strong> Your payment was successful. Andressa will confirm your booking by phone shortly.</p>
+        <p class="flow-cta-wrap" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(0,0,0,0.08);">New dog? <a href="enrol.html" class="flow-cta-link">Complete your enrolment form</a> so we have their details and we're ready for the big day.</p>
+      </div>
+      <p class="flow-stepper"><a href="enrol.html">Step 1: Enrol</a> (new dogs) → <span class="flow-stepper-current">Step 2</span> Send booking request</p>
+      <header class="booking-header">
+        <h1>Book Day Care</h1>
+        <p>Pick your dog's size and session — your price appears below. Then choose a date and send your request.</p>
+      </header>
+
+      <p class="booking-intro-note">New dog? <a href="enrol.html">Enrol first</a> (one-time form, ~5 min). Already enrolled? Pick your options below.</p>
+
+      <form class="booking-form" id="bookingForm" action="https://formspree.io/f/xzdaajpb" method="POST" novalidate>
+        <input type="hidden" name="_subject" value="[Pansi's Paw] Booking request">
+        <input type="hidden" name="_next" value="https://pansispaws.com.au/book.html?submitted=1">
+        <!-- Dog Size -->
+        <section class="booking-section" id="section-size">
+          <h2>1. Dog size</h2>
+          <p class="booking-hint">Rates are by weight band so we can plan space and care. Choose your dog's size — prices for each option appear in step 2.</p>
+          <span class="field-error" id="error-size" role="alert"></span>
+          <div class="size-options">
+            <label class="size-card" data-size="small" data-half="55" data-full="80" data-pack5="360" data-pack10="680">
+              <input type="radio" name="size" value="small" required>
+              <span class="size-label">Small</span>
+              <span class="size-desc">Up to 10 kg</span>
+              <span class="size-price half">$55 half-day</span>
+              <span class="size-price full">$80 full-day</span>
+            </label>
+            <label class="size-card" data-size="medium" data-half="65" data-full="90" data-pack5="405" data-pack10="765">
+              <input type="radio" name="size" value="medium">
+              <span class="size-label">Medium</span>
+              <span class="size-desc">10 – 25 kg</span>
+              <span class="size-price half">$65 half-day</span>
+              <span class="size-price full">$90 full-day</span>
+            </label>
+            <label class="size-card" data-size="large" data-half="75" data-full="100" data-pack5="450" data-pack10="850">
+              <input type="radio" name="size" value="large">
+              <span class="size-label">Large</span>
+              <span class="size-desc">25 kg+</span>
+              <span class="size-price half">$75 half-day</span>
+              <span class="size-price full">$100 full-day</span>
+            </label>
+          </div>
+        </section>
+
+        <!-- Session Type -->
+        <section class="booking-section" id="section-session">
+          <h2>2. Half-day or full-day?</h2>
+          <p class="booking-hint">Half-day is up to 5 hours. A 5–6 hour stay is an extended half day (+$15). Full-day is over 6 hours, up to 7:30am–5:30pm. A 15-minute grace period applies. The price shown is for your chosen size above.</p>
+          <div class="session-options">
+            <label class="session-card">
+              <input type="radio" name="session" value="half" checked>
+              <span class="session-label">Half-day</span>
+              <span class="session-time">Up to 5 hrs</span>
+              <span class="session-price" id="halfPrice">—</span>
+            </label>
+            <label class="session-card">
+              <input type="radio" name="session" value="full">
+              <span class="session-label">Full-day</span>
+              <span class="session-time">6+ hrs · to 5:30pm</span>
+              <span class="session-price" id="fullPrice">—</span>
+            </label>
+          </div>
+        </section>
+
+        <!-- Packs: standalone, selectable (no links), same name="session" so mutually exclusive -->
+        <section class="pricing-packs pricing-packs-inline" aria-label="Multi-day packs">
+          <h2>Want to save? Multi-day packs</h2>
+          <p class="pricing-intro">Pre-pay for 5 or 10 days at a discount. Use within 6 months. Click to select — then send your booking request below.</p>
+          <div class="pack-grid">
+            <label class="pack-card pack-card-selectable">
+              <input type="radio" name="session" value="5day">
+              <h3>5-day pack</h3>
+              <p class="pack-save">~10% off</p>
+            </label>
+            <label class="pack-card pack-card-selectable">
+              <input type="radio" name="session" value="10day">
+              <h3>10-day pack</h3>
+              <p class="pack-save">~15% off</p>
+            </label>
+          </div>
+          <p class="pricing-note">Or book a single visit above.</p>
+        </section>
+
+        <!-- Date -->
+        <section class="booking-section" id="section-date">
+          <h2>3. Choose date</h2>
+          <p class="booking-hint">We're open 7 days, 7:30 AM – 5:30 PM.</p>
+          <div class="date-input-wrap">
+            <input type="date" id="bookingDate" name="date" required min="">
+          </div>
+          <span class="field-error" id="error-date" role="alert"></span>
+          <p class="availability-note" id="availabilityNote"></p>
+        </section>
+
+        <!-- Contact -->
+        <section class="booking-section">
+          <h2>4. Your details</h2>
+          <div class="form-grid">
+            <div class="form-group" id="group-bookName">
+              <label for="bookName">Your name *</label>
+              <input type="text" id="bookName" name="name" required aria-describedby="error-bookName" aria-invalid="false">
+              <span class="field-error" id="error-bookName" role="alert"></span>
+            </div>
+            <div class="form-group" id="group-bookPhone">
+              <label for="bookPhone">Phone *</label>
+              <input type="tel" id="bookPhone" name="phone" required aria-describedby="error-bookPhone" aria-invalid="false">
+              <span class="field-error" id="error-bookPhone" role="alert"></span>
+            </div>
+            <div class="form-group full-width" id="group-bookDog">
+              <label for="bookDog">Dog's name *</label>
+              <input type="text" id="bookDog" name="dog" required aria-describedby="error-bookDog" aria-invalid="false">
+              <span class="field-error" id="error-bookDog" role="alert"></span>
+            </div>
+            <div class="form-group full-width">
+              <label for="bookNotes">Notes (optional)</label>
+              <textarea id="bookNotes" name="notes" rows="2" placeholder="Drop-off time, special requests, etc."></textarea>
+            </div>
+          </div>
+        </section>
+
+        <!-- Summary -->
+        <section class="booking-summary" aria-label="Booking summary">
+          <p class="booking-summary-heading">Your visit</p>
+          <div class="summary-row">
+            <span>Date</span>
+            <span id="summaryDate">—</span>
+          </div>
+          <div class="summary-row">
+            <span>Product</span>
+            <span id="summarySession">—</span>
+          </div>
+          <div class="summary-row summary-total">
+            <span>Total <span class="summary-total-label" id="summaryTotalLabel">(one day)</span></span>
+            <strong id="summaryTotal">—</strong>
+          </div>
+        </section>
+
+        <div class="booking-actions">
+          <button type="submit" class="btn btn-primary btn-block" id="bookingSubmit">Send booking request</button>
+          <p class="booking-disclaimer">Andressa will call you to confirm and arrange payment. First time? Enrol above first, then book.</p>
+        </div>
+      </form>
+
+      <!-- Pricing notes: small print -->
+      <details class="pricing-notes-block" style="margin-top:2rem; padding:1.25rem; background:#faf8f5; border:1px solid #e7e5e4; border-radius:12px;">
+        <summary style="cursor:pointer; font-weight:600; color:#1c1917; list-style:none;">Pricing notes &amp; add-ons</summary>
+        <div style="margin-top:0.75rem; font-size:0.9rem; color:#57534e; line-height:1.7;">
+          <p style="margin:0 0 0.5rem;"><strong>Senior Care add-on:</strong> +$12/day. For dogs aged 10+ or with health needs requiring a modified routine.</p>
+          <p style="margin:0 0 0.5rem;"><strong>Puppy Care add-on:</strong> +$12/day. For puppies under 6 months — frequent toilet breaks, gentle group intro, photo updates and behaviour notes.</p>
+          <p style="margin:0 0 0.5rem;"><strong>Medication administration (oral):</strong> +$5/visit. Owner provides clearly labelled medication.</p>
+          <p style="margin:0 0 0.5rem;"><strong>Pickup &amp; dropoff:</strong> $20 each way within 5 km · $30 each way 5–10 km · beyond 10 km by arrangement.</p>
+          <p style="margin:0 0 0.5rem;"><strong>Special diet preparation:</strong> +$3/day. If owner provides specialised food.</p>
+          <p style="margin:0 0 0.5rem;"><strong>Public holiday surcharge:</strong> +$25/day on NSW public holidays.</p>
+          <p style="margin:0 0 0.5rem;"><strong>Late pickup:</strong> +$10 per 30 mins after 5:30 PM (15-minute grace, capped at $40/day).</p>
+          <p style="margin:0;"><strong>Cancellation:</strong> Cancellations within 24 hours of booking incur 50% fee. Genuine emergencies excepted.</p>
+        </div>
+      </details>
+    </div>
   </main>
 
   <footer class="footer">
-    <div class="footer-content">
-      <p class="footer-tagline">A small home daycare with time and care for every dog.</p>
-      <p class="footer-copy">&copy; 2026 Pansi's Paw Home Daycare · <a href="terms.html">Terms &amp; Conditions</a></p>
-    </div>
+    <p class="footer-copy">&copy; 2026 Pansi's Paw Home Daycare • Annandale, NSW • <a href="tel:0410151509">0410 151 509</a> · <a href="terms.html">Terms &amp; Conditions</a></p>
   </footer>
 
   <script src="script.js"></script>
+  <script src="booking.js"></script>
+  <script>
+    if (window.location.search.includes('submitted=1')) {
+      var el = document.getElementById('bookingSuccess');
+      if (el) { el.style.display = 'block'; el.style.marginBottom = '1rem'; el.style.padding = '1rem'; el.style.background = '#f0fdf4'; el.style.borderRadius = '8px'; el.style.color = '#166534'; }
+    }
+    if (window.location.search.includes('paid=1')) {
+      var paidMsg = document.getElementById('bookingPaidSuccess');
+      if (paidMsg) {
+        paidMsg.style.display = 'block';
+        paidMsg.style.marginBottom = '1rem';
+        paidMsg.style.padding = '1rem';
+        paidMsg.style.background = '#f0fdf4';
+        paidMsg.style.borderRadius = '8px';
+        paidMsg.style.color = '#166534';
+      }
+    }
+  </script>
 </body>
 </html>

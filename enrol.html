@@ -3,48 +3,392 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Get in Touch | Pansi's Paw Home Daycare</title>
-  <meta name="description" content="Get in touch with Pansi's Paw Home Daycare, Annandale. Call or email to arrange a visit.">
-  <meta name="robots" content="noindex, follow">
+  <title>Enrol Your Dog | Pansi's Paw Dog Daycare Annandale</title>
+  <meta name="description" content="Enrol your dog at Pansi's Paw home daycare in Annandale, Inner West Sydney. One quick form — then book and pay anytime online.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://pansispaws.com.au/enrol.html">
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    .launch-banner { background: #5d3a1a; color: #fef3c7; text-align: center; padding: 0.6rem 1rem; font-size: 0.9rem; }
+    .launch-banner p { margin: 0; max-width: 900px; margin-left: auto; margin-right: auto; }
+  </style>
 </head>
 <body>
+
 
   <header class="header">
     <nav class="nav">
       <a href="index.html">Home</a>
       <a href="index.html#meet">Meet Us</a>
+      <a href="index.html#services">Our Daycare</a>
       <a href="services.html">Services</a>
       <a href="scouts.html">Scouts Club</a>
+      <a href="book.html">Book</a>
+      <a href="enrol.html">Enrol</a>
       <a href="index.html#contact">Contact</a>
     </nav>
     <a href="tel:0410151509" class="header-phone">0410 151 509</a>
     <button class="mobile-menu-btn" aria-label="Open menu">☰</button>
   </header>
 
-  <main>
-    <section id="contact" class="contact-section" style="padding-top: 4rem;">
-      <h2>Get in Touch</h2>
-      <p style="max-width: 480px; margin: 0 auto 1.5rem; color: #555; line-height: 1.6;">The easiest way to arrange anything is a quick call or email — we'll take it from there.</p>
-      <div class="contact-details">
-        <p><strong>Phone:</strong> <a href="tel:0410151509">0410 151 509</a></p>
-        <p><strong>Email:</strong> <a href="mailto:andressa@pansispaws.com.au">andressa@pansispaws.com.au</a></p>
-        <p><strong>Location:</strong> Annandale, NSW</p>
-      </div>
-      <a href="tel:0410151509" class="btn btn-primary">Call Us</a>
+  <main class="form-main">
+    <div class="form-success-msg" id="enrolSuccess" style="display: none;">
+      <p><strong>Thank you!</strong> We've received your enrolment form. Andressa will be in touch soon. You can also call 0410 151 509 to confirm.</p>
+      <p class="flow-cta-wrap">Next: book your first visit. New? Start with a free meet &amp; greet.</p>
+      <a href="book.html" class="btn btn-primary flow-cta-btn">Book your first visit →</a>
+    </div>
+    <p class="flow-stepper"><span class="flow-stepper-current">Step 1</span> Enrol → <a href="book.html">Step 2: Book & pay</a></p>
+    <section class="form-intro">
+      <h1>Dog Information & Enrolment Form</h1>
+      <p>Pansi's Paw Home Daycare • Annandale, NSW • 0410 151 509</p>
+      <p class="form-intro-note">Required once before your dog's first visit. Then you can book and pay anytime.</p>
+      <p class="form-trust-note">We're insured and have first aid for pets. Your dog is in safe hands.</p>
     </section>
+
+    <form class="enrol-form" id="enrolForm" action="https://formspree.io/f/xzdaajpb" method="POST" enctype="multipart/form-data">
+      <input type="hidden" name="_subject" value="[Pansi's Paw] Enrolment form">
+      <input type="hidden" name="_next" value="https://pansispaws.com.au/enrol.html?submitted=1">
+      <!-- Dog Details -->
+      <fieldset class="form-section">
+        <legend>Dog Details</legend>
+        <div class="form-group" id="group-dogName">
+          <label for="dogName">Dog's Name *</label>
+          <input type="text" id="dogName" name="dogName" required aria-describedby="error-dogName" aria-invalid="false">
+          <span class="field-error" id="error-dogName" role="alert"></span>
+        </div>
+        <div class="form-row">
+          <div class="form-group" id="group-breed">
+            <label for="breed">Breed *</label>
+            <input type="text" id="breed" name="breed" required list="breed-list" autocomplete="off" aria-describedby="error-breed" aria-invalid="false" placeholder="Start typing or choose from list">
+            <datalist id="breed-list">
+              <option value="Australian Cattle Dog">
+              <option value="Australian Shepherd">
+              <option value="Beagle">
+              <option value="Border Collie">
+              <option value="Boston Terrier">
+              <option value="Boxer">
+              <option value="Bulldog">
+              <option value="Cavalier King Charles Spaniel">
+              <option value="Chihuahua">
+              <option value="Cocker Spaniel">
+              <option value="Dachshund">
+              <option value="Dalmatian">
+              <option value="French Bulldog">
+              <option value="German Shepherd">
+              <option value="Golden Retriever">
+              <option value="Great Dane">
+              <option value="Greyhound">
+              <option value="Groodle">
+              <option value="Jack Russell Terrier">
+              <option value="Kelpie">
+              <option value="Labrador Retriever">
+              <option value="Maltese">
+              <option value="Miniature Schnauzer">
+              <option value="Poodle">
+              <option value="Pug">
+              <option value="Rottweiler">
+              <option value="Shih Tzu">
+              <option value="Staffordshire Bull Terrier">
+              <option value="West Highland White Terrier">
+              <option value="Mixed breed">
+            </datalist>
+            <span class="field-error" id="error-breed" role="alert"></span>
+          </div>
+          <div class="form-group">
+            <label for="age">Age</label>
+            <input type="text" id="age" name="age" placeholder="e.g. 2 years">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Sex</label>
+            <div class="radio-group">
+              <label class="radio-label"><input type="radio" name="sex" value="male"> Male</label>
+              <label class="radio-label"><input type="radio" name="sex" value="female"> Female</label>
+              <label class="radio-label"><input type="radio" name="sex" value="desexed"> Desexed</label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="weight">Weight</label>
+            <input type="text" id="weight" name="weight" placeholder="e.g. 25kg">
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- Health Information -->
+      <fieldset class="form-section">
+        <legend>Health Information</legend>
+        <div class="form-row">
+          <div class="form-group" id="group-vaccinated">
+            <label>Fully Vaccinated *</label>
+            <div class="radio-group">
+              <label class="radio-label"><input type="radio" name="vaccinated" value="yes" required aria-describedby="error-vaccinated"> Yes (certificate required)</label>
+              <label class="radio-label"><input type="radio" name="vaccinated" value="no"> No</label>
+            </div>
+            <span class="field-error" id="error-vaccinated" role="alert"></span>
+          </div>
+          <div class="form-group">
+            <label for="vaccDate">Date of Last Vaccination</label>
+            <input type="text" id="vaccDate" name="vaccDate" placeholder="DD/MM/YYYY">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Flea & Tick Prevention</label>
+            <div class="radio-group">
+              <label class="radio-label"><input type="radio" name="fleaTick" value="yes"> Yes</label>
+              <label class="radio-label"><input type="radio" name="fleaTick" value="no"> No</label>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="medicalConditions">Medical Conditions</label>
+          <input type="text" id="medicalConditions" name="medicalConditions" placeholder="None if applicable">
+        </div>
+        <div class="form-group">
+          <label for="allergies">Allergies</label>
+          <input type="text" id="allergies" name="allergies" placeholder="None if applicable">
+        </div>
+        <div class="form-group">
+          <label for="vetName">Vet Name & Phone</label>
+          <input type="text" id="vetName" name="vetName">
+        </div>
+      </fieldset>
+
+      <!-- Documents -->
+      <fieldset class="form-section">
+        <legend>Documents</legend>
+        <p class="form-hint">Upload photos or PDFs of your dog's vaccination and desexing certificates. Required for enrolment.</p>
+        <div class="form-group" id="group-vaccCert">
+          <label for="vaccCert">Vaccination Certificate *</label>
+          <input type="file" id="vaccCert" name="vaccination_certificate" accept=".pdf,.jpg,.jpeg,.png" required aria-describedby="hint-vaccCert">
+          <span class="field-hint" id="hint-vaccCert">PDF, JPG or PNG. Max 10MB.</span>
+          <span class="field-error" id="error-vaccCert" role="alert"></span>
+        </div>
+        <div class="form-group" id="group-desexCert">
+          <label for="desexCert">Desexing Certificate</label>
+          <input type="file" id="desexCert" name="desexing_certificate" accept=".pdf,.jpg,.jpeg,.png" aria-describedby="hint-desexCert">
+          <span class="field-hint" id="hint-desexCert">PDF, JPG or PNG. Optional if your dog is not desexed.</span>
+        </div>
+      </fieldset>
+
+      <!-- Feeding & Routine -->
+      <fieldset class="form-section">
+        <legend>Feeding & Routine</legend>
+        <div class="form-group">
+          <label for="feedingSchedule">Feeding Schedule</label>
+          <input type="text" id="feedingSchedule" name="feedingSchedule">
+        </div>
+        <div class="form-group">
+          <label>Can Have Treats</label>
+          <div class="radio-group">
+            <label class="radio-label"><input type="radio" name="treats" value="yes"> Yes</label>
+            <label class="radio-label"><input type="radio" name="treats" value="no"> No</label>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="toiletRoutine">Toilet Routine</label>
+          <input type="text" id="toiletRoutine" name="toiletRoutine">
+        </div>
+      </fieldset>
+
+      <!-- Behaviour & Socialisation -->
+      <fieldset class="form-section">
+        <legend>Behaviour & Socialisation</legend>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Friendly with Other Dogs</label>
+            <div class="radio-group">
+              <label class="radio-label"><input type="radio" name="friendlyDogs" value="yes"> Yes</label>
+              <label class="radio-label"><input type="radio" name="friendlyDogs" value="no"> No</label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>History of Aggression</label>
+            <div class="radio-group">
+              <label class="radio-label"><input type="radio" name="aggression" value="yes"> Yes</label>
+              <label class="radio-label"><input type="radio" name="aggression" value="no"> No</label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Separation Anxiety</label>
+            <div class="radio-group">
+              <label class="radio-label"><input type="radio" name="separation" value="yes"> Yes</label>
+              <label class="radio-label"><input type="radio" name="separation" value="no"> No</label>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="aggressionExplain">If aggression history—please explain</label>
+          <textarea id="aggressionExplain" name="aggressionExplain" rows="2"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="additionalBehaviours">Additional Behaviours</label>
+          <textarea id="additionalBehaviours" name="additionalBehaviours" rows="3"></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="socialisationHistory">Socialisation with other dogs</label>
+            <select id="socialisationHistory" name="socialisationHistory">
+              <option value="">Select…</option>
+              <option value="regular">Regular contact — parks, playdates</option>
+              <option value="occasional">Occasional contact</option>
+              <option value="limited">Limited — mainly at home</option>
+              <option value="none">None</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="walksPerDay">Walks per day</label>
+            <select id="walksPerDay" name="walksPerDay">
+              <option value="">Select…</option>
+              <option value="0">None</option>
+              <option value="1">1 walk</option>
+              <option value="2">2 walks</option>
+              <option value="3">3+ walks</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="walksPerWeek">Walks per week</label>
+            <select id="walksPerWeek" name="walksPerWeek">
+              <option value="">Select…</option>
+              <option value="1-3">1–3 walks</option>
+              <option value="4-6">4–6 walks</option>
+              <option value="7-10">7–10 walks (daily)</option>
+              <option value="10-plus">10+ walks</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="walkDuration">Typical walk length</label>
+            <select id="walkDuration" name="walkDuration">
+              <option value="">Select…</option>
+              <option value="under-30">Under 30 min</option>
+              <option value="30-60">30–60 min</option>
+              <option value="60-90">1–1.5 hrs</option>
+              <option value="90-plus">1.5+ hrs</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Has your dog attended other daycare before?</label>
+            <div class="radio-group">
+              <label class="radio-label"><input type="radio" name="priorDaycare" value="yes"> Yes</label>
+              <label class="radio-label"><input type="radio" name="priorDaycare" value="no"> No</label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Has your dog worked with a dog trainer?</label>
+            <div class="radio-group">
+              <label class="radio-label"><input type="radio" name="priorTrainer" value="yes"> Yes</label>
+              <label class="radio-label"><input type="radio" name="priorTrainer" value="no"> No</label>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="priorCareDetail">If yes to either — where / when / what worked well or didn't (optional)</label>
+          <textarea id="priorCareDetail" name="priorCareDetail" rows="2"></textarea>
+        </div>
+      </fieldset>
+
+      <!-- Emergency Contact -->
+      <fieldset class="form-section">
+        <legend>Emergency Contact</legend>
+        <div class="form-group" id="group-ownerName">
+          <label for="ownerName">Owner Full Name *</label>
+          <input type="text" id="ownerName" name="ownerName" required aria-describedby="error-ownerName" aria-invalid="false">
+          <span class="field-error" id="error-ownerName" role="alert"></span>
+        </div>
+        <div class="form-row">
+          <div class="form-group" id="group-ownerPhone">
+            <label for="ownerPhone">Phone Number *</label>
+            <input type="tel" id="ownerPhone" name="ownerPhone" required aria-describedby="error-ownerPhone" aria-invalid="false">
+            <span class="field-error" id="error-ownerPhone" role="alert"></span>
+          </div>
+          <div class="form-group" id="group-ownerEmail">
+            <label for="ownerEmail">Email *</label>
+            <input type="email" id="ownerEmail" name="ownerEmail" required aria-describedby="error-ownerEmail" aria-invalid="false">
+            <span class="field-error" id="error-ownerEmail" role="alert"></span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="emergencyContact">Emergency Contact Name & Phone</label>
+          <input type="text" id="emergencyContact" name="emergencyContact">
+        </div>
+      </fieldset>
+
+      <!-- Veterinary Consent -->
+      <fieldset class="form-section">
+        <legend>Veterinary Consent</legend>
+        <p class="consent-text">In case of emergency, I authorise Pansi's Paw Home Daycare to seek veterinary treatment if I cannot be reached. I understand I am responsible for any veterinary costs incurred.</p>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="vetConsentSig">Signature</label>
+            <input type="text" id="vetConsentSig" name="vetConsentSig">
+          </div>
+          <div class="form-group">
+            <label for="vetConsentDate">Date</label>
+            <input type="text" id="vetConsentDate" name="vetConsentDate" placeholder="DD/MM/YYYY">
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- Photo Consent -->
+      <fieldset class="form-section">
+        <legend>Photo Consent</legend>
+        <div class="checkbox-group">
+          <label class="checkbox-label"><input type="radio" name="photoConsent" value="social"> I give permission for photos/videos to be shared on social media.</label>
+          <label class="checkbox-label"><input type="radio" name="photoConsent" value="private"> I prefer photos sent privately only.</label>
+        </div>
+      </fieldset>
+
+      <!-- Agreement -->
+      <fieldset class="form-section">
+        <legend>Agreement</legend>
+        <p class="consent-text">I confirm that all information provided is accurate and complete. I understand that Pansi's Paw Home Daycare operates as a small, home-based environment focused on safety, wellbeing, and positive social experiences for all dogs in care. I agree to communicate openly about my dog's behaviour, health, and needs to ensure a happy and successful stay.</p>
+        <div class="form-row">
+          <div class="form-group" id="group-agreementSig">
+            <label for="agreementSig">Signature *</label>
+            <input type="text" id="agreementSig" name="agreementSig" required aria-describedby="error-agreementSig" aria-invalid="false">
+            <span class="field-error" id="error-agreementSig" role="alert"></span>
+          </div>
+          <div class="form-group" id="group-agreementDate">
+            <label for="agreementDate">Date *</label>
+            <input type="text" id="agreementDate" name="agreementDate" required placeholder="DD/MM/YYYY" aria-describedby="error-agreementDate" aria-invalid="false">
+            <span class="field-error" id="error-agreementDate" role="alert"></span>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="form-section">
+        <legend>Agreement</legend>
+        <div class="form-group">
+          <label class="radio-label" style="align-items:flex-start;">
+            <input type="checkbox" name="termsAgreed" value="yes" required style="margin-top:0.2rem;">
+            <span>I have read and agree to the <a href="terms.html" target="_blank" rel="noopener">Terms &amp; Conditions</a>, including authorising emergency veterinary treatment, accepting the risks of group daycare, and consenting to my dog's photos being used (unless I opt out).</span>
+          </label>
+        </div>
+      </fieldset>
+
+      <div class="form-submit">
+        <button type="submit" class="btn btn-primary" id="enrolSubmit">Submit Enrolment</button>
+      </div>
+    </form>
   </main>
 
   <footer class="footer">
-    <div class="footer-content">
-      <p class="footer-tagline">A small home daycare with time and care for every dog.</p>
-      <p class="footer-copy">&copy; 2026 Pansi's Paw Home Daycare · <a href="terms.html">Terms &amp; Conditions</a></p>
-    </div>
+    <p class="footer-copy">&copy; 2026 Pansi's Paw Home Daycare • Annandale, NSW • 0410 151 509 · <a href="terms.html">Terms &amp; Conditions</a></p>
   </footer>
 
   <script src="script.js"></script>
+  <script src="enrol.js"></script>
+  <script>
+    if (window.location.search.includes('submitted=1')) {
+      var el = document.getElementById('enrolSuccess');
+      if (el) { el.style.display = 'block'; el.style.marginBottom = '1rem'; el.style.padding = '1rem'; el.style.background = '#f0fdf4'; el.style.borderRadius = '8px'; el.style.color = '#166534'; }
+    }
+  </script>
 </body>
 </html>
