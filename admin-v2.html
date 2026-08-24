@@ -550,6 +550,11 @@ async function loadPricing() {
 const SESSION_LABELS = { half:"Half day", extended:"Extended half", full:"Full day", overnight:"Overnight" };
 const SIZE_LABELS = { small:"Small ≤10kg", medium:"Medium 10–25kg", large:"Large 25kg+" };
 
+// Payment tracking is switched off for now. Flip to true to bring back
+// "unpaid" tags on bookings and the "· $X paid" hints on day/week totals.
+// (The Ledger tab keeps its payment detail regardless.)
+const SHOW_PAYMENTS = false;
+
 const uid = () => Math.random().toString(16).slice(2,10);
 const localISO = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const todayISO = () => localISO(new Date());
@@ -1020,7 +1025,7 @@ function dogCard(b, state) {
   const total = b.total || calcTotal(b, dog);
   const isNight = b.session === 'overnight';
   const pills = [];
-  pills.push(b.paymentStatus === 'paid' ? '<span class="pill done">paid</span>' : '<span class="pill owe">unpaid</span>');
+  if (SHOW_PAYMENTS) pills.push(b.paymentStatus === 'paid' ? '<span class="pill done">paid</span>' : '<span class="pill owe">unpaid</span>');
   if (isMeaningfulHealth(dog.medicalConditions)) pills.push(`<span class="pill med">⚕ ${escapeHtml(truncate(dog.medicalConditions, 24))}</span>`);
   if (dog.aggression === 'yes') pills.push('<span class="pill med">⚠ aggression</span>');
   if (b.arrivalLogged) pills.push(`<span class="timestamp">✓ ${b.arrivalLogged}</span>`);
@@ -1032,7 +1037,7 @@ function dogCard(b, state) {
       ? `<button class="btn primary" data-depart="${b.id}"><span class="primary-icon">→</span> Picked up</button>`
       : `<button class="btn ghost" data-openbk="${b.id}">Open</button>`;
   const secondary = [];
-  if (state !== 'upcoming' && b.paymentStatus !== 'paid') secondary.push(`<button class="btn ghost tiny" data-pay="${b.id}">Mark paid</button>`);
+  if (SHOW_PAYMENTS && state !== 'upcoming' && b.paymentStatus !== 'paid') secondary.push(`<button class="btn ghost tiny" data-pay="${b.id}">Mark paid</button>`);
   secondary.push(`<button class="btn ghost tiny" data-openbk="${b.id}">Edit</button>`);
 
   let quickStrip = '';
@@ -1184,7 +1189,7 @@ function renderWeek() {
       <div class="week-day-head">
         <div class="week-day-name">${d.getDate()} ${d.toLocaleDateString('en-AU', { month:'short' })}<span class="dow">${d.toLocaleDateString('en-AU', { weekday: opts.mini ? 'short' : 'long' })}</span></div>
         <div style="display:flex;align-items:center;gap:8px">
-          <div class="day-revenue">$${rev}${paidRev < rev ? ` <span class="paid-hint">· $${paidRev} paid</span>` : ''}</div>
+          <div class="day-revenue">$${rev}${SHOW_PAYMENTS && paidRev < rev ? ` <span class="paid-hint">· $${paidRev} paid</span>` : ''}</div>
           <button class="day-add" data-emptyday="${iso}" title="Add booking for this day" aria-label="Add booking">＋</button>
         </div>
       </div>
@@ -1213,7 +1218,7 @@ function renderWeek() {
     const stats = weekRevFor(weekMonday);
     const label = w === 0 ? 'This week' : w === 1 ? 'Next week' : `Week of ${weekMonday.getDate()} ${weekMonday.toLocaleDateString('en-AU',{month:'short'})}`;
     if (!stats.count) return `<div class="week-header">${label}<span class="week-total muted">Free</span></div>`;
-    return `<div class="week-header">${label}<span class="week-total"><b>$${stats.bookedRev.toLocaleString()}</b>${stats.paidRev < stats.bookedRev ? `<span class="muted"> · $${stats.paidRev.toLocaleString()} paid</span>` : ''}</span></div>`;
+    return `<div class="week-header">${label}<span class="week-total"><b>$${stats.bookedRev.toLocaleString()}</b>${SHOW_PAYMENTS && stats.paidRev < stats.bookedRev ? `<span class="muted"> · $${stats.paidRev.toLocaleString()} paid</span>` : ''}</span></div>`;
   };
 
   const weeksToShow = isPastMode ? weekPastWeeks : weekViewWeeks;
@@ -1233,7 +1238,7 @@ function renderWeek() {
     const stats = weekRevFor(weekStart);
     const label = pastLabel(w, weekStart);
     if (!stats.count) return `<div class="week-header">${label}<span class="week-total muted">Nothing booked</span></div>`;
-    return `<div class="week-header">${label}<span class="week-total"><b>$${stats.bookedRev.toLocaleString()}</b>${stats.paidRev < stats.bookedRev ? `<span class="muted"> · $${stats.paidRev.toLocaleString()} paid</span>` : ''}</span></div>`;
+    return `<div class="week-header">${label}<span class="week-total"><b>$${stats.bookedRev.toLocaleString()}</b>${SHOW_PAYMENTS && stats.paidRev < stats.bookedRev ? `<span class="muted"> · $${stats.paidRev.toLocaleString()} paid</span>` : ''}</span></div>`;
   };
 
   if (isDesktop) {
@@ -1274,7 +1279,7 @@ function weekDogRow(b) {
   const dog = dogById(b.dogId); if (!dog) return '';
   const owner = ownerOf(b.dogId);
   const isNight = b.session === 'overnight';
-  const unpaidTag = b.paymentStatus !== 'paid' ? ' · <span class="text-owe">unpaid</span>' : '';
+  const unpaidTag = (SHOW_PAYMENTS && b.paymentStatus !== 'paid') ? ' · <span class="text-owe">unpaid</span>' : '';
   return `<div class="week-dog-row" data-openbk="${b.id}">
     <div class="week-dog-face ${isNight?'night':''}">${photoOrGlyph(dog)}</div>
     <div class="week-dog-body">
@@ -1933,11 +1938,11 @@ function openStaySheet(bookingIdInStay) {
     <p class="sheet-sub">${escapeHtml(owner?.name || '—')} · ${fmtDateShort(stay.bookings[0].date)} – ${fmtDateShort(stay.bookings.at(-1).date)}</p>
     <div class="ledger-hero" style="margin-bottom:20px">
       <div class="ledger-num" style="font-size:48px">$${totalStay}</div>
-      <div class="ledger-caption">${unpaid ? unpaid + ' night(s) unpaid' : 'all paid'}</div>
+      <div class="ledger-caption">${!SHOW_PAYMENTS ? nights + ' night(s)' : (unpaid ? unpaid + ' night(s) unpaid' : 'all paid')}</div>
     </div>
     <div class="section-title">Nights</div>
     ${stay.bookings.map(b => `<div class="ledger-row" data-openbk="${b.id}">
-      <div><div class="r-dog">${fmtDateShort(b.date)}</div><div class="r-date">${b.paymentStatus === 'paid' ? '✓ paid' : 'pending'}${b.arrivalLogged ? ' · in ' + b.arrivalLogged : ''}${b.departureLogged ? ' · out ' + b.departureLogged : ''}</div></div>
+      <div><div class="r-dog">${fmtDateShort(b.date)}</div><div class="r-date">${!SHOW_PAYMENTS ? '' : (b.paymentStatus === 'paid' ? '✓ paid' : 'pending')}${b.arrivalLogged ? ' · in ' + b.arrivalLogged : ''}${b.departureLogged ? ' · out ' + b.departureLogged : ''}</div></div>
       <div class="r-amt ${b.paymentStatus==='paid'?'':'owe'}">$${b.total||0}</div>
     </div>`).join('')}`);
 }
