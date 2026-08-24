@@ -219,6 +219,16 @@ body.modal-open { overflow: hidden; }
 .week-dog-body { flex: 1; min-width: 0; }
 .week-dog-name { font-family: var(--font-serif); font-weight: 600; font-size: 15px; color: var(--ink); }
 .week-dog-meta { font-size: 12px; color: var(--ink-2); }
+.week-dog-price { font-family: var(--font-serif); font-weight: 500; font-size: 15px; color: var(--ink); font-variant-numeric: tabular-nums; margin-left: auto; flex-shrink: 0; }
+.week-dog-row.orphan { background: #fdf3e7; }
+.week-dog-row.orphan .week-dog-face { background: var(--edge); color: var(--ink-2); display: flex; align-items: center; justify-content: center; font-weight: 700; }
+.week-dog-row.orphan .week-dog-meta { color: #a8621f; }
+/* Receipt foot — the rows above literally add up to this. */
+.day-total { display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  margin: 10px -8px 0; padding: 10px 8px 0; border-top: 1.5px solid var(--ink); }
+.day-total .dt-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-2); }
+.day-total .dt-amt { font-family: var(--font-serif); font-weight: 600; font-size: 20px; color: var(--ink);
+  letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
 .week-dog-price { font-family: var(--font-serif); font-weight: 500; color: var(--ink); font-size: 14px; }
 
 .stay-ribbon { display: flex; align-items: center; gap: var(--s3); padding: 10px 12px; background: linear-gradient(135deg, var(--night) 0%, #4a4276 100%); color: white; border-radius: var(--r2); margin: 4px 0; cursor: pointer; }
@@ -1159,45 +1169,37 @@ function renderWeek() {
     const rev = bks.reduce((s,b) => s + (b.total || 0), 0);
     const paidRev = bks.filter(b => b.paymentStatus === 'paid').reduce((s,b) => s + (b.total || 0), 0);
 
-    const bookingsRendered = new Set();
-    let rows = '';
+    // One pass: every booking dated today renders exactly one row, and the day
+    // total is accumulated from those same rows. They cannot disagree.
+    let rows = '', dayTotal = 0;
     bks.forEach(b => {
-      if (bookingsRendered.has(b.id)) return;
+      const amt = b.total != null ? b.total : calcTotal(b, dogById(b.dogId));
+      dayTotal += amt;
+      let context = '';
       if (b.session === 'overnight') {
-        const stay = stays.find(s => s.bookings[0].id === b.id);
+        const stay = stays.find(s => s.bookings.some(x => x.id === b.id));
         if (stay && stay.bookings.length > 1) {
-          const dog = dogById(stay.dogId);
-          const nights = stay.bookings.length;
-          const totalStay = stay.bookings.reduce((s,x) => s + (x.total || calcTotal(x, dog)), 0);
-          rows += `<div class="stay-ribbon" data-openstay="${stay.bookings[0].id}">
-            <div class="stay-face">${photoOrGlyph(dog)}</div>
-            <div class="body">
-              <div class="name">${escapeHtml(dog?.name || '?')}</div>
-              <div class="meta">${nights}-night stay · from ${fmtDateShort(stay.bookings[0].date)}</div>
-            </div>
-            <div class="amount">$${totalStay}</div>
-          </div>`;
-          stay.bookings.forEach(x => bookingsRendered.add(x.id));
-          return;
+          const n = stay.bookings.findIndex(x => x.id === b.id) + 1;
+          context = `night ${n} of ${stay.bookings.length}`;
         }
       }
-      rows += weekDogRow(b);
-      bookingsRendered.add(b.id);
+      rows += weekDogRow(b, { amt, context });
     });
 
     return `<div class="week-day ${isToday?'today':''} ${isPast&&!isToday?'past':''}">
       <div class="week-day-head">
         <div class="week-day-name">${d.getDate()} ${d.toLocaleDateString('en-AU', { month:'short' })}<span class="dow">${d.toLocaleDateString('en-AU', { weekday: opts.mini ? 'short' : 'long' })}</span></div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <div class="day-revenue">$${rev}${SHOW_PAYMENTS && paidRev < rev ? ` <span class="paid-hint">· $${paidRev} paid</span>` : ''}</div>
-          <button class="day-add" data-emptyday="${iso}" title="Add booking for this day" aria-label="Add booking">＋</button>
-        </div>
+        <button class="day-add" data-emptyday="${iso}" title="Add booking for this day" aria-label="Add booking">＋</button>
       </div>
       <div class="week-day-cap">
         <span>☀ ${dayCount}/${cap.maxDaycare}<span class="cap-bar"><span style="width:${dayPct}%" class="${dayPct>=100?'full':''}"></span></span></span>
         ${cap.maxBoarding ? `<span>☾ ${nightCount}/${cap.maxBoarding}<span class="cap-bar"><span style="width:${nightPct}%" class="night ${nightPct>=100?'full':''}"></span></span></span>` : ''}
       </div>
       ${rows}
+      <div class="day-total">
+        <span class="dt-label">${bks.length} ${bks.length === 1 ? 'booking' : 'bookings'}</span>
+        <span class="dt-amt">$${dayTotal}</span>
+      </div>
     </div>`;
   };
 
@@ -1209,7 +1211,7 @@ function renderWeek() {
       const iso = localISO(d);
       const dayBks = bookingsForDate(iso);
       count += dayBks.length;
-      bookedRev += dayBks.reduce((s,b) => s + (b.total||0), 0);
+      bookedRev += dayBks.reduce((s,b) => s + (b.total != null ? b.total : calcTotal(b, dogById(b.dogId))), 0);
       paidRev += dayBks.filter(b => b.paymentStatus === 'paid').reduce((s,b) => s + (b.total||0), 0);
     }
     return { bookedRev, paidRev, count };
@@ -1275,18 +1277,35 @@ function showMoreWeeks() {
 }
 function setWeekMode(m) { weekViewMode = m; render(); window.scrollTo({ top: 0, behavior:'smooth' }); }
 
-function weekDogRow(b) {
-  const dog = dogById(b.dogId); if (!dog) return '';
-  const owner = ownerOf(b.dogId);
+function weekDogRow(b, opts = {}) {
+  const dog = dogById(b.dogId);
+  const amt = opts.amt != null ? opts.amt : (b.total != null ? b.total : calcTotal(b, dog));
   const isNight = b.session === 'overnight';
+
+  // A booking with no dog record still costs money and still counts toward the
+  // day total — so it gets a visible row. Silently dropping it made the rows
+  // disagree with the total, which is how this whole thing got confusing.
+  if (!dog) {
+    return `<div class="week-dog-row orphan" data-openbk="${b.id}">
+      <div class="week-dog-face">?</div>
+      <div class="week-dog-body">
+        <div class="week-dog-name">Unknown dog</div>
+        <div class="week-dog-meta">No dog record — tap to fix</div>
+      </div>
+      <div class="week-dog-price">$${amt}</div>
+    </div>`;
+  }
+
+  const owner = ownerOf(b.dogId);
   const unpaidTag = (SHOW_PAYMENTS && b.paymentStatus !== 'paid') ? ' · <span class="text-owe">unpaid</span>' : '';
+  const context = opts.context ? ` · ${opts.context}` : '';
   return `<div class="week-dog-row" data-openbk="${b.id}">
     <div class="week-dog-face ${isNight?'night':''}">${photoOrGlyph(dog)}</div>
     <div class="week-dog-body">
       <div class="week-dog-name">${escapeHtml(dog.name)} <span class="muted small">· ${escapeHtml(owner?.name || '—')}</span></div>
-      <div class="week-dog-meta">${SESSION_LABELS[b.session]}${unpaidTag}</div>
+      <div class="week-dog-meta">${SESSION_LABELS[b.session]}${context}${unpaidTag}</div>
     </div>
-    <div class="week-dog-price">$${b.total || calcTotal(b, dog)}</div>
+    <div class="week-dog-price">$${amt}</div>
   </div>`;
 }
 
