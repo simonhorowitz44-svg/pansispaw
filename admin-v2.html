@@ -219,6 +219,24 @@ body.modal-open { overflow: hidden; }
 .week-dog-body { flex: 1; min-width: 0; }
 .week-dog-name { font-family: var(--font-serif); font-weight: 600; font-size: 15px; color: var(--ink); }
 .week-dog-meta { font-size: 12px; color: var(--ink-2); }
+/* Today — one plain list of who's on */
+.today-count { font-size: 13px; color: var(--ink-2); margin: 0 0 14px; }
+.today-warn { background: #fdf3e7; color: #a8621f; font-size: 13px; line-height: 1.5;
+  padding: 10px 12px; border-radius: var(--r2); margin-bottom: 14px; }
+.today-list { border-top: 1px solid var(--edge-2); }
+.today-row { display: flex; align-items: center; gap: 12px; padding: 12px 4px;
+  border-bottom: 1px solid var(--edge-2); }
+.today-row.dupe { background: #fdf3e7; }
+.today-face { width: 38px; height: 38px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
+  background: var(--kraft); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.today-face.night { box-shadow: 0 0 0 2px var(--night); }
+.today-face img { width: 100%; height: 100%; object-fit: cover; }
+.today-body { flex: 1; min-width: 0; cursor: pointer; }
+.today-name { font-family: var(--font-serif); font-size: 16px; font-weight: 500; color: var(--ink); }
+.today-meta { font-size: 12px; color: var(--ink-2); margin-top: 1px; }
+.today-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.row-here { font-size: 12px; color: var(--action-dark); }
+.row-done { font-size: 12px; color: var(--ink-3); }
 .week-dog-price { font-family: var(--font-serif); font-weight: 500; font-size: 15px; color: var(--ink); font-variant-numeric: tabular-nums; margin-left: auto; flex-shrink: 0; }
 .week-dog-row.orphan { background: #fdf3e7; }
 .week-dog-row.orphan .week-dog-face { background: var(--edge); color: var(--ink-2); display: flex; align-items: center; justify-content: center; font-weight: 700; }
@@ -957,42 +975,73 @@ function greeting() {
 
 function renderDay() {
   const iso = todayISO();
-  const bks = bookingsForDate(iso).slice().sort((a,b) => (a.arrivalTime||'99') > (b.arrivalTime||'99') ? 1 : -1);
   const g = greeting();
-  const overnights = DB.bookings.filter(b => b.session === 'overnight' && b.date === iso);
+  const bks = bookingsForDate(iso).slice().sort((a,b) => (a.arrivalTime||'99').localeCompare(b.arrivalTime||'99'));
 
   let html = `<h1 class="greet">${g.line}</h1><p class="sub">${g.sub}</p>`;
 
-  if (overnights.length) {
-    html += `<div class="stay-strip">
-      <div class="stay-strip-label">Overnight guests</div>
-      <div class="stay-strip-list">${overnights.map(b => renderStayItem(b)).join('')}</div>
-    </div>`;
-  }
-
-  const day = bks.filter(b => b.session !== 'overnight');
-  const upcoming = day.filter(b => !b.arrivalLogged);
-  const inCare = day.filter(b => b.arrivalLogged && !b.departureLogged);
-  const done = day.filter(b => b.departureLogged);
-
-  if (!bks.length && !overnights.length) {
-    html += `<div class="day-empty">Nothing to keep. Take a walk.</div>
+  if (!bks.length) {
+    html += `<div class="day-empty">Nothing on today. Take a walk.</div>
       <p class="text-center"><button class="btn ghost mt-2" onclick="openAddMenuSheet()">＋ Add something</button></p>`;
     return html;
   }
 
-  if (upcoming.length) { html += `<div class="section-title">Coming today</div>`; upcoming.forEach(b => html += dogCardWrapped(b, 'upcoming')); }
-  if (inCare.length)   { html += `<div class="section-title">Here now</div>`;   inCare.forEach(b => html += dogCardWrapped(b, 'in-care')); }
-  if (done.length)     { html += `<div class="section-title">Left today</div>`; done.forEach(b => html += dogCardWrapped(b, 'done')); }
+  // Same dog booked twice in one day is almost always a duplicate, not a real
+  // second visit. Say so rather than quietly listing them twice.
+  const seen = {};
+  bks.forEach(b => { seen[b.dogId] = (seen[b.dogId] || 0) + 1; });
+  const dupes = Object.keys(seen).filter(id => seen[id] > 1)
+    .map(id => dogById(id)?.name).filter(Boolean);
 
-  const readyBks = [...day.filter(b => b.arrivalLogged && !b.report?.sentAt), ...overnights.filter(b => !b.report?.sentAt)];
-  if (readyBks.length) {
-    const label = readyBks.length === 1 ? '1 story to write' : `${readyBks.length} stories to write`;
-    html += `<div class="section-title">Ritual</div>
-      <button class="btn primary block big" data-startritual>📖 Wrap up the day · ${label}</button>
-      <p class="sub small text-center" style="margin-top:12px">Photos, mood, moments. One dog after another.</p>`;
+  const n = bks.length;
+  html += `<div class="today-count">${n} ${n === 1 ? 'dog' : 'dogs'} today</div>`;
+
+  if (dupes.length) {
+    html += `<div class="today-warn">${escapeHtml(dupes.join(', '))} ${dupes.length === 1 ? 'is' : 'are'} listed twice — likely a duplicate booking. Tap to check.</div>`;
+  }
+
+  html += `<div class="today-list">${bks.map(b => dayRow(b, seen[b.dogId] > 1)).join('')}</div>`;
+
+  const ready = bks.filter(b => b.arrivalLogged && !b.report?.sentAt);
+  if (ready.length) {
+    html += `<p class="text-center" style="margin-top:20px">
+      <button class="btn ghost" data-startritual>Write today's stories · ${ready.length}</button>
+    </p>`;
   }
   return html;
+}
+
+function dayRow(b, isDupe) {
+  const dog = dogById(b.dogId);
+  const owner = dog ? ownerOf(b.dogId) : null;
+  const isNight = b.session === 'overnight';
+
+  let note = SESSION_LABELS[b.session] || b.session;
+  if (isNight) {
+    const stay = stayForBookingId(b.id);
+    if (stay && stay.bookings.length > 1) {
+      note += ` · night ${stay.bookings.findIndex(x => x.id === b.id) + 1} of ${stay.bookings.length}`;
+    }
+  }
+
+  let status = '', action = '';
+  if (b.departureLogged) {
+    status = `<span class="row-done">Left ${b.departureLogged}</span>`;
+  } else if (b.arrivalLogged) {
+    status = `<span class="row-here">Here since ${b.arrivalLogged}</span>`;
+    action = `<button class="btn tiny" data-depart="${b.id}">Picked up</button>`;
+  } else {
+    action = `<button class="btn tiny" data-arrive="${b.id}">Arrived</button>`;
+  }
+
+  return `<div class="today-row ${isDupe ? 'dupe' : ''}">
+    <div class="today-face ${isNight ? 'night' : ''}" data-openbk="${b.id}">${dog ? photoOrGlyph(dog) : '?'}</div>
+    <div class="today-body" data-openbk="${b.id}">
+      <div class="today-name">${escapeHtml(dog?.name || 'Unknown dog')}</div>
+      <div class="today-meta">${escapeHtml(owner?.name || '—')} · ${note}</div>
+    </div>
+    <div class="today-right">${status}${action}</div>
+  </div>`;
 }
 
 function renderStayItem(b) {
