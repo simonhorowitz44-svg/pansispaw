@@ -221,6 +221,9 @@ body.modal-open { overflow: hidden; }
 .week-dog-meta { font-size: 12px; color: var(--ink-2); }
 /* Today — one plain list of who's on */
 .today-count { font-size: 13px; color: var(--ink-2); margin: 0 0 14px; }
+.today-row.cancelled .today-name, .today-row.cancelled .today-meta { text-decoration: line-through; opacity: 0.55; }
+.week-dog-row.cancelled .week-dog-name, .week-dog-row.cancelled .week-dog-price { text-decoration: line-through; opacity: 0.55; }
+.row-cancel { font-size: 12px; color: var(--owe); }
 .today-warn { background: #fdf3e7; color: #a8621f; font-size: 13px; line-height: 1.5;
   padding: 10px 12px; border-radius: var(--r2); margin-bottom: 14px; }
 .today-list { border-top: 1px solid var(--edge-2); }
@@ -560,7 +563,7 @@ const STATE_DOC = doc(fbDb, "pansis-admin", "state");
 const STORAGE_KEY = "pansis_admin_v1";
 const LAST_SAVE_KEY = "pansis_admin_last_save_ts";
 
-let PRICES = { small:{half:55,extended:70,full:80,overnight:100}, medium:{half:65,extended:80,full:90,overnight:115}, large:{half:75,extended:90,full:100,overnight:130} };
+let PRICES = { small:{meet:0,half:55,extended:70,full:80,overnight:100}, medium:{meet:0,half:65,extended:80,full:90,overnight:115}, large:{meet:0,half:75,extended:90,full:100,overnight:130} };
 let ADDONS = { senior:12, puppy:12, med:5, diet:3, taxi:35 };
 let SURCHARGES = { publicHoliday:25, xmasPeakDay:15, xmasPeakNight:30 };
 async function loadPricing() {
@@ -575,7 +578,11 @@ async function loadPricing() {
   } catch {}
 }
 
-const SESSION_LABELS = { half:"Half day", extended:"Extended half", full:"Full day", overnight:"Overnight" };
+const SESSION_LABELS = { meet:"Meet \u0026 greet", half:"Half day", extended:"Extended half", full:"Full day", overnight:"Overnight" };
+
+// Cancellation policy. 24h+ notice is free; inside 24h is charged at this rate.
+const CANCEL_NOTICE_HOURS = 24;
+const CANCEL_CHARGE_RATE  = 0.5;
 const SIZE_LABELS = { small:"Small ≤10kg", medium:"Medium 10–25kg", large:"Large 25kg+" };
 
 // Payment tracking is switched off for now. Flip to true to bring back
@@ -813,6 +820,8 @@ const dogsOfOwner = ownerId => DB.dogs.filter(d => d.ownerId === ownerId);
 const bookingsForDate = iso => DB.bookings.filter(b => b.date === iso);
 
 function calcTotal(booking, dog) {
+  if (booking.cancelled) return booking.cancelCharge || 0;
+  if (booking.session === 'meet') return 0;
   if (booking.customPrice != null) return booking.customPrice;
   if (!dog) return 0;
   let t = PRICES[dog.size]?.[booking.session] || 0;
@@ -1046,16 +1055,20 @@ function dayRow(b, isDupe) {
   }
 
   let status = '', action = '';
-  if (b.departureLogged) {
+  if (b.cancelled) {
+    status = `<span class="row-cancel">Cancelled${b.cancelCharge ? ' · $' + b.cancelCharge : ' · no charge'}</span>`;
+    action = `<button class="btn tiny" onclick="uncancelBooking('${b.id}')">Undo</button>`;
+  } else if (b.departureLogged) {
     status = `<span class="row-done">Left ${b.departureLogged}</span>`;
   } else if (b.arrivalLogged) {
     status = `<span class="row-here">Here since ${b.arrivalLogged}</span>`;
     action = `<button class="btn tiny" data-depart="${b.id}">Picked up</button>`;
   } else {
-    action = `<button class="btn tiny" data-arrive="${b.id}">Arrived</button>`;
+    action = `<button class="btn tiny" data-arrive="${b.id}">Arrived</button>`
+           + `<button class="btn tiny" onclick="openCancelSheet('${b.id}')">Cancel</button>`;
   }
 
-  return `<div class="today-row ${isDupe ? 'dupe' : ''}">
+  return `<div class="today-row ${isDupe ? 'dupe' : ''} ${b.cancelled ? 'cancelled' : ''}">
     <div class="today-face ${isNight ? 'night' : ''}" data-openbk="${b.id}">${dog ? photoOrGlyph(dog) : '?'}</div>
     <div class="today-body" data-openbk="${b.id}">
       <div class="today-name">${escapeHtml(dog?.name || 'Unknown dog')}</div>
@@ -1118,6 +1131,8 @@ function dogCard(b, state) {
       : `<button class="btn ghost" data-openbk="${b.id}">Open</button>`;
   const secondary = [];
   if (SHOW_PAYMENTS && state !== 'upcoming' && b.paymentStatus !== 'paid') secondary.push(`<button class="btn ghost tiny" data-pay="${b.id}">Mark paid</button>`);
+  if (b.cancelled) secondary.push(`<button class="btn ghost tiny" onclick="uncancelBooking('${b.id}')">Un-cancel</button>`);
+  else secondary.push(`<button class="btn ghost tiny" onclick="openCancelSheet('${b.id}')">Cancel booking</button>`);
   secondary.push(`<button class="btn ghost tiny" data-openbk="${b.id}">Edit</button>`);
 
   let quickStrip = '';
@@ -1369,11 +1384,11 @@ function weekDogRow(b, opts = {}) {
   const owner = ownerOf(b.dogId);
   const unpaidTag = (SHOW_PAYMENTS && b.paymentStatus !== 'paid') ? ' · <span class="text-owe">unpaid</span>' : '';
   const context = opts.context ? ` · ${opts.context}` : '';
-  return `<div class="week-dog-row" data-openbk="${b.id}">
+  return `<div class="week-dog-row ${b.cancelled ? 'cancelled' : ''}" data-openbk="${b.id}">
     <div class="week-dog-face ${isNight?'night':''}">${photoOrGlyph(dog)}</div>
     <div class="week-dog-body">
       <div class="week-dog-name">${escapeHtml(dog.name)} <span class="muted small">· ${escapeHtml(owner?.name || '—')}</span></div>
-      <div class="week-dog-meta">${SESSION_LABELS[b.session]}${context}${unpaidTag}</div>
+      <div class="week-dog-meta">${b.cancelled ? 'Cancelled' + (b.cancelCharge ? ' · $' + b.cancelCharge + ' charged' : ' · no charge') : SESSION_LABELS[b.session] + context + unpaidTag}</div>
     </div>
     <div class="week-dog-price">$${amt}</div>
   </div>`;
@@ -1771,6 +1786,7 @@ function openBookingSheet(bookingId, prefillDate) {
         <div class="field-group"><label>Date</label><input class="field" name="date" type="date" value="${b.date}" required></div>
         <div class="field-group"><label>Session</label>
           <select name="session" class="field">
+            <option value="meet" ${b.session==='meet'?'selected':''}>Meet &amp; greet (free)</option>
             <option value="half" ${b.session==='half'?'selected':''}>Half day</option>
             <option value="extended" ${b.session==='extended'?'selected':''}>Extended half (5-6h)</option>
             <option value="full" ${b.session==='full'?'selected':''}>Full day</option>
@@ -2029,6 +2045,82 @@ async function saveBookingForm(e, id, isNew) {
     if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = isNew ? 'Add booking' : 'Save'; }
   }
 }
+// --- Cancellation -----------------------------------------------------------
+// 24h+ notice is free. Inside 24h is charged at 50% of what the day would have
+// been. Weather or Andressa cancelling is always free — use the "no charge"
+// option for that.
+function cancelQuote(bk) {
+  const dog = dogById(bk.dogId);
+  const wouldHaveBeen = bk.customPrice != null ? bk.customPrice
+    : (bk.session === 'meet' ? 0 : calcTotal({ ...bk, cancelled:false }, dog));
+  const start = new Date(bk.date + 'T' + (bk.arrivalTime && bk.arrivalTime.length === 5 ? bk.arrivalTime : '07:30') + ':00');
+  const hours = (start - new Date()) / 3600000;
+  const late = hours < CANCEL_NOTICE_HOURS;
+  return {
+    wouldHaveBeen,
+    hours,
+    late,
+    charge: late ? Math.round(wouldHaveBeen * CANCEL_CHARGE_RATE) : 0
+  };
+}
+
+function openCancelSheet(id) {
+  const bk = DB.bookings.find(b => b.id === id); if (!bk) return;
+  const dog = dogById(bk.dogId);
+  const q = cancelQuote(bk);
+  const notice = q.hours < 0 ? 'already started'
+    : q.hours < 24 ? Math.max(0, Math.round(q.hours)) + ' hours away'
+    : Math.round(q.hours / 24) + ' days away';
+  openSheet(`
+    <h2 class="sheet-title">Cancel ${escapeHtml(dog?.name || 'booking')}</h2>
+    <p class="sheet-sub">${fmtDateShort(bk.date)} · ${SESSION_LABELS[bk.session] || bk.session} · ${notice}</p>
+    <div class="ledger-hero" style="margin-bottom:16px">
+      <div class="ledger-num" style="font-size:40px">$${q.charge}</div>
+      <div class="ledger-caption">${q.late
+        ? 'Inside 24 hours — 50% of $' + q.wouldHaveBeen
+        : 'More than 24 hours notice — no charge'}</div>
+    </div>
+    <div class="section-title">Charge</div>
+    <div class="sheet-actions" style="flex-direction:column;gap:8px">
+      <button class="btn primary block" onclick="applyCancel('${bk.id}', ${q.charge})">
+        Cancel and charge $${q.charge}
+      </button>
+      <button class="btn ghost block" onclick="applyCancel('${bk.id}', 0)">
+        Cancel with no charge
+      </button>
+      ${q.late ? '' : `<button class="btn ghost block" onclick="applyCancel('${bk.id}', ${Math.round(q.wouldHaveBeen * CANCEL_CHARGE_RATE)})">Cancel and charge 50% anyway</button>`}
+      <button class="btn ghost block" onclick="closeSheet()">Keep the booking</button>
+    </div>
+    <p class="sub small" style="margin-top:14px">Weather, illness or you cancelling — use "no charge".</p>
+  `);
+}
+
+async function applyCancel(id, charge) {
+  const bk = DB.bookings.find(b => b.id === id); if (!bk) return;
+  bk.cancelled = true;
+  bk.cancelledAt = new Date().toISOString();
+  bk.cancelCharge = charge;
+  bk.total = charge;
+  bk.arrivalLogged = null;
+  bk.departureLogged = null;
+  // A cancelled day goes back to the pack.
+  if (bk.packId) {
+    const pk = DB.packs.find(x => x.id === bk.packId);
+    if (pk && pk.daysUsed > 0) pk.daysUsed -= 1;
+    bk.packId = null;
+  }
+  await save(DB); closeSheet(); render();
+  toast(charge ? `Cancelled · $${charge} charged` : 'Cancelled · no charge');
+}
+
+async function uncancelBooking(id) {
+  const bk = DB.bookings.find(b => b.id === id); if (!bk) return;
+  bk.cancelled = false; bk.cancelledAt = null; bk.cancelCharge = null;
+  bk.total = calcTotal(bk, dogById(bk.dogId));
+  await save(DB); closeSheet(); render();
+  toast('Booking restored');
+}
+
 async function deleteBooking(id) {
   if (!confirm('Delete this booking?')) return;
   const bk = DB.bookings.find(b => b.id === id);
