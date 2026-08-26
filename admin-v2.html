@@ -583,6 +583,10 @@ const SIZE_LABELS = { small:"Small ≤10kg", medium:"Medium 10–25kg", large:"L
 // (The Ledger tab keeps its payment detail regardless.)
 const SHOW_PAYMENTS = false;
 
+// Guards a double-tap on Save. The booking id is minted when the sheet opens,
+// so two submits would push the SAME id twice and you'd get a duplicate row.
+let savingBooking = false;
+
 const uid = () => Math.random().toString(16).slice(2,10);
 const localISO = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const todayISO = () => localISO(new Date());
@@ -597,12 +601,29 @@ const hapticSuccess = () => { try { navigator.vibrate?.([20, 40, 30]); } catch {
 function emptyDb() {
   return { owners: [], dogs: [], bookings: [], packs: [], meta: { version:2, createdAt: new Date().toISOString(), lastBackup: null, capacity:{maxDaycare:5, maxBoarding:3} } };
 }
+// Two records can never legitimately share an id — that only happens when a
+// double-tap pushed the same booking twice. Strip them on load.
+function dedupeById(db) {
+  if (!db || !Array.isArray(db.bookings)) return 0;
+  const seen = new Set();
+  const before = db.bookings.length;
+  db.bookings = db.bookings.filter(b => {
+    if (!b || !b.id) return true;
+    if (seen.has(b.id)) return false;
+    seen.add(b.id);
+    return true;
+  });
+  return before - db.bookings.length;
+}
+
 function normalizeDb(db) {
   if (!db || typeof db !== 'object') return emptyDb();
   db.owners ||= []; db.dogs ||= []; db.bookings ||= []; db.packs ||= []; db.meta ||= {};
   db.meta.capacity ||= { maxDaycare:5, maxBoarding:3 };
   if (!(db.meta.capacity.maxDaycare > 0)) db.meta.capacity.maxDaycare = 5;
   if (!(db.meta.capacity.maxBoarding >= 0)) db.meta.capacity.maxBoarding = 3;
+  const dropped = dedupeById(db);
+  if (dropped) console.warn('Removed ' + dropped + ' duplicate booking(s) sharing an id');
   return db;
 }
 
@@ -1905,8 +1926,24 @@ function updateRepeatPreview() {
 }
 async function saveBookingForm(e, id, isNew) {
   e.preventDefault();
+  if (savingBooking) return false;
   const f = e.target;
   const dog = dogById(f.dogId.value); if (!dog) return false;
+
+  // Same dog, same day, same session is a duplicate, not a second visit.
+  if (isNew) {
+    const clash = DB.bookings.find(x =>
+      x.dogId === f.dogId.value && x.date === f.date.value &&
+      (x.session || 'full') === f.session.value);
+    if (clash) {
+      toast(dog.name + ' is already booked that day');
+      return false;
+    }
+  }
+  savingBooking = true;
+  const submitBtn = f.querySelector('button[type="submit"]');
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Saving…'; }
+  try {
   const custom = f.customPrice.value === '' ? null : parseFloat(f.customPrice.value);
   const existing = isNew ? null : DB.bookings.find(b => b.id === id);
   const bk = {
@@ -1977,11 +2014,20 @@ async function saveBookingForm(e, id, isNew) {
     return false;
   }
 
-  if (isNew) DB.bookings.push(bk);
-  else { const i = DB.bookings.findIndex(x => x.id === id); if (i >= 0) DB.bookings[i] = bk; }
+  if (isNew) {
+    // Belt and braces: never allow the same id twice.
+    if (!DB.bookings.some(x => x.id === bk.id)) DB.bookings.push(bk);
+  } else {
+    const i = DB.bookings.findIndex(x => x.id === id);
+    if (i >= 0) DB.bookings[i] = bk;
+  }
   await save(DB); closeSheet(); render();
   toast(isNew ? 'Booking added' : 'Saved');
   return false;
+  } finally {
+    savingBooking = false;
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = isNew ? 'Add booking' : 'Save'; }
+  }
 }
 async function deleteBooking(id) {
   if (!confirm('Delete this booking?')) return;
