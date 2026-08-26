@@ -563,7 +563,7 @@ const STATE_DOC = doc(fbDb, "pansis-admin", "state");
 const STORAGE_KEY = "pansis_admin_v1";
 const LAST_SAVE_KEY = "pansis_admin_last_save_ts";
 
-let PRICES = { small:{meet:0,half:55,extended:70,full:80,overnight:100}, medium:{meet:0,half:65,extended:80,full:90,overnight:115}, large:{meet:0,half:75,extended:90,full:100,overnight:130} };
+let PRICES = { small:{meet:0,trial:0,half:55,extended:70,full:80,overnight:100}, medium:{meet:0,trial:0,half:65,extended:80,full:90,overnight:115}, large:{meet:0,trial:0,half:75,extended:90,full:100,overnight:130} };
 let ADDONS = { senior:12, puppy:12, med:5, diet:3, taxi:35 };
 let SURCHARGES = { publicHoliday:25, xmasPeakDay:15, xmasPeakNight:30 };
 async function loadPricing() {
@@ -578,7 +578,7 @@ async function loadPricing() {
   } catch {}
 }
 
-const SESSION_LABELS = { meet:"Meet \u0026 greet", half:"Half day", extended:"Extended half", full:"Full day", overnight:"Overnight" };
+const SESSION_LABELS = { meet:"Meet \u0026 greet", trial:"Trial day", half:"Half day", extended:"Extended half", full:"Full day", overnight:"Overnight" };
 
 // Cancellation policy. 24h+ notice is free; inside 24h is charged at this rate.
 const CANCEL_NOTICE_HOURS = 24;
@@ -821,7 +821,7 @@ const bookingsForDate = iso => DB.bookings.filter(b => b.date === iso);
 
 function calcTotal(booking, dog) {
   if (booking.cancelled) return booking.cancelCharge || 0;
-  if (booking.session === 'meet') return 0;
+  if (booking.session === 'meet' || booking.session === 'trial') return 0;
   if (booking.customPrice != null) return booking.customPrice;
   if (!dog) return 0;
   let t = PRICES[dog.size]?.[booking.session] || 0;
@@ -1247,7 +1247,7 @@ function renderWeek() {
         <span>${opts.mini ? '＋' : 'Free — tap to add'}</span>
       </div>`;
     }
-    const dayCount = bks.filter(b => b.session !== 'overnight').length;
+    const dayCount = bks.filter(b => b.session !== 'overnight' && b.session !== 'meet').length;
     const nightCount = bks.filter(b => b.session === 'overnight').length;
     const dayPct = Math.min(100, Math.round(dayCount / cap.maxDaycare * 100));
     const nightPct = cap.maxBoarding ? Math.min(100, Math.round(nightCount / cap.maxBoarding * 100)) : 0;
@@ -1786,7 +1786,8 @@ function openBookingSheet(bookingId, prefillDate) {
         <div class="field-group"><label>Date</label><input class="field" name="date" type="date" value="${b.date}" required></div>
         <div class="field-group"><label>Session</label>
           <select name="session" class="field">
-            <option value="meet" ${b.session==='meet'?'selected':''}>Meet &amp; greet (free)</option>
+            <option value="meet" ${b.session==='meet'?'selected':''}>Meet &amp; greet — 30 min, free</option>
+            <option value="trial" ${b.session==='trial'?'selected':''}>Trial day — 2 hours, free</option>
             <option value="half" ${b.session==='half'?'selected':''}>Half day</option>
             <option value="extended" ${b.session==='extended'?'selected':''}>Extended half (5-6h)</option>
             <option value="full" ${b.session==='full'?'selected':''}>Full day</option>
@@ -2052,7 +2053,7 @@ async function saveBookingForm(e, id, isNew) {
 function cancelQuote(bk) {
   const dog = dogById(bk.dogId);
   const wouldHaveBeen = bk.customPrice != null ? bk.customPrice
-    : (bk.session === 'meet' ? 0 : calcTotal({ ...bk, cancelled:false }, dog));
+    : ((bk.session === 'meet' || bk.session === 'trial') ? 0 : calcTotal({ ...bk, cancelled:false }, dog));
   const start = new Date(bk.date + 'T' + (bk.arrivalTime && bk.arrivalTime.length === 5 ? bk.arrivalTime : '07:30') + ':00');
   const hours = (start - new Date()) / 3600000;
   const late = hours < CANCEL_NOTICE_HOURS;
