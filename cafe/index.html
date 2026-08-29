@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>15% off your first day | Pansi's Paws</title>
+<meta name="robots" content="noindex, follow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Fraunces:opsz,wght,SOFT@9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink:#3f2814; --ink-2:#7a5e3f; --ink-3:#a89680;
+    --paper:#faf6ed; --kraft:#f6efdd; --edge:#ead9b8;
+    --sage:#6a8f4a; --sage-dark:#4d6d34; --honey:#dba63f; --cream:#fef3c7;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--paper); color:var(--ink);
+    font-family:"DM Sans",system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:440px; margin:0 auto; padding:28px 22px 48px; }
+  .logo { display:block; width:150px; margin:0 auto 18px; }
+  .badge { display:inline-block; background:#fef3c7; color:#7a5a10;
+    font-size:11px; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
+    padding:6px 13px; border-radius:999px; margin-bottom:14px; }
+  h1 { font-family:"Fraunces",Georgia,serif; font-variation-settings:'opsz' 144,'SOFT' 100;
+    font-weight:500; font-size:34px; line-height:1.1; letter-spacing:-.02em; margin:0 0 12px; }
+  h1 em { font-style:italic; color:var(--ink-2); }
+  .lede { font-size:16px; line-height:1.55; color:var(--ink-2); margin:0 0 22px; }
+  .card { background:#fff; border:1px solid var(--edge); border-radius:14px; padding:20px 18px; }
+  label { display:block; font-size:12px; font-weight:600; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--ink-2); margin-bottom:5px; }
+  input { width:100%; font-size:16px; font-family:inherit; color:var(--ink);
+    padding:13px 14px; border:1.5px solid var(--edge); border-radius:9px;
+    background:var(--paper); margin-bottom:15px; }
+  input:focus { outline:none; border-color:var(--sage); background:#fff; }
+  button { width:100%; font-family:inherit; font-size:16px; font-weight:600;
+    color:var(--cream); background:#6a8f4a; border:0; border-radius:10px;
+    padding:16px; cursor:pointer; }
+  button:active { transform:translateY(1px); }
+  .fine { font-size:12px; line-height:1.6; color:var(--ink-3); margin:16px 0 0; text-align:center; }
+  .foot { text-align:center; margin-top:26px; font-size:13px; color:var(--ink-2); }
+  .foot a { color:var(--ink-2); }
+  .ok { display:none; text-align:center; padding:34px 18px; }
+  .ok .tick { font-size:40px; }
+  .ok h2 { font-family:"Fraunces",Georgia,serif; font-weight:500; font-size:26px; margin:10px 0 8px; }
+  .ok p { color:var(--ink-2); font-size:15px; line-height:1.6; margin:0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <img class="logo" src="/images/logo.png" alt="Pansi's Paws">
+
+  <div id="form">
+    <span class="badge">15% off your first day</span>
+    <h1>A calm day out for <em>your dog.</em></h1>
+    <p class="lede">Small groups, two walks a day, and a real home rather than a kennel. Leave your details and Andressa will be in touch — no forms to fill in here.</p>
+
+    <form class="card" action="https://formspree.io/f/xzdaajpb" method="POST">
+      <input type="hidden" name="_subject" value="[Pansi's Paw] Cafe promo — daycare">
+      <input type="hidden" name="form_type" value="promo_daycare">
+      <input type="hidden" name="promo" value="CAFE15">
+      <input type="hidden" name="source" value="Dog cafe, 29 Aug 2026">
+      <input type="hidden" name="_next" value="https://pansispaws.com.au/cafe/?done=1">
+
+      <label for="n">Your name</label>
+      <input id="n" name="name" type="text" autocomplete="name" required placeholder="Andressa">
+
+      <label for="p">Mobile</label>
+      <input id="p" name="phone" type="tel" autocomplete="tel" required placeholder="0410 000 000">
+
+      <label for="d">Your dog's name</label>
+      <input id="d" name="dog_name" type="text" required placeholder="Pansi">
+
+      <button type="submit">Claim 15% off</button>
+      <p class="fine">15% off your first day of daycare. New clients, book by 30 September 2026. One per household.</p>
+    </form>
+  </div>
+
+  <div class="ok" id="ok">
+    <div class="tick">🐾</div>
+    <h2>Got it!</h2>
+    <p>Andressa will text you within a day to sort the details.<br>Thanks for saying hello 🤍</p>
+  </div>
+
+  <p class="foot">Pansi's Paws · Annandale<br>
+    <a href="tel:0410151509">0410 151 509</a> · <a href="https://www.instagram.com/pansispawsdaycare/">@pansispawsdaycare</a>
+  </p>
+</div>
+<script>
+  if (location.search.indexOf('done=1') > -1) {
+    document.getElementById('form').style.display = 'none';
+    document.getElementById('ok').style.display = 'block';
+  }
+</script>
+</body>
+</html>
