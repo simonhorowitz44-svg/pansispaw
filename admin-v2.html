@@ -2652,8 +2652,105 @@ function openOwnerSheet(ownerId) {
       <div class="field-group"><label>Notes</label><textarea class="field" name="notes" rows="2">${escapeHtml(rec.notes||'')}</textarea></div>
       <button type="submit" class="btn primary block">${isNew?'Add client':'Save'}</button>
       ${!isNew ? `<button type="button" class="btn ghost block mt-2" onclick="closeSheet(); openDogEditSheet(null, '${rec.id}')">＋ Add a dog for ${escapeHtml(rec.name || 'this client')}</button>` : ''}
+      ${!isNew ? `<button type="button" class="btn ghost block mt-2" onclick="openMergeOwnerSheet('${rec.id}')">⇄ Merge into another client</button>` : ''}
       ${!isNew ? `<button type="button" class="btn danger block mt-2" onclick="deleteOwner('${rec.id}')">Delete client + all their dogs</button>` : ''}
     </form>`);
+}
+
+/* ---------- MERGE CLIENTS ----------
+   Two records for the same person (usually an old hand-typed one plus a
+   later enrolment) can't be fixed by deleting either: the old record owns
+   the booking history, the new one owns the contact details. Merge moves
+   everything onto the record you keep, then removes the empty one. */
+function mergeSummary(fromId, toId) {
+  const from = ownerById(fromId), to = ownerById(toId);
+  const fromDogs = DB.dogs.filter(d => d.ownerId === fromId);
+  const toDogs   = DB.dogs.filter(d => d.ownerId === toId);
+  const same = n => (n || '').trim().toLowerCase();
+  const pairs = fromDogs.map(d => ({
+    dog: d,
+    twin: toDogs.find(t => same(t.name) === same(d.name)) || null,
+    bookings: DB.bookings.filter(b => b.dogId === d.id).length,
+    packs: (DB.packs || []).filter(p => p.dogId === d.id).length
+  }));
+  const fills = ['phone','email','emergencyContact','notes','address']
+    .filter(k => !(to && to[k]) && from && from[k]);
+  return { from, to, pairs, fills,
+           moveBk: pairs.reduce((n,p) => n + p.bookings, 0),
+           moveDogs: pairs.filter(p => !p.twin).length,
+           joinDogs: pairs.filter(p => p.twin).length };
+}
+
+function openMergeOwnerSheet(fromId) {
+  const from = ownerById(fromId);
+  if (!from) return;
+  const others = DB.owners.filter(o => o.id !== fromId)
+    .sort((a,b) => (a.name||'').localeCompare(b.name||''));
+  openSheet(`
+    <h2 class="sheet-title">Merge ${escapeHtml(from.name)}</h2>
+    <p class="sheet-sub">Everything belonging to <strong>${escapeHtml(from.name)}</strong> —
+       dogs, bookings and packs — moves onto the client you pick.
+       ${escapeHtml(from.name)} is then removed. Nothing is deleted.</p>
+    <div class="field-group">
+      <label>Keep this client</label>
+      <select class="field" id="mergeTarget">
+        <option value="">Choose who to merge into…</option>
+        ${others.map(o => `<option value="${o.id}">${escapeHtml(o.name)}${o.email ? ' · ' + escapeHtml(o.email) : ''}</option>`).join('')}
+      </select>
+    </div>
+    <div id="mergePreview" class="sheet-sub" style="min-height:52px"></div>
+    <button class="btn primary block" id="mergeGo" disabled
+            onclick="applyMergeOwner('${fromId}', document.getElementById('mergeTarget').value)">Merge</button>
+    <button class="btn ghost block mt-2" onclick="closeSheet(); openOwnerSheet('${fromId}')">Cancel</button>`);
+
+  const sel = document.getElementById('mergeTarget');
+  const box = document.getElementById('mergePreview');
+  const go  = document.getElementById('mergeGo');
+  sel.onchange = () => {
+    if (!sel.value) { box.innerHTML = ''; go.disabled = true; return; }
+    const s = mergeSummary(fromId, sel.value);
+    const bits = [];
+    if (s.moveDogs) bits.push(`${s.moveDogs} dog${s.moveDogs>1?'s':''} moved across`);
+    if (s.joinDogs) bits.push(`${s.joinDogs} dog${s.joinDogs>1?'s':''} joined with the same-named dog already there`);
+    if (s.moveBk)   bits.push(`${s.moveBk} booking${s.moveBk>1?'s':''} kept`);
+    if (s.fills.length) bits.push(`fills in blank ${s.fills.join(', ')} on ${escapeHtml(s.to.name)}`);
+    box.innerHTML = bits.length
+      ? '→ ' + bits.join('<br>→ ')
+      : 'Nothing to move — this record is already empty.';
+    go.disabled = false;
+  };
+}
+
+async function applyMergeOwner(fromId, toId) {
+  if (!toId || fromId === toId) return;
+  const s = mergeSummary(fromId, toId);
+  if (!s.from || !s.to) return;
+  if (!confirm(`Merge ${s.from.name} into ${s.to.name}?\n\n` +
+               `${s.moveBk} booking(s) and ${s.pairs.length} dog(s) move across.\n` +
+               `${s.from.name} is then removed.`)) return;
+
+  // Contact details: only ever fill blanks on the record being kept.
+  s.fills.forEach(k => { s.to[k] = s.from[k]; });
+
+  s.pairs.forEach(p => {
+    if (p.twin) {
+      // Same dog recorded twice — point its history at the surviving record.
+      DB.bookings.forEach(b => { if (b.dogId === p.dog.id) b.dogId = p.twin.id; });
+      (DB.packs || []).forEach(pk => { if (pk.dogId === p.dog.id) pk.dogId = p.twin.id; });
+      Object.keys(p.dog).forEach(k => {
+        if (k === 'id' || k === 'ownerId') return;
+        if (!p.twin[k] && p.dog[k]) p.twin[k] = p.dog[k];
+      });
+      DB.dogs = DB.dogs.filter(d => d.id !== p.dog.id);
+    } else {
+      p.dog.ownerId = toId;                      // just changes hands
+    }
+  });
+
+  DB.owners = DB.owners.filter(o => o.id !== fromId);
+  dedupeById();
+  await save(DB); closeSheet(); render();
+  toast(`Merged into ${s.to.name}`);
 }
 async function saveOwnerForm(e, id, isNew) {
   e.preventDefault();
@@ -3082,6 +3179,7 @@ Object.assign(window, {
   openStaySheet,
   openDogSheet, openDogEditSheet, saveDogForm, deleteDog,
   openOwnerSheet, saveOwnerForm, deleteOwner,
+  openMergeOwnerSheet, applyMergeOwner,
   openCapacitySheet, saveCapacityForm,
   openImportSheet, importDataFile, exportBackup,
   openReconcileSheet, onReconFile, applyRecon, applyAllRecon,
