@@ -37,6 +37,11 @@
   .opt.club .tag{background:#eef2e6;color:var(--pine)}
   .opt.club:hover{border-color:var(--pine)}
 
+  .already{text-align:center;margin:16px 0 0;font-size:13.5px;color:var(--ink-2)}
+  .opt.plain{display:inline;width:auto;background:none;border:0;padding:0;margin:0;
+        font-size:13.5px;color:var(--pine);font-weight:600;text-decoration:underline;
+        text-underline-offset:2px;cursor:pointer}
+  .opt.plain:hover{color:var(--ink)}
   .card{background:#fff;border:1px solid var(--edge);border-radius:14px;padding:20px 18px}
   .chosen{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px}
   .chosen b{font-family:"Fraunces",Georgia,serif;font-weight:600;font-size:17px}
@@ -83,6 +88,10 @@
         <span class="tag">Two adventures, price of one</span>
       </button>
     </div>
+    <p class="already">Already one of our families?
+      <button class="opt plain" type="button" data-promo="SCOUTS10" data-form="promo_scouts_existing"
+              data-name="Scouts Club" data-off="$10 off your first adventure">Your Scouts rate</button>
+    </p>
     <noscript>
       <p class="fine" style="margin-top:18px">
         <a href="/cafe/">Daycare — 15% off</a> &nbsp;·&nbsp; <a href="/club/">Scouts Club — two for one</a>
@@ -138,7 +147,8 @@
 (function () {
   var TERMS = {
     CAFE15:    '15% off your first day of daycare. New clients, book by 30 September 2026. One per household.',
-    CLUB2FOR1: 'Your first two adventures for the price of one. First 10 dogs, book by 30 September 2026. New Scouts only.'
+    CLUB2FOR1: 'Your first two adventures for the price of one. First 10 dogs, book by 30 September 2026. New Scouts only.',
+    SCOUTS10:  '$10 off your first Scouts adventure, because you are already one of our families. Book by 30 September 2026.'
   };
   var s1 = document.getElementById('step1'),
       s2 = document.getElementById('step2'),
@@ -155,7 +165,8 @@
       document.getElementById('fPromo').value    = p;
       document.getElementById('fType').value     = b.getAttribute('data-form');
       document.getElementById('fInterest').value = b.getAttribute('data-name');
-      document.getElementById('fSubject').value  = "[Pansi's Paw] Cafe promo — " + b.getAttribute('data-name');
+      document.getElementById('fSubject').value  = "[Pansi's Paw] Cafe promo — " + b.getAttribute('data-name')
+        + (p === 'SCOUTS10' ? ' (existing client)' : '');
       document.getElementById('pickName').textContent = b.getAttribute('data-name');
       document.getElementById('pickOff').textContent  = b.getAttribute('data-off');
       document.getElementById('terms').textContent    = TERMS[p];
