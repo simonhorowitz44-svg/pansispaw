@@ -45,7 +45,7 @@
         text-decoration:underline;cursor:pointer;padding:4px;flex:none}
   label{display:block;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
         color:var(--ink-2);margin-bottom:5px}
-  input[type=text],input[type=tel]{width:100%;font-size:16px;font-family:inherit;color:var(--ink);
+  input[type=text],input[type=tel],input[type=email]{width:100%;font-size:16px;font-family:inherit;color:var(--ink);
         padding:13px 14px;border:1.5px solid var(--edge);border-radius:9px;background:var(--paper);margin-bottom:15px}
   input:focus{outline:none;border-color:var(--sage);background:#fff}
   button[type=submit]{width:100%;font-family:inherit;font-size:16px;font-weight:600;color:var(--cream);
@@ -110,6 +110,9 @@
 
       <label for="p">Mobile</label>
       <input id="p" name="phone" type="tel" autocomplete="tel" required placeholder="0410 000 000">
+
+      <label for="e">Email</label>
+      <input id="e" name="email" type="email" autocomplete="email" required placeholder="you@email.com">
 
       <label for="d">Your dog's name</label>
       <input id="d" name="dog_name" type="text" required placeholder="Pansi">
