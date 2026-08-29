@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Say hello | Pansi's Paws</title>
+<meta name="robots" content="noindex, follow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Fraunces:opsz,wght,SOFT@9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet">
+<style>
+  :root{--ink:#3f2814;--ink-2:#7a5e3f;--ink-3:#a89680;--paper:#faf6ed;--edge:#ead9b8;
+        --sage:#6a8f4a;--pine:#4d6d34;--honey:#dba63f;--cream:#fef3c7;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+       font-family:"DM Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:440px;margin:0 auto;padding:26px 22px 44px}
+  .logo{display:block;width:140px;margin:0 auto 16px}
+  h1{font-family:"Fraunces",Georgia,serif;font-variation-settings:'opsz' 144,'SOFT' 100;
+     font-weight:500;font-size:30px;line-height:1.12;letter-spacing:-.02em;margin:0 0 10px;text-align:center}
+  h1 em{font-style:italic;color:var(--ink-2)}
+  .lede{font-size:15px;line-height:1.55;color:var(--ink-2);margin:0 0 22px;text-align:center}
+
+  .pick{display:flex;flex-direction:column;gap:12px}
+  .opt{display:block;width:100%;text-align:left;font-family:inherit;cursor:pointer;
+       background:#fff;border:1.5px solid var(--edge);border-radius:14px;padding:17px 18px;
+       transition:border-color .15s,transform .1s}
+  .opt:active{transform:translateY(1px)}
+  .opt .k{font-family:"Fraunces",Georgia,serif;font-weight:600;font-size:19px;color:var(--ink);margin:0 0 3px}
+  .opt .d{font-size:13.5px;line-height:1.45;color:var(--ink-2);margin:0 0 10px}
+  .opt .tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.09em;
+            text-transform:uppercase;padding:5px 11px;border-radius:999px}
+  .opt.day{border-left:5px solid var(--honey)}
+  .opt.day .tag{background:var(--cream);color:#7a5a10}
+  .opt.day:hover{border-color:var(--honey)}
+  .opt.club{border-left:5px solid var(--pine)}
+  .opt.club .tag{background:#eef2e6;color:var(--pine)}
+  .opt.club:hover{border-color:var(--pine)}
+
+  .card{background:#fff;border:1px solid var(--edge);border-radius:14px;padding:20px 18px}
+  .chosen{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px}
+  .chosen b{font-family:"Fraunces",Georgia,serif;font-weight:600;font-size:17px}
+  .chosen span{display:block;font-size:12.5px;color:var(--ink-2);margin-top:2px}
+  .back{background:none;border:0;font-family:inherit;font-size:12.5px;color:var(--ink-2);
+        text-decoration:underline;cursor:pointer;padding:4px;flex:none}
+  label{display:block;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+        color:var(--ink-2);margin-bottom:5px}
+  input[type=text],input[type=tel]{width:100%;font-size:16px;font-family:inherit;color:var(--ink);
+        padding:13px 14px;border:1.5px solid var(--edge);border-radius:9px;background:var(--paper);margin-bottom:15px}
+  input:focus{outline:none;border-color:var(--sage);background:#fff}
+  button[type=submit]{width:100%;font-family:inherit;font-size:16px;font-weight:600;color:var(--cream);
+        background:var(--sage);border:0;border-radius:10px;padding:16px;cursor:pointer}
+  button[type=submit]:active{transform:translateY(1px)}
+  .fine{font-size:12px;line-height:1.6;color:var(--ink-3);margin:15px 0 0;text-align:center}
+  .foot{text-align:center;margin-top:24px;font-size:13px;color:var(--ink-2)}
+  .foot a{color:var(--ink-2)}
+  .hide{display:none}
+  .ok{text-align:center;padding:32px 18px}
+  .ok .tick{font-size:38px}
+  .ok h2{font-family:"Fraunces",Georgia,serif;font-weight:500;font-size:25px;margin:10px 0 8px}
+  .ok p{color:var(--ink-2);font-size:15px;line-height:1.6;margin:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <img class="logo" src="/images/logo.png" alt="Pansi's Paws">
+
+  <!-- STEP 1 -->
+  <div id="step1">
+    <h1>Lovely to <em>meet you.</em></h1>
+    <p class="lede">Pick what suits your dog and leave your details — Andressa will be in touch.</p>
+    <div class="pick">
+      <button class="opt day" type="button" data-promo="CAFE15" data-form="promo_daycare"
+              data-name="Home daycare" data-off="15% off your first day">
+        <p class="k">Home daycare</p>
+        <p class="d">Small groups, two walks a day, and a real home rather than a kennel.</p>
+        <span class="tag">15% off your first day</span>
+      </button>
+      <button class="opt club" type="button" data-promo="CLUB2FOR1" data-form="promo_scouts"
+              data-name="Scouts Club" data-off="Two adventures for the price of one">
+        <p class="k">Scouts Club</p>
+        <p class="d">Four dogs, real bush trails, home tired and happy. Bandana and a patch every time.</p>
+        <span class="tag">Two adventures, price of one</span>
+      </button>
+    </div>
+    <noscript>
+      <p class="fine" style="margin-top:18px">
+        <a href="/cafe/">Daycare — 15% off</a> &nbsp;·&nbsp; <a href="/club/">Scouts Club — two for one</a>
+      </p>
+    </noscript>
+  </div>
+
+  <!-- STEP 2 -->
+  <div id="step2" class="hide">
+    <form class="card" action="https://formspree.io/f/xzdaajpb" method="POST">
+      <div class="chosen">
+        <div><b id="pickName"></b><span id="pickOff"></span></div>
+        <button class="back" type="button" id="back">change</button>
+      </div>
+
+      <input type="hidden" name="_subject" id="fSubject" value="">
+      <input type="hidden" name="form_type" id="fType" value="">
+      <input type="hidden" name="promo" id="fPromo" value="">
+      <input type="hidden" name="interest" id="fInterest" value="">
+      <input type="hidden" name="source" value="Dog cafe promo day">
+      <input type="hidden" name="_next" value="https://pansispaws.com.au/promo/?done=1">
+
+      <label for="n">Your name</label>
+      <input id="n" name="name" type="text" autocomplete="name" required placeholder="Andressa">
+
+      <label for="p">Mobile</label>
+      <input id="p" name="phone" type="tel" autocomplete="tel" required placeholder="0410 000 000">
+
+      <label for="d">Your dog's name</label>
+      <input id="d" name="dog_name" type="text" required placeholder="Pansi">
+
+      <button type="submit">Claim my offer</button>
+      <p class="fine" id="terms"></p>
+    </form>
+  </div>
+
+  <!-- DONE -->
+  <div id="done" class="ok hide">
+    <div class="tick">🐾</div>
+    <h2>Got it!</h2>
+    <p>Andressa will text you within a day to sort the details.<br>Thanks for saying hello 🤍</p>
+  </div>
+
+  <p class="foot">Pansi's Paws · Annandale<br>
+    <a href="tel:0410151509">0410 151 509</a> · <a href="https://www.instagram.com/pansispawsdaycare/">@pansispawsdaycare</a>
+  </p>
+</div>
+
+<script>
+(function () {
+  var TERMS = {
+    CAFE15:    '15% off your first day of daycare. New clients, book by 30 September 2026. One per household.',
+    CLUB2FOR1: 'Your first two adventures for the price of one. First 10 dogs, book by 30 September 2026. New Scouts only.'
+  };
+  var s1 = document.getElementById('step1'),
+      s2 = document.getElementById('step2'),
+      dn = document.getElementById('done');
+
+  if (location.search.indexOf('done=1') > -1) {
+    s1.className = 'hide'; dn.className = 'ok';
+    return;
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.opt'), function (b) {
+    b.addEventListener('click', function () {
+      var p = b.getAttribute('data-promo');
+      document.getElementById('fPromo').value    = p;
+      document.getElementById('fType').value     = b.getAttribute('data-form');
+      document.getElementById('fInterest').value = b.getAttribute('data-name');
+      document.getElementById('fSubject').value  = "[Pansi's Paw] Cafe promo — " + b.getAttribute('data-name');
+      document.getElementById('pickName').textContent = b.getAttribute('data-name');
+      document.getElementById('pickOff').textContent  = b.getAttribute('data-off');
+      document.getElementById('terms').textContent    = TERMS[p];
+      s1.className = 'hide'; s2.className = '';
+      window.scrollTo(0, 0);
+    });
+  });
+
+  document.getElementById('back').addEventListener('click', function () {
+    s2.className = 'hide'; s1.className = '';
+  });
+})();
+</script>
+</body>
+</html>
