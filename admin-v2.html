@@ -281,6 +281,21 @@ body.modal-open { overflow: hidden; }
 .pack-owner { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
 .pack-tag { font-size: 11px; color: var(--ink-3); margin-top: 6px; text-transform: uppercase; letter-spacing: 0.08em; }
 .pack-tag.med { color: var(--medical); font-weight: 600; }
+
+/* Scouts Club marker + pack filter */
+.pack-card { position: relative; }
+.scouts-pip { position: absolute; top: 8px; right: 8px; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--pine, #4d6d34); box-shadow: 0 0 0 2px var(--paper-2); }
+.scouts-pip.lead { background: var(--honey, #dba63f); }
+.pack-filter { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin: 0 0 var(--s4); }
+.pack-chip { font: inherit; font-size: 12.5px; padding: 6px 13px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--edge-2); background: transparent; color: var(--ink-2); }
+.pack-chip[aria-pressed="true"] { background: var(--pine, #4d6d34); border-color: var(--pine, #4d6d34); color: #fef3c7; font-weight: 600; }
+.pack-chip .n { opacity: .65; margin-left: 4px; }
+.scouts-legend { text-align: center; font-size: 11.5px; color: var(--ink-3); margin: -4px 0 var(--s4); }
+.scouts-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin: 0 3px 0 10px; vertical-align: middle; font-style: normal; }
+.scouts-legend i.m { background: var(--pine, #4d6d34); }
+.scouts-legend i.l { background: var(--honey, #dba63f); }
 .pack-actions { text-align: center; margin: var(--s5) 0; display: flex; gap: var(--s3); justify-content: center; flex-wrap: wrap; }
 
 /* Ledger */
@@ -975,6 +990,7 @@ function attach() {
   document.querySelectorAll('[data-openowner]').forEach(b => b.onclick = (e) => { e.stopPropagation(); openOwnerSheet(b.dataset.openowner || null); });
   document.querySelectorAll('[data-startritual]').forEach(b => b.onclick = () => startRitual());
   document.querySelectorAll('[data-adddog]').forEach(b => b.onclick = () => openDogEditSheet(null, b.dataset.adddog || null));
+  document.querySelectorAll('[data-packfilter]').forEach(b => b.onclick = () => setPackFilter(b.dataset.packfilter));
   document.querySelectorAll('[data-editdog]').forEach(b => b.onclick = (e) => { e.stopPropagation(); openDogEditSheet(b.dataset.editdog); });
   document.querySelectorAll('[data-emptyday]').forEach(b => b.onclick = () => openBookingSheet(null, b.dataset.emptyday));
   document.querySelectorAll('[data-openstay]').forEach(b => b.onclick = () => openStaySheet(b.dataset.openstay));
@@ -991,11 +1007,32 @@ function handleSearch(v) {
   searchQuery = v;
   if (currentTab === 'pack') updatePackFilter();
 }
+
+/* ---------- SCOUTS CLUB ----------
+   Scouts is a flag on the dog, not a separate list — plenty of dogs do both
+   daycare and Scouts, and they should stay one record.
+     'member' — signed up, doing adventures
+     'lead'   — expressed interest (cafe promo etc), not signed up yet
+   Returns '' for daycare-only dogs. */
+let packFilter = 'all';
+function scoutsState(dog) {
+  const s = dog && dog.scouts;
+  if (!s) return '';
+  if (s === true) return 'member';
+  return s.status === 'lead' ? 'lead' : 'member';
+}
+function setPackFilter(v) { packFilter = v; render(); }
+
 function updatePackFilter() {
   const q = searchQuery.trim().toLowerCase();
   document.querySelectorAll('#packGrid > .pack-card').forEach(card => {
     const hay = card.dataset.hay || '';
-    card.style.display = (!q || hay.includes(q)) ? '' : 'none';
+    const sc  = card.dataset.scouts || '';
+    const okQ = !q || hay.includes(q);
+    const okF = packFilter === 'all'
+             || (packFilter === 'scouts'  && sc)
+             || (packFilter === 'daycare' && !sc);
+    card.style.display = (okQ && okF) ? '' : 'none';
   });
 }
 
@@ -1627,13 +1664,20 @@ async function applyAllRecon() {
 
 /* ---------- PACK ---------- */
 function renderPack() {
+  const nScouts = DB.dogs.filter(d => scoutsState(d)).length;
   let html = `<h1 class="greet">The pack <em>${DB.dogs.length}</em></h1>
     <p class="sub tight">Every dog who's ever been through the door.</p>
     <div class="pack-actions">
       <button class="btn ghost" data-openowner="">＋ New client</button>
       <button class="btn ghost" data-adddog="">＋ New dog</button>
     </div>
-    <div class="search-bar"><input class="search-input" id="searchInput" placeholder="Search a name…" value="${escapeHtml(searchQuery)}" aria-label="Search dogs"></div>`;
+    <div class="search-bar"><input class="search-input" id="searchInput" placeholder="Search a name…" value="${escapeHtml(searchQuery)}" aria-label="Search dogs"></div>
+    <div class="pack-filter">
+      <button class="pack-chip" data-packfilter="all"     aria-pressed="${packFilter==='all'}">Everyone<span class="n">${DB.dogs.length}</span></button>
+      <button class="pack-chip" data-packfilter="scouts"  aria-pressed="${packFilter==='scouts'}">Scouts<span class="n">${nScouts}</span></button>
+      <button class="pack-chip" data-packfilter="daycare" aria-pressed="${packFilter==='daycare'}">Daycare only<span class="n">${DB.dogs.length - nScouts}</span></button>
+    </div>`;
+  if (nScouts) html += `<p class="scouts-legend"><i class="m"></i> member <i class="l"></i> lead — not signed up yet</p>`;
 
   if (!DB.dogs.length) {
     html += `<div class="day-empty">No dogs yet.</div>
@@ -1650,8 +1694,11 @@ function renderPack() {
               : d.aggression === 'yes' ? '⚠ handle carefully'
               : (SIZE_LABELS[d.size] || d.size || '');
     const tagClass = (isMeaningfulHealth(d.medicalConditions) || d.aggression === 'yes') ? 'pack-tag med' : 'pack-tag';
-    const hay = `${d.name} ${d.breed||''} ${owner?.name||''}`.toLowerCase();
-    html += `<div class="pack-card" data-opendog="${d.id}" data-hay="${escapeHtml(hay)}" role="button" tabindex="0">
+    const sc = scoutsState(d);
+    const hay = `${d.name} ${d.breed||''} ${owner?.name||''}${sc ? ' scouts' : ''}`.toLowerCase();
+    const pip = sc ? `<span class="scouts-pip ${sc === 'lead' ? 'lead' : ''}" title="Scouts Club ${sc}"></span>` : '';
+    html += `<div class="pack-card" data-opendog="${d.id}" data-hay="${escapeHtml(hay)}" data-scouts="${sc || ''}" role="button" tabindex="0">
+      ${pip}
       <div class="pack-face">${face}</div>
       <div class="pack-name">${escapeHtml(d.name)}</div>
       <div class="pack-owner">${escapeHtml(owner?.name || '—')}</div>
@@ -2577,6 +2624,13 @@ function openDogEditSheet(dogId, prefillOwnerId) {
         </div>
         <div class="field-group"><label>Vacc date</label><input class="field" name="vaccDate" type="date" value="${escapeHtml(rec.vaccDate||'')}"></div>
       </div>
+      <div class="field-group"><label>Scouts Club</label>
+        <select name="scouts" class="field">
+          <option value=""       ${!scoutsState(rec)?'selected':''}>Not in Scouts</option>
+          <option value="lead"   ${scoutsState(rec)==='lead'?'selected':''}>Lead — interested, not signed up</option>
+          <option value="member" ${scoutsState(rec)==='member'?'selected':''}>Member — doing adventures</option>
+        </select>
+      </div>
       <div class="field-group"><label>Medical conditions</label><textarea class="field" name="medicalConditions" rows="2">${escapeHtml(rec.medicalConditions||'')}</textarea></div>
       <div class="field-group"><label>Allergies</label><textarea class="field" name="allergies" rows="2">${escapeHtml(rec.allergies||'')}</textarea></div>
       <div class="field-group"><label>Vet</label><input class="field" name="vetName" value="${escapeHtml(rec.vetName||'')}"></div>
@@ -2623,6 +2677,14 @@ async function saveDogForm(e, id, isNew) {
     photoUrl: existing?.photoUrl || '',
     createdAt: existing?.createdAt || new Date().toISOString()
   };
+  // This form rebuilds the record from scratch, so anything not read back here
+  // is silently dropped. Carry the Scouts flag across deliberately.
+  const scoutsPick = f.scouts ? f.scouts.value : scoutsState(existing || {});
+  if (scoutsPick) {
+    const prev = (existing && existing.scouts && typeof existing.scouts === 'object') ? existing.scouts : {};
+    rec.scouts = { ...prev, status: scoutsPick,
+                   since: prev.since || new Date().toISOString().slice(0,10) };
+  }
   if (isNew) DB.dogs.push(rec);
   else { const i = DB.dogs.findIndex(d => d.id === id); if (i >= 0) DB.dogs[i] = rec; }
   await save(DB); closeSheet(); render();
@@ -3180,6 +3242,7 @@ Object.assign(window, {
   openDogSheet, openDogEditSheet, saveDogForm, deleteDog,
   openOwnerSheet, saveOwnerForm, deleteOwner,
   openMergeOwnerSheet, applyMergeOwner,
+  setPackFilter, scoutsState,
   openCapacitySheet, saveCapacityForm,
   openImportSheet, importDataFile, exportBackup,
   openReconcileSheet, onReconFile, applyRecon, applyAllRecon,
