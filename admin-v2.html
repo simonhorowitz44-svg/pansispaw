@@ -1023,16 +1023,12 @@ function scoutsState(dog) {
 }
 function setPackFilter(v) { packFilter = v; render(); }
 
+// Search only — the Scouts/daycare split is applied in renderPack.
 function updatePackFilter() {
   const q = searchQuery.trim().toLowerCase();
   document.querySelectorAll('#packGrid > .pack-card').forEach(card => {
     const hay = card.dataset.hay || '';
-    const sc  = card.dataset.scouts || '';
-    const okQ = !q || hay.includes(q);
-    const okF = packFilter === 'all'
-             || (packFilter === 'scouts'  && sc)
-             || (packFilter === 'daycare' && !sc);
-    card.style.display = (okQ && okF) ? '' : 'none';
+    card.style.display = (!q || hay.includes(q)) ? '' : 'none';
   });
 }
 
@@ -1685,7 +1681,21 @@ function renderPack() {
     return html;
   }
 
-  const dogs = DB.dogs.slice().sort((a,b) => a.name.localeCompare(b.name));
+  // Filter here rather than hiding cards afterwards — a re-render redraws the
+  // grid, and nothing re-applies a DOM-level filter once that has happened.
+  const dogs = DB.dogs
+    .filter(d => packFilter === 'all'
+              || (packFilter === 'scouts'  &&  scoutsState(d))
+              || (packFilter === 'daycare' && !scoutsState(d)))
+    .sort((a,b) => a.name.localeCompare(b.name));
+
+  if (!dogs.length) {
+    html += `<div class="day-empty">${packFilter === 'scouts'
+      ? 'No Scouts sign-ups yet. Open a dog and set Scouts Club to add one.'
+      : 'No dogs match that filter.'}</div>`;
+    return html;
+  }
+
   html += `<div class="pack-grid" id="packGrid">`;
   dogs.forEach(d => {
     const owner = ownerById(d.ownerId);
