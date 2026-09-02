@@ -357,6 +357,16 @@
           </div>
 
           <div class="sc-field-group">
+            <label class="sc-field-label" for="pickup_address">Pickup address</label>
+            <input class="sc-field-input" id="pickup_address" name="pickup_address" type="text" required autocomplete="street-address" placeholder="12 Booth St, Annandale NSW 2038">
+          </div>
+
+          <div class="sc-field-group">
+            <label class="sc-field-label" for="pickup_notes">Getting in (buzzer, parking, gate — anything that helps at the door)</label>
+            <input class="sc-field-input" id="pickup_notes" name="pickup_notes" type="text" placeholder="Buzz unit 4 · driveway parking on the left">
+          </div>
+
+          <div class="sc-field-group">
             <label class="sc-field-label" for="notes">Anything we should know? (medical, behavioural, recall, water confidence, mobility)</label>
             <textarea class="sc-field-input" id="notes" name="notes" placeholder="Medications, allergies, injuries, reactivity, prey drive, deep-seated feelings about cockatoos…"></textarea>
           </div>
@@ -378,6 +388,15 @@
               <span class="sc-radio-pill"><input type="radio" name="preferred_day" id="pd_mon" value="Monday" required><label for="pd_mon">Monday</label></span>
               <span class="sc-radio-pill"><input type="radio" name="preferred_day" id="pd_fri" value="Friday"><label for="pd_fri">Friday</label></span>
               <span class="sc-radio-pill"><input type="radio" name="preferred_day" id="pd_either" value="Either" checked><label for="pd_either">Either</label></span>
+            </div>
+          </div>
+
+          <div class="sc-field-group">
+            <label class="sc-field-label">Preferred trip</label>
+            <div class="sc-radio-row">
+              <span class="sc-radio-pill"><input type="radio" name="preferred_trip" id="pt_am" value="Morning (from 7:30)"><label for="pt_am">Morning · from 7:30</label></span>
+              <span class="sc-radio-pill"><input type="radio" name="preferred_trip" id="pt_pm" value="Afternoon (from 1:30)"><label for="pt_pm">Afternoon · from 1:30</label></span>
+              <span class="sc-radio-pill"><input type="radio" name="preferred_trip" id="pt_any" value="Either" checked><label for="pt_any">Either</label></span>
             </div>
           </div>
 
