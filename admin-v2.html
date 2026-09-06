@@ -2613,7 +2613,7 @@ function openDogSheet(dogId) {
 
   openSheet(`
     <h2 class="sheet-title">${escapeHtml(d.name)}</h2>
-    <p class="sheet-sub">${escapeHtml(owner?.name || '—')} · ${escapeHtml(d.breed || '')} · ${escapeHtml(SIZE_LABELS[d.size] || '')} ${d.age ? '· ' + escapeHtml(d.age) : ''}</p>
+    <p class="sheet-sub">${[owner?.name, d.breed, SIZE_LABELS[d.size], d.age].filter(Boolean).map(escapeHtml).join(' · ') || '—'}</p>
     ${isMeaningfulHealth(d.medicalConditions) ? `<div class="pill med" style="margin-bottom:12px">⚕ ${escapeHtml(d.medicalConditions)}</div>` : ''}
     ${isMeaningfulHealth(d.allergies) ? `<div class="pill med" style="margin-bottom:12px">🌿 Allergies: ${escapeHtml(d.allergies)}</div>` : ''}
     ${d.aggression === 'yes' ? `<div class="pill med" style="margin-bottom:12px">⚠ Aggression: ${escapeHtml(d.aggressionExplain || 'noted')}</div>` : ''}
@@ -2623,9 +2623,25 @@ function openDogSheet(dogId) {
     ${d.additionalBehaviours ? `<div class="field-group"><label>📝 Notes</label><div>${escapeHtml(d.additionalBehaviours)}</div></div>` : ''}
     ${d.vetName ? `<div class="field-group"><label>🩺 Vet</label><div>${escapeHtml(d.vetName)}</div></div>` : ''}
 
-    <div class="section-title" style="margin-top:24px">Welcome packs</div>
-    ${dogPacks.length ? dogPacks.map(packRow).join('') : '<p class="sub muted small">No packs sold yet.</p>'}
-    <button class="btn ghost block mt-2" onclick="openSellPackSheet('${d.id}')">＋ Sell a welcome pack</button>
+    ${scoutsState(d) ? (() => {
+      const sc = typeof d.scouts === 'object' ? d.scouts : {};
+      const bits = [
+        scoutsState(d) === 'lead' ? 'Lead — not signed up yet' : 'Member',
+        sc.preferredTrip ? SCOUTS_TRIPS[sc.preferredTrip]?.label : '',
+        sc.promo ? 'promo ' + sc.promo : '',
+        sc.source || ''
+      ].filter(Boolean);
+      return `<div class="pill ${scoutsState(d)==='lead'?'hi':''}" style="margin:14px 0 4px">🌿 Scouts Club — ${escapeHtml(bits.join(' · '))}</div>
+        ${scoutsState(d) === 'lead' ? `<p class="sub small muted" style="margin:0 0 4px">Enrolment form not completed — no breed, size or vaccination on file yet.</p>` : ''}`;
+    })() : ''}
+
+    ${(owner?.phone || owner?.email || owner?.pickupAddress) ? `<div class="field-group" style="margin-top:14px"><label>Contact</label>
+      <div class="sub small">${[owner.phone, owner.email].filter(Boolean).map(escapeHtml).join(' · ')}</div>
+      ${owner.pickupAddress ? `<div class="sub small">📍 ${escapeHtml(owner.pickupAddress)}</div>` : ''}
+    </div>` : ''}
+
+    ${dogPacks.length ? `<div class="section-title" style="margin-top:24px">Packs</div>
+    ${dogPacks.map(packRow).join('')}` : ''}
 
     <div class="section-title" style="margin-top:24px">Upcoming</div>
     ${upcoming.length ? upcoming.map(b => `<div class="ledger-row" data-openbk="${b.id}"><div><div class="r-dog">${fmtDateShort(b.date)}</div><div class="r-date">${SESSION_LABELS[b.session]}${b.packId ? ' · <span class="text-medical" style="color:var(--night)">from pack</span>' : ''}</div></div><div class="r-amt">$${b.total||0}</div></div>`).join('') : '<p class="sub muted small">None booked.</p>'}
@@ -2857,6 +2873,7 @@ function openOwnerSheet(ownerId) {
         <div class="field-group"><label>Email</label><input class="field" name="email" type="email" value="${escapeHtml(rec.email)}"></div>
       </div>
       <div class="field-group"><label>Emergency contact</label><input class="field" name="emergencyContact" value="${escapeHtml(rec.emergencyContact||'')}"></div>
+      <div class="field-group"><label>Pickup address <span class="muted small">— for Scouts</span></label><input class="field" name="pickupAddress" value="${escapeHtml(rec.pickupAddress||'')}" placeholder="70 Applebee St, St Peters NSW 2044"></div>
       <div class="field-group"><label>Notes</label><textarea class="field" name="notes" rows="2">${escapeHtml(rec.notes||'')}</textarea></div>
       <button type="submit" class="btn primary block">${isNew?'Add client':'Save'}</button>
       ${!isNew ? `<button type="button" class="btn ghost block mt-2" onclick="closeSheet(); openDogEditSheet(null, '${rec.id}')">＋ Add a dog for ${escapeHtml(rec.name || 'this client')}</button>` : ''}
@@ -2967,6 +2984,7 @@ async function saveOwnerForm(e, id, isNew) {
   const rec = {
     id, name: f.name.value.trim(), phone: f.phone.value.trim(), email: f.email.value.trim(),
     emergencyContact: f.emergencyContact.value.trim(), notes: f.notes.value.trim(),
+    pickupAddress: f.pickupAddress ? f.pickupAddress.value.trim() : (existing?.pickupAddress || ''),
     source: existing?.source || 'manual', createdAt: existing?.createdAt || new Date().toISOString()
   };
   if (isNew) DB.owners.push(rec);
@@ -3034,7 +3052,7 @@ function importDataFile(e, mode) {
         const phone = normPhone(newO.phone);
         const existing = phone ? DB.owners.find(o => normPhone(o.phone) === phone) : DB.owners.find(o => normName(o.name) === normName(newO.name));
         if (existing) {
-          ['email','address','notes','emergencyContact','source'].forEach(k => { if (!existing[k] && newO[k]) existing[k] = newO[k]; });
+          Object.keys(newO).forEach(k => { if (k === 'id') return; if (!existing[k] && newO[k]) existing[k] = newO[k]; });
           ownerIdMap[newO.id] = existing.id; mergeOwner++;
         } else { DB.owners.push({...newO}); ownerIdMap[newO.id] = newO.id; addOwner++; }
       });
