@@ -237,6 +237,7 @@ body.modal-open { overflow: hidden; }
   padding: 11px 0; border-bottom: 1px solid var(--edge-2); }
 .rc-row.ok   { background: linear-gradient(90deg, #f2f7ee 0%, transparent 60%); }
 .rc-row.miss { background: linear-gradient(90deg, #fdf3f1 0%, transparent 60%); }
+.rc-row.pack { background: linear-gradient(90deg, #eef1f7 0%, transparent 60%); }
 .rc-name { font-family: var(--font-serif); font-size: 15px; color: var(--ink); }
 .rc-sub  { font-size: 11.5px; color: var(--ink-2); margin-top: 2px; }
 .rc-amt  { font-family: var(--font-serif); font-size: 16px; color: var(--ink); white-space: nowrap; }
@@ -244,6 +245,7 @@ body.modal-open { overflow: hidden; }
 .rc-state { font-size: 12px; color: var(--ink-2); }
 .rc-state.ok   { color: var(--sage-dark, #4d6d34); font-weight: 600; }
 .rc-state.miss { color: #a8442f; font-weight: 600; }
+.rc-state.pack { color: #4a5b7a; font-weight: 600; }
 @media (max-width: 560px) {
   .rc-row { grid-template-columns: 1fr auto; row-gap: 4px; }
   .rc-right, .rc-row > div:last-child { grid-column: 1 / -1; text-align: left; }
@@ -1560,11 +1562,17 @@ function weekBilling(monday) {
     const dog = dogById(b.dogId); if (!dog) return;
     const owner = ownerOf(b.dogId); if (!owner) return;
     const amt = b.cancelled ? (b.cancelCharge || 0) : (b.total != null ? b.total : calcTotal(b, dog));
-    if (!amt) return;
-    const g = groups[owner.id] ||= { owner, bookings: [], dogs: new Set(), billed: 0 };
-    g.bookings.push(b); g.dogs.add(dog.name); g.billed += amt;
+    const onPack = !!b.packId;
+    if (!amt && !onPack) return;
+    const g = groups[owner.id] ||= { owner, bookings: [], packDays: [], dogs: new Set(), billed: 0, dogIds: new Set() };
+    g.dogs.add(dog.name); g.dogIds.add(dog.id);
+    // A pack day was paid for when the pack was bought — it's a visit, not money due this week.
+    if (onPack) { g.packDays.push(b); return; }
+    g.bookings.push(b); g.billed += amt;
   });
-  return Object.values(groups).sort((x,y) => y.billed - x.billed);
+  return Object.values(groups)
+    .filter(g => g.bookings.length || g.packDays.length)
+    .sort((x,y) => y.billed - x.billed);
 }
 
 /* Best credit in the file for one client's week. Exact amount wins outright. */
@@ -1591,15 +1599,20 @@ function reconcileWeek() {
   const groups = weekBilling(monday);
   const taken = {};
   const rows = groups.map(g => {
-    const alreadyPaid = g.bookings.every(b => b.paymentStatus === 'paid');
-    const m = alreadyPaid ? null : matchPayment(g, RECON_TXS, taken);
+    const allOnPack  = g.bookings.length === 0 && g.packDays.length > 0;
+    const alreadyPaid = g.bookings.length > 0 && g.bookings.every(b => b.paymentStatus === 'paid');
+    const m = (allOnPack || alreadyPaid) ? null : matchPayment(g, RECON_TXS, taken);
     if (m) taken[m.i] = true;
-    return { ...g, alreadyPaid, match: m };
+    // Days left on any live pack, so an unpaid week can be covered in one tap.
+    const packLeft = [...g.dogIds].reduce((n, id) =>
+      n + activePacksForDog(id).reduce((k, p) => k + (p.size - (p.daysUsed || 0)), 0), 0);
+    return { ...g, allOnPack, alreadyPaid, match: m, packLeft };
   });
   const loose = RECON_TXS.filter((_, i) => !taken[i]);
   const billed = rows.reduce((s,r) => s + r.billed, 0);
-  const settled = rows.reduce((s,r) => s + (r.alreadyPaid || r.match ? r.billed : 0), 0);
-  return { monday, rows, loose, billed, settled, short: billed - settled };
+  const settled = rows.reduce((s,r) => s + (r.alreadyPaid || r.match || r.allOnPack ? r.billed : 0), 0);
+  const packVisits = rows.reduce((s,r) => s + r.packDays.length, 0);
+  return { monday, rows, loose, billed, settled, packVisits, short: billed - settled };
 }
 
 function openReconcileSheet() { RECON_TXS = []; RECON_SKIP = {}; renderReconcile(); }
@@ -1628,21 +1641,24 @@ function renderReconcile() {
 
   const row = r => {
     const dogs = [...r.dogs].join(', ');
-    const n = r.bookings.length;
-    let right, cls;
-    if (r.alreadyPaid) { cls = 'ok';   right = `<span class="rc-state ok">already marked paid</span>`; }
-    else if (r.match)  { cls = 'ok';   right = `<span class="rc-state ok">${money(r.match.tx.amount)} received${r.match.exact ? '' : ' — amount differs'}</span>
-                                                <div class="rc-sub">${escapeHtml(r.match.tx.date)} · ${escapeHtml(r.match.tx.desc.slice(0,44))}</div>`; }
-    else if (hasFile)  { cls = 'miss'; right = `<span class="rc-state miss">nothing found</span>`; }
-    else               { cls = '';     right = `<span class="rc-state">—</span>`; }
-    const btn = (!r.alreadyPaid && r.match)
-      ? `<button class="btn tiny" onclick="settleClient('${r.owner.id}')">Mark paid</button>` : '';
+    const n = r.bookings.length + r.packDays.length;
+    const visits = `${n} visit${n>1?'s':''}${r.packDays.length ? ` · ${r.packDays.length} on pack` : ''}`;
+    let right, cls, btn = '';
+    if (r.allOnPack)        { cls = 'pack'; right = `<span class="rc-state pack">covered by pack</span>`; }
+    else if (r.alreadyPaid) { cls = 'ok';   right = `<span class="rc-state ok">already marked paid</span>`; }
+    else if (r.match)       { cls = 'ok';   right = `<span class="rc-state ok">${money(r.match.tx.amount)} received${r.match.exact ? '' : ' — amount differs'}</span>
+                                                     <div class="rc-sub">${escapeHtml(r.match.tx.date)} · ${escapeHtml(r.match.tx.desc.slice(0,44))}</div>`;
+                              btn = `<button class="btn tiny" onclick="settleClient('${r.owner.id}')">Mark paid</button>`; }
+    else if (r.packLeft)    { cls = 'miss'; right = `<span class="rc-state miss">nothing found</span><div class="rc-sub">${r.packLeft} day${r.packLeft>1?'s':''} left on a pack</div>`;
+                              btn = `<button class="btn tiny" onclick="coverFromPack('${r.owner.id}')">Use pack</button>`; }
+    else if (hasFile)       { cls = 'miss'; right = `<span class="rc-state miss">nothing found</span>`; }
+    else                    { cls = '';     right = `<span class="rc-state">—</span>`; }
     return `<div class="rc-row ${cls}">
       <div>
         <div class="rc-name">${escapeHtml(r.owner.name)}</div>
-        <div class="rc-sub">${escapeHtml(dogs)} · ${n} visit${n>1?'s':''}</div>
+        <div class="rc-sub">${escapeHtml(dogs)} · ${visits}</div>
       </div>
-      <div class="rc-amt">${money(r.billed)}</div>
+      <div class="rc-amt">${r.billed ? money(r.billed) : '—'}</div>
       <div class="rc-right">${right}</div>
       <div>${btn}</div>
     </div>`;
@@ -1666,6 +1682,7 @@ function renderReconcile() {
         <b>${w.short > 0 ? money(w.short) : '✓'}</b>
       </div>
     </div>
+    ${w.packVisits ? `<p class="sub small" style="margin:-10px 0 14px;text-align:center">Plus ${w.packVisits} visit${w.packVisits>1?'s':''} taken from a pre-paid pack — no payment due this week.</p>` : ''}
 
     ${!hasFile ? `<label class="btn primary block" style="cursor:pointer;margin-bottom:14px">
         Load bank CSV for this week <input type="file" accept=".csv,text/csv" style="display:none" onchange="onReconFile(event)">
@@ -1690,6 +1707,31 @@ async function settleClient(ownerId) {
   r.bookings.forEach(b => { b.paymentStatus = 'paid'; b.paidAt = now; });
   await save(DB); renderReconcile();
   toast(`${r.owner.name} · ${money(r.billed)} marked paid`);
+}
+
+async function coverFromPack(ownerId) {
+  const w = reconcileWeek();
+  const r = w.rows.find(x => x.owner.id === ownerId);
+  if (!r || !r.bookings.length) return;
+  const eligible = r.bookings.filter(b => b.session !== 'overnight' && !b.cancelled);
+  if (!eligible.length) return toast('Nothing on this week can come off a pack');
+  if (!confirm(`Take ${eligible.length} visit(s) for ${r.owner.name} off their pack?`)) return;
+
+  const now = new Date().toISOString();
+  let used = 0;
+  eligible.forEach(b => {
+    const pack = activePacksForDog(b.dogId)[0];
+    if (!pack) return;                       // that dog has no days left
+    pack.daysUsed = (pack.daysUsed || 0) + 1;
+    b.packId = pack.id;
+    b.total = 0; b.customPrice = 0;
+    b.paymentStatus = 'paid'; b.paidAt = now;
+    b.notes = (b.notes ? b.notes + ' · ' : '') + `Redeemed from ${pack.size}-day pack`;
+    used++;
+  });
+  if (!used) return toast('No pack days left for those dogs');
+  await save(DB); renderReconcile();
+  toast(`${used} visit${used>1?'s':''} taken off ${r.owner.name}'s pack`);
 }
 
 async function settleAllMatched() {
@@ -3303,7 +3345,7 @@ Object.assign(window, {
   setPackFilter, scoutsState,
   openCapacitySheet, saveCapacityForm,
   openImportSheet, importDataFile, exportBackup,
-  openReconcileSheet, onReconFile, shiftReconWeek, settleClient, settleAllMatched,
+  openReconcileSheet, onReconFile, shiftReconWeek, settleClient, settleAllMatched, coverFromPack,
   closeSheet, closeRitual, startRitual,
   toggleMood, toggleMoment, skipRitualCard, sendRitualCard, onRitualPhoto, removeRitualPhoto,
   triggerQuickPhoto,
