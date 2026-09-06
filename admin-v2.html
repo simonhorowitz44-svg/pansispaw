@@ -605,7 +605,7 @@ const STATE_DOC = doc(fbDb, "pansis-admin", "state");
 const STORAGE_KEY = "pansis_admin_v1";
 const LAST_SAVE_KEY = "pansis_admin_last_save_ts";
 
-let PRICES = { small:{meet:0,trial:0,half:55,extended:70,full:80,overnight:100}, medium:{meet:0,trial:0,half:65,extended:80,full:90,overnight:115}, large:{meet:0,trial:0,half:75,extended:90,full:100,overnight:130} };
+let PRICES = { small:{meet:0,trial:0,half:55,extended:70,full:80,overnight:100,scouts:75}, medium:{meet:0,trial:0,half:65,extended:80,full:90,overnight:115,scouts:75}, large:{meet:0,trial:0,half:75,extended:90,full:100,overnight:130,scouts:75} };
 let ADDONS = { senior:12, puppy:12, med:5, diet:3, taxi:35 };
 let SURCHARGES = { publicHoliday:25, xmasPeakDay:15, xmasPeakNight:30 };
 async function loadPricing() {
@@ -620,7 +620,10 @@ async function loadPricing() {
   } catch {}
 }
 
-const SESSION_LABELS = { meet:"Meet \u0026 greet", trial:"Trial day", half:"Half day", extended:"Extended half", full:"Full day", overnight:"Overnight" };
+const SESSION_LABELS = { meet:"Meet \u0026 greet", trial:"Trial day", half:"Half day", extended:"Extended half", full:"Full day", overnight:"Overnight", scouts:"Scouts adventure" };
+// Scouts trips: first pickup 7:30am, afternoon trip from 1:30pm. Max 4 dogs per trip (NSW cap).
+const SCOUTS_TRIPS = { am: { label:"Morning · from 7:30", start:"07:30" }, pm: { label:"Afternoon · from 1:30", start:"13:30" } };
+const SCOUTS_MAX_PER_TRIP = 4;
 
 // Cancellation policy. 24h+ notice is free; inside 24h is charged at this rate.
 const CANCEL_NOTICE_HOURS = 24;
@@ -861,12 +864,26 @@ const ownerOf = dogId => { const d = dogById(dogId); return d ? ownerById(d.owne
 const dogsOfOwner = ownerId => DB.dogs.filter(d => d.ownerId === ownerId);
 const bookingsForDate = iso => DB.bookings.filter(b => b.date === iso);
 
+/* Scouts trips cap at four dogs per handler: NSW Companion Animals Act says a
+   person doesn't have dogs under effective control beyond that. */
+function scoutsTripLoad(date, trip, excludeId) {
+  return DB.bookings.filter(b => b.session === 'scouts' && b.date === date
+    && (b.scoutsTrip || 'am') === trip && !b.cancelled && b.id !== excludeId).length;
+}
+function scoutsCapNote(date, trip, excludeId) {
+  const n = scoutsTripLoad(date, trip, excludeId);
+  if (n >= SCOUTS_MAX_PER_TRIP) return `⚠ That trip already has ${n} dogs — ${SCOUTS_MAX_PER_TRIP} is the legal maximum per handler.`;
+  return `${n} of ${SCOUTS_MAX_PER_TRIP} booked on that trip.`;
+}
+
 function calcTotal(booking, dog) {
   if (booking.cancelled) return booking.cancelCharge || 0;
   if (booking.session === 'meet' || booking.session === 'trial') return 0;
   if (booking.customPrice != null) return booking.customPrice;
   if (!dog) return 0;
   let t = PRICES[dog.size]?.[booking.session] || 0;
+  // Scouts is a flat rate with transport included — daycare add-ons don't apply.
+  if (booking.session === 'scouts') return t;
   if (booking.addOns?.senior) t += ADDONS.senior;
   if (booking.addOns?.puppy)  t += ADDONS.puppy;
   if (booking.addOns?.med)    t += ADDONS.med;
@@ -2170,6 +2187,7 @@ function openBookingSheet(bookingId, prefillDate) {
             <option value="extended" ${b.session==='extended'?'selected':''}>Extended half (5-6h)</option>
             <option value="full" ${b.session==='full'?'selected':''}>Full day</option>
             <option value="overnight" ${b.session==='overnight'?'selected':''}>Overnight</option>
+            <option value="scouts" ${b.session==='scouts'?'selected':''}>Scouts adventure — $75</option>
           </select>
         </div>
       </div>
@@ -2178,6 +2196,15 @@ function openBookingSheet(bookingId, prefillDate) {
         <div class="price-preview-label">Total</div>
         <div class="price-preview-num" id="priceNum">$0</div>
         <div class="price-preview-breakdown" id="priceBreak">—</div>
+      </div>
+
+      <div class="field-group" id="scoutsTripRow" style="${b.session === 'scouts' ? '' : 'display:none'}">
+        <label>Which trip</label>
+        <select name="scoutsTrip" class="field">
+          ${Object.entries(SCOUTS_TRIPS).map(([k, t]) =>
+            `<option value="${k}" ${b.scoutsTrip === k ? 'selected' : ''}>${t.label}</option>`).join('')}
+        </select>
+        <p class="sub small" id="scoutsCap" style="margin:6px 0 0"></p>
       </div>
 
       <div class="field-row">
@@ -2257,6 +2284,24 @@ function updateBookingPrice() {
   if (!dog) { document.getElementById('priceNum').textContent = '$0'; document.getElementById('priceBreak').textContent = 'Pick a dog'; return; }
   const session = f.session.value;
   const base = PRICES[dog.size]?.[session] || 0;
+
+  // Scouts: flat rate, transport included, no daycare add-ons. Show the trip
+  // picker and how full that trip already is.
+  const tripRow = document.getElementById('scoutsTripRow');
+  if (tripRow) tripRow.style.display = session === 'scouts' ? '' : 'none';
+  if (session === 'scouts') {
+    const trip = f.scoutsTrip ? f.scoutsTrip.value : 'am';
+    const note = document.getElementById('scoutsCap');
+    if (note) note.textContent = scoutsCapNote(f.date.value, trip, f.id ? f.id.value : null);
+    if (f.arrivalTime && !f.arrivalTime.value) f.arrivalTime.value = SCOUTS_TRIPS[trip].start;
+    const custom = f.customPrice.value;
+    const t = custom !== '' ? parseFloat(custom) : base;
+    document.getElementById('priceNum').textContent = '$' + (isNaN(t) ? 0 : t);
+    document.getElementById('priceBreak').textContent =
+      custom !== '' ? 'Custom price' : `Scouts adventure · ${SCOUTS_TRIPS[trip].label} · pickup & drop-off included`;
+    return;
+  }
+
   const parts = [`${SIZE_LABELS[dog.size]||dog.size} ${SESSION_LABELS[session]||session}: $${base}`];
   let total = base;
   if (f.senior.checked) { total += ADDONS.senior; parts.push(`+ Senior $${ADDONS.senior}`); }
@@ -2343,6 +2388,7 @@ async function saveBookingForm(e, id, isNew) {
   const existing = isNew ? null : DB.bookings.find(b => b.id === id);
   const bk = {
     id, dogId: f.dogId.value, date: f.date.value, session: f.session.value,
+    scoutsTrip: f.session.value === 'scouts' ? (f.scoutsTrip ? f.scoutsTrip.value : 'am') : null,
     arrivalTime: f.arrivalTime.value, departureTime: f.departureTime.value,
     arrivalLogged: existing?.arrivalLogged || null, departureLogged: existing?.departureLogged || null,
     addOns: { senior: f.senior.checked, puppy: f.puppy.checked, med: f.med.checked, diet: f.diet.checked, taxi: f.taxi.checked },
@@ -3351,6 +3397,7 @@ Object.assign(window, {
   triggerQuickPhoto,
   setLedgerPeriod, exportLedgerCSV, printLedger,
   updateBookingPrice, toggleRepeatPreview, showMoreWeeks, setWeekMode,
+  scoutsTripLoad, scoutsCapNote,
   openSellPackSheet, savePackForm,
   hideSyncBanner, retryPendingSave
 });
