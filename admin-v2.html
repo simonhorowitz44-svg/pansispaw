@@ -2239,24 +2239,47 @@ function openBookingSheet(bookingId, prefillDate) {
           <span>Repeat this booking</span>
         </label>
         <div class="repeat-body hidden" id="repeatBody">
-          <div class="field-row" style="margin-top:12px">
-            <div class="field-group"><label>How often</label>
-              <select name="repeatFreq" class="field">
-                <option value="7">Weekly</option>
-                <option value="14">Fortnightly</option>
-                <option value="1">Every day</option>
-              </select>
-            </div>
-            <div class="field-group"><label>For how many weeks</label>
-              <select name="repeatWeeks" class="field">
-                <option value="4">4 weeks</option>
-                <option value="8">8 weeks</option>
-                <option value="12" selected>12 weeks</option>
-                <option value="26">6 months</option>
-                <option value="52">A year</option>
-              </select>
+          <div class="field-group" style="margin-top:12px"><label>Pattern</label>
+            <select name="repeatMode" class="field" onchange="toggleRepeatMode(this.value)">
+              <option value="every">Every so often, for a while</option>
+              <option value="range">Every day between two dates</option>
+            </select>
+          </div>
+
+          <div id="repeatEvery">
+            <div class="field-row">
+              <div class="field-group"><label>How often</label>
+                <select name="repeatFreq" class="field">
+                  <option value="7">Weekly</option>
+                  <option value="14">Fortnightly</option>
+                  <option value="1">Every day</option>
+                </select>
+              </div>
+              <div class="field-group"><label>For how many weeks</label>
+                <select name="repeatWeeks" class="field">
+                  <option value="4">4 weeks</option>
+                  <option value="8">8 weeks</option>
+                  <option value="12" selected>12 weeks</option>
+                  <option value="26">6 months</option>
+                  <option value="52">A year</option>
+                </select>
+              </div>
             </div>
           </div>
+
+          <div id="repeatRange" class="hidden">
+            <div class="field-row">
+              <div class="field-group"><label>Last day</label>
+                <input class="field" name="repeatUntil" type="date" value="" oninput="toggleRepeatPreview(document.getElementById('bkForm').repeat)"></div>
+              <div class="field-group"><label>Days</label>
+                <select name="repeatDays" class="field">
+                  <option value="all">Every day, including weekends</option>
+                  <option value="weekdays">Weekdays only</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
           <div class="repeat-preview t-caption" id="repeatPreview">Preview:</div>
         </div>
       </div>` : ''}
@@ -2347,6 +2370,46 @@ function updateBookingPrice() {
   updateRepeatPreview();
 }
 
+/* The dates a repeat/range will create, before duplicate-checking.
+   One place so the preview can never disagree with what actually gets saved. */
+function repeatDates(f) {
+  const start = f.date.value;
+  if (!start) return [];
+  const mode = f.repeatMode ? f.repeatMode.value : 'every';
+  const out = [];
+  if (mode === 'range') {
+    const until = f.repeatUntil ? f.repeatUntil.value : '';
+    if (!until || until < start) return [];
+    const weekdaysOnly = f.repeatDays && f.repeatDays.value === 'weekdays';
+    const d = new Date(start + 'T00:00:00');
+    const last = new Date(until + 'T00:00:00');
+    let guard = 0;
+    while (d <= last && guard++ < 400) {
+      const dow = d.getDay();
+      if (!(weekdaysOnly && (dow === 0 || dow === 6))) out.push(localISO(d));
+      d.setDate(d.getDate() + 1);
+    }
+    return out;
+  }
+  const freq = parseInt(f.repeatFreq.value, 10);
+  const weeks = parseInt(f.repeatWeeks.value, 10);
+  const n = Math.ceil(weeks * 7 / freq);
+  const s0 = new Date(start + 'T00:00:00');
+  for (let i = 0; i < n; i++) {
+    const d = new Date(s0); d.setDate(s0.getDate() + i * freq);
+    out.push(localISO(d));
+  }
+  return out;
+}
+
+function toggleRepeatMode(mode) {
+  const ev = document.getElementById('repeatEvery');
+  const rg = document.getElementById('repeatRange');
+  if (ev) ev.classList.toggle('hidden', mode === 'range');
+  if (rg) rg.classList.toggle('hidden', mode !== 'range');
+  updateRepeatPreview();
+}
+
 function toggleRepeatPreview(cb) {
   document.getElementById('repeatBody').classList.toggle('hidden', !cb.checked);
   updateRepeatPreview();
@@ -2354,15 +2417,23 @@ function toggleRepeatPreview(cb) {
 function updateRepeatPreview() {
   const f = document.getElementById('bkForm'); if (!f) return;
   const cb = f.repeat; if (!cb || !cb.checked) return;
-  const startDate = f.date.value;
-  const freq = parseInt(f.repeatFreq.value, 10);
-  const weeks = parseInt(f.repeatWeeks.value, 10);
-  const priceNum = parseFloat(document.getElementById('priceNum').textContent.replace(/[^\d.]/g,'')) || 0;
-  const daysTotal = Math.ceil(weeks * 7 / freq);
-  const totalRev = priceNum * daysTotal;
-  const end = new Date(startDate + 'T00:00:00'); end.setDate(end.getDate() + (daysTotal-1) * freq);
   const preview = document.getElementById('repeatPreview');
-  if (preview) preview.innerHTML = `<b>${daysTotal} bookings</b> · through ${fmtDateShort(localISO(end))} · <b>$${totalRev.toLocaleString()}</b> total`;
+  if (!preview) return;
+  const dates = repeatDates(f);
+  if (!dates.length) {
+    preview.innerHTML = (f.repeatMode && f.repeatMode.value === 'range')
+      ? 'Pick a last day that falls after the first.' : 'Preview:';
+    return;
+  }
+  const price = parseFloat(document.getElementById('priceNum').textContent.replace(/[^\d.]/g,'')) || 0;
+  const dogId = f.dogId.value, session = f.session.value;
+  const clashes = dates.filter(iso => DB.bookings.some(x =>
+    x.dogId === dogId && x.date === iso && (x.session || 'full') === session)).length;
+  const fresh = dates.length - clashes;
+  preview.innerHTML = `<b>${fresh} booking${fresh === 1 ? '' : 's'}</b> · `
+    + `${fmtDateShort(dates[0])} – ${fmtDateShort(dates[dates.length - 1])} · `
+    + `<b>$${(price * fresh).toLocaleString()}</b> total`
+    + (clashes ? ` · ${clashes} already booked, will be skipped` : '');
 }
 async function saveBookingForm(e, id, isNew) {
   e.preventDefault();
@@ -2432,15 +2503,11 @@ async function saveBookingForm(e, id, isNew) {
   // Recurring bookings
   const wantRepeat = isNew && f.repeat && f.repeat.checked;
   if (wantRepeat) {
-    const freq = parseInt(f.repeatFreq.value, 10);
-    const weeks = parseInt(f.repeatWeeks.value, 10);
-    const daysTotal = Math.ceil(weeks * 7 / freq);
+    const dates = repeatDates(f);
+    if (!dates.length) { toast('Pick a last day after the first'); savingBooking = false; return false; }
     const seriesId = uid();
-    const startDate = new Date(bk.date + 'T00:00:00');
     let added = 0, skipped = 0;
-    for (let i = 0; i < daysTotal; i++) {
-      const d = new Date(startDate); d.setDate(startDate.getDate() + i * freq);
-      const iso = localISO(d);
+    for (const iso of dates) {
       // skip if a booking already exists for this dog + date + session
       const dup = DB.bookings.find(x => x.dogId === bk.dogId && x.date === iso && (x.session||'full') === bk.session);
       if (dup) { skipped++; continue; }
@@ -3414,7 +3481,7 @@ Object.assign(window, {
   toggleMood, toggleMoment, skipRitualCard, sendRitualCard, onRitualPhoto, removeRitualPhoto,
   triggerQuickPhoto,
   setLedgerPeriod, exportLedgerCSV, printLedger,
-  updateBookingPrice, toggleRepeatPreview, showMoreWeeks, setWeekMode,
+  updateBookingPrice, toggleRepeatPreview, toggleRepeatMode, repeatDates, showMoreWeeks, setWeekMode,
   scoutsTripLoad, scoutsCapNote,
   openSellPackSheet, savePackForm,
   hideSyncBanner, retryPendingSave
