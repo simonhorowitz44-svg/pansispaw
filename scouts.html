@@ -120,6 +120,11 @@
   textarea.sc-field-input { resize: vertical; min-height: 72px; padding: 8px 0; border: 1.5px dashed var(--edge); padding: 10px 12px; border-radius: 6px; }
   textarea.sc-field-input:focus { border-color: var(--sage); border-style: solid; }
   .sc-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .sc-zone { font-size: 13.5px; line-height: 1.5; color: var(--ink-2); background: var(--sage-soft);
+             border-left: 3px solid var(--sage); padding: 10px 14px; border-radius: 0 8px 8px 0;
+             margin: -0.4rem 0 1.2rem; }
+  .sc-zone.extended { background: #fdf6e6; border-left-color: var(--honey); }
+  .sc-zone.outside  { background: var(--kraft); border-left-color: var(--edge); }
   .sc-radio-row { display: flex; gap: 8px; flex-wrap: wrap; }
   .sc-radio-pill { display: inline-block; }
   .sc-radio-pill input { position: absolute; opacity: 0; }
@@ -277,7 +282,10 @@
       <h3>Standard membership</h3>
       <div class="sc-rate-row"><span class="sc-rate-label">Single adventure</span><span class="sc-rate-price">$75</span></div>
       <div class="sc-rate-row"><span class="sc-rate-label">Second household dog</span><span class="sc-rate-price">$75</span></div>
-      <div class="sc-rate-row"><span class="sc-rate-label">Pickup, drop-off &amp; tracker</span><span class="sc-rate-price" style="color: var(--sage-dark); font-size: 14px;">included</span></div>
+      <div class="sc-rate-row"><span class="sc-rate-label">Pickup &amp; drop-off <span style="display:block; font-size:11px; color:var(--ink-3); font-weight:400; letter-spacing:0.02em; margin-top:2px;">Inner West run — see below</span></span><span class="sc-rate-price" style="color: var(--sage-dark); font-size: 14px;">included</span></div>
+      <div class="sc-rate-row"><span class="sc-rate-label">Just outside the run <span style="display:block; font-size:11px; color:var(--ink-3); font-weight:400; letter-spacing:0.02em; margin-top:2px;">Door-to-door, a little further afield</span></span><span class="sc-rate-price">+$20</span></div>
+      <div class="sc-rate-row"><span class="sc-rate-label">Drop off with us in Annandale <span style="display:block; font-size:11px; color:var(--ink-3); font-weight:400; letter-spacing:0.02em; margin-top:2px;">Anywhere in Sydney — no transport fee</span></span><span class="sc-rate-price" style="color: var(--sage-dark); font-size: 14px;">included</span></div>
+      <div class="sc-rate-row"><span class="sc-rate-label">GPS tracker on every Scout</span><span class="sc-rate-price" style="color: var(--sage-dark); font-size: 14px;">included</span></div>
     </div>
     <div class="sc-founding" style="text-align: left;">
       <h3 style="text-align: center;">What's in every adventure</h3>
@@ -356,10 +364,18 @@
             </div>
           </div>
 
-          <div class="sc-field-group">
-            <label class="sc-field-label" for="pickup_address">Pickup address</label>
-            <input class="sc-field-input" id="pickup_address" name="pickup_address" type="text" required autocomplete="street-address" placeholder="12 Booth St, Annandale NSW 2038">
+          <div class="sc-field-row">
+            <div class="sc-field-group">
+              <label class="sc-field-label" for="pickup_address">Your address</label>
+              <input class="sc-field-input" id="pickup_address" name="pickup_address" type="text" required autocomplete="street-address" placeholder="12 Booth St, Annandale">
+            </div>
+            <div class="sc-field-group">
+              <label class="sc-field-label" for="postcode">Postcode</label>
+              <input class="sc-field-input" id="postcode" name="postcode" type="text" inputmode="numeric" maxlength="4" required autocomplete="postal-code" placeholder="2038">
+            </div>
           </div>
+          <p class="sc-zone" id="zoneNote">We collect from around the Inner West — pop your postcode in and we'll tell you how pickup works for you.</p>
+          <input type="hidden" name="pickup_zone" id="pickupZone" value="">
 
           <div class="sc-field-group">
             <label class="sc-field-label" for="pickup_notes">Getting in (buzzer, parking, gate — anything that helps at the door)</label>
@@ -482,6 +498,11 @@
       <p>Every enrolled Scout gets a Neck of the Woods bandana — soft green gingham with a sage stitched hem and honey paw crest. The bandana arrives empty. After each adventure, Andressa hands you a new collectible patch to take home and add to your Scout's growing collection.</p>
     </details>
     <details>
+      <summary>What if I live outside your pickup area?</summary>
+      <p>You're still very welcome. We run door-to-door collection across the Inner West — roughly five kilometres around Annandale, which covers Leichhardt, Rozelle, Balmain, Glebe, Petersham, Stanmore, Newtown, Enmore, Erskineville, St Peters, Camperdown, Haberfield and Marrickville. A little further out we can usually still come to you for $20 extra. And wherever you are in Sydney, you're always welcome to drop your dog off with us in Annandale and collect them after the adventure — same $75, nothing extra. The postcode box on the form will tell you which applies to you.</p>
+    </details>
+
+    <details>
       <summary>Is pickup and drop-off really included?</summary>
       <p>Yes. Transport in the Pansi's Paws vehicle is part of every membership — dogs are appropriately secured for the drive. On the morning trip the first pickup is 7:30 AM and dogs are home between 10:30 and 11; the afternoon trip starts at 1:30 PM and runs to a matching schedule. No optional add-on fee for it.</p>
     </details>
@@ -518,6 +539,51 @@
       success.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }
+</script>
+
+<script>
+(function () {
+  /* Pickup bands. One place to edit if the run changes.
+     CORE   ~5km of Annandale — door-to-door included.
+     NEAR   ~5-10km          — door-to-door for a small supplement.
+     Beyond — drop off and collect from us in Annandale instead. */
+  var CORE = ['2037','2038','2039','2040','2041','2042','2043','2044','2045',
+              '2048','2049','2050','2204','2007','2008','2009'];
+  var NEAR = ['2010','2015','2016','2017','2018','2046','2047',
+              '2130','2131','2132','2133','2203','2205'];
+  var NEAR_FEE = 20;
+
+  var pc   = document.getElementById('postcode');
+  var note = document.getElementById('zoneNote');
+  var zone = document.getElementById('pickupZone');
+  if (!pc || !note || !zone) return;
+
+  function say() {
+    var v = (pc.value || '').trim();
+    note.className = 'sc-zone';
+    if (v.length < 4) {
+      zone.value = '';
+      note.textContent = "We collect from around the Inner West — pop your postcode in and we'll tell you how pickup works for you.";
+      return;
+    }
+    if (CORE.indexOf(v) > -1) {
+      zone.value = 'core';
+      note.textContent = "You're in our pickup run — door-to-door collection and drop-off is included in the $75.";
+    } else if (NEAR.indexOf(v) > -1) {
+      zone.value = 'near';
+      note.className = 'sc-zone extended';
+      note.textContent = "You're just outside our usual loop. We can still collect from your door for $" + NEAR_FEE
+        + " extra — or you're very welcome to drop off and collect from us in Annandale at no extra cost.";
+    } else {
+      zone.value = 'outside';
+      note.className = 'sc-zone outside';
+      note.textContent = "You're outside our pickup run — but you're still very welcome in the club. "
+        + "Drop off and collect from us in Annandale and it's the standard $75, with nothing extra to pay.";
+    }
+  }
+  pc.addEventListener('input', say);
+  say();
+})();
 </script>
 </body>
 </html>
