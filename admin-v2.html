@@ -2192,6 +2192,58 @@ function openBookingSheet(bookingId, prefillDate) {
         </div>
       </div>
 
+      ${isNew ? `
+      <div class="field-group repeat-group">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer">
+          <input type="checkbox" name="repeat" onchange="toggleRepeatPreview(this)" style="width:16px; height:16px">
+          <span>More than one day <span class="muted small">— a date range, or a repeating booking</span></span>
+        </label>
+        <div class="repeat-body hidden" id="repeatBody">
+          <div class="field-group" style="margin-top:12px"><label>Pattern</label>
+            <select name="repeatMode" class="field" onchange="toggleRepeatMode(this.value)">
+              <option value="every">Repeats — weekly, fortnightly or daily</option>
+              <option value="range">A stay — every day between two dates</option>
+            </select>
+          </div>
+
+          <div id="repeatEvery">
+            <div class="field-row">
+              <div class="field-group"><label>How often</label>
+                <select name="repeatFreq" class="field">
+                  <option value="7">Weekly</option>
+                  <option value="14">Fortnightly</option>
+                  <option value="1">Every day</option>
+                </select>
+              </div>
+              <div class="field-group"><label>For how many weeks</label>
+                <select name="repeatWeeks" class="field">
+                  <option value="4">4 weeks</option>
+                  <option value="8">8 weeks</option>
+                  <option value="12" selected>12 weeks</option>
+                  <option value="26">6 months</option>
+                  <option value="52">A year</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div id="repeatRange" class="hidden">
+            <div class="field-row">
+              <div class="field-group"><label>Through to</label>
+                <input class="field" name="repeatUntil" type="date" value="" oninput="toggleRepeatPreview(document.getElementById('bkForm').repeat)"></div>
+              <div class="field-group" id="repeatDaysWrap"><label>Days</label>
+                <select name="repeatDays" class="field">
+                  <option value="all">Every day, including weekends</option>
+                  <option value="weekdays">Weekdays only</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="repeat-preview t-caption" id="repeatPreview">Preview:</div>
+        </div>
+      </div>` : ''}
+
       <div class="price-preview" id="pricePreview">
         <div class="price-preview-label">Total</div>
         <div class="price-preview-num" id="priceNum">$0</div>
@@ -2232,58 +2284,6 @@ function openBookingSheet(bookingId, prefillDate) {
       <div class="field-group"><label>Custom price (blank = auto)</label><input class="field" name="customPrice" type="number" value="${b.customPrice ?? ''}" placeholder="Auto-calculated"></div>
       <div class="field-group"><label>Notes</label><textarea class="field" name="notes" rows="2">${escapeHtml(b.notes||'')}</textarea></div>
 
-      ${isNew ? `
-      <div class="field-group repeat-group">
-        <label style="display:flex; align-items:center; gap:8px; cursor:pointer">
-          <input type="checkbox" name="repeat" onchange="toggleRepeatPreview(this)" style="width:16px; height:16px">
-          <span>More than one day <span class="muted small">— a date range, or a repeating booking</span></span>
-        </label>
-        <div class="repeat-body hidden" id="repeatBody">
-          <div class="field-group" style="margin-top:12px"><label>Pattern</label>
-            <select name="repeatMode" class="field" onchange="toggleRepeatMode(this.value)">
-              <option value="every">Repeats — weekly, fortnightly or daily</option>
-              <option value="range">A stay — every day between two dates</option>
-            </select>
-          </div>
-
-          <div id="repeatEvery">
-            <div class="field-row">
-              <div class="field-group"><label>How often</label>
-                <select name="repeatFreq" class="field">
-                  <option value="7">Weekly</option>
-                  <option value="14">Fortnightly</option>
-                  <option value="1">Every day</option>
-                </select>
-              </div>
-              <div class="field-group"><label>For how many weeks</label>
-                <select name="repeatWeeks" class="field">
-                  <option value="4">4 weeks</option>
-                  <option value="8">8 weeks</option>
-                  <option value="12" selected>12 weeks</option>
-                  <option value="26">6 months</option>
-                  <option value="52">A year</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div id="repeatRange" class="hidden">
-            <div class="field-row">
-              <div class="field-group"><label>Through to</label>
-                <input class="field" name="repeatUntil" type="date" value="" oninput="toggleRepeatPreview(document.getElementById('bkForm').repeat)"></div>
-              <div class="field-group"><label>Days</label>
-                <select name="repeatDays" class="field">
-                  <option value="all">Every day, including weekends</option>
-                  <option value="weekdays">Weekdays only</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div class="repeat-preview t-caption" id="repeatPreview">Preview:</div>
-        </div>
-      </div>` : ''}
-
       <div class="field-row">
         <div class="field-group"><label>Payment</label>
           <select name="paymentStatus" class="field">
@@ -2317,6 +2317,13 @@ function updateBookingPrice() {
     if (!f.repeat.checked) { f.repeat.checked = true; toggleRepeatPreview(f.repeat); }
     if (f.repeatMode) { f.repeatMode.value = 'range'; toggleRepeatMode('range'); }
   }
+  // "weekdays only" makes no sense for a stay — you don't skip the Saturday
+  const daysWrap = document.getElementById('repeatDaysWrap');
+  if (daysWrap) daysWrap.style.display = session === 'overnight' ? 'none' : '';
+  const dateLbl = f.date && f.date.closest('.field-group') && f.date.closest('.field-group').querySelector('label');
+  if (dateLbl) dateLbl.textContent =
+    (f.repeat && f.repeat.checked && f.repeatMode && f.repeatMode.value === 'range')
+      ? (session === 'overnight' ? 'First night' : 'From') : 'Date';
 
   const tripRow = document.getElementById('scoutsTripRow');
   if (tripRow) tripRow.style.display = session === 'scouts' ? '' : 'none';
@@ -2328,6 +2335,7 @@ function updateBookingPrice() {
     const custom = f.customPrice.value;
     const t = custom !== '' ? parseFloat(custom) : base;
     document.getElementById('priceNum').textContent = '$' + (isNaN(t) ? 0 : t);
+    document.getElementById('priceNum').dataset.unit = '$' + (isNaN(t) ? 0 : t);
     document.getElementById('priceBreak').textContent =
       custom !== '' ? 'Custom price' : `Scouts adventure · ${SCOUTS_TRIPS[trip].label} · pickup & drop-off included`;
     return;
@@ -2374,6 +2382,7 @@ function updateBookingPrice() {
     label = `<span class="text-owe">Custom (auto: $${total})</span>`;
   } else { label = parts.join(' '); }
   document.getElementById('priceNum').textContent = '$' + displayTotal;
+  document.getElementById('priceNum').dataset.unit = '$' + displayTotal;
   document.getElementById('priceBreak').innerHTML = label;
   updateRepeatPreview();
 }
@@ -2426,14 +2435,30 @@ function updateRepeatPreview() {
   const f = document.getElementById('bkForm'); if (!f) return;
   const cb = f.repeat; if (!cb || !cb.checked) return;
   const preview = document.getElementById('repeatPreview');
-  if (!preview) return;
   const dates = repeatDates(f);
+  // Roll the range into the headline price so there aren't two totals on screen
+  // saying different things.
+  const numEl = document.getElementById('priceNum');
+  const brkEl = document.getElementById('priceBreak');
+  if (numEl && brkEl && dates.length) {
+    const per = parseFloat((numEl.dataset.unit || numEl.textContent).replace(/[^\d.]/g,'')) || 0;
+    const dogId = f.dogId.value, session = f.session.value;
+    const fresh = dates.filter(iso => !DB.bookings.some(x =>
+      x.dogId === dogId && x.date === iso && (x.session || 'full') === session)).length;
+    const unit = session === 'overnight' ? 'night' : 'day';
+    numEl.dataset.unit = '$' + per;
+    numEl.textContent = '$' + (per * fresh).toLocaleString();
+    brkEl.textContent = `${fresh} ${unit}${fresh===1?'':'s'} · $${per} per ${unit} · `
+      + `${fmtDateShort(dates[0])} – ${fmtDateShort(dates[dates.length-1])}`;
+  }
+  if (!preview) return;
   if (!dates.length) {
     preview.innerHTML = (f.repeatMode && f.repeatMode.value === 'range')
       ? 'Pick a last day that falls after the first.' : 'Preview:';
     return;
   }
-  const price = parseFloat(document.getElementById('priceNum').textContent.replace(/[^\d.]/g,'')) || 0;
+  const pn = document.getElementById('priceNum');
+  const price = parseFloat((pn.dataset.unit || pn.textContent).replace(/[^\d.]/g,'')) || 0;
   const dogId = f.dogId.value, session = f.session.value;
   const clashes = dates.filter(iso => DB.bookings.some(x =>
     x.dogId === dogId && x.date === iso && (x.session || 'full') === session)).length;
