@@ -2236,13 +2236,13 @@ function openBookingSheet(bookingId, prefillDate) {
       <div class="field-group repeat-group">
         <label style="display:flex; align-items:center; gap:8px; cursor:pointer">
           <input type="checkbox" name="repeat" onchange="toggleRepeatPreview(this)" style="width:16px; height:16px">
-          <span>Repeat this booking</span>
+          <span>More than one day <span class="muted small">— a date range, or a repeating booking</span></span>
         </label>
         <div class="repeat-body hidden" id="repeatBody">
           <div class="field-group" style="margin-top:12px"><label>Pattern</label>
             <select name="repeatMode" class="field" onchange="toggleRepeatMode(this.value)">
-              <option value="every">Every so often, for a while</option>
-              <option value="range">Every day between two dates</option>
+              <option value="every">Repeats — weekly, fortnightly or daily</option>
+              <option value="range">A stay — every day between two dates</option>
             </select>
           </div>
 
@@ -2269,7 +2269,7 @@ function openBookingSheet(bookingId, prefillDate) {
 
           <div id="repeatRange" class="hidden">
             <div class="field-row">
-              <div class="field-group"><label>Last day</label>
+              <div class="field-group"><label>Through to</label>
                 <input class="field" name="repeatUntil" type="date" value="" oninput="toggleRepeatPreview(document.getElementById('bkForm').repeat)"></div>
               <div class="field-group"><label>Days</label>
                 <select name="repeatDays" class="field">
@@ -2310,6 +2310,14 @@ function updateBookingPrice() {
 
   // Scouts: flat rate, transport included, no daycare add-ons. Show the trip
   // picker and how full that trip already is.
+  // Overnight is a stay, so default it to the date-range mode the first time
+  // it's chosen. Once only — don't fight someone who turns it back off.
+  if (session === 'overnight' && f.repeat && !f.dataset.stayPrefilled) {
+    f.dataset.stayPrefilled = '1';
+    if (!f.repeat.checked) { f.repeat.checked = true; toggleRepeatPreview(f.repeat); }
+    if (f.repeatMode) { f.repeatMode.value = 'range'; toggleRepeatMode('range'); }
+  }
+
   const tripRow = document.getElementById('scoutsTripRow');
   if (tripRow) tripRow.style.display = session === 'scouts' ? '' : 'none';
   if (session === 'scouts') {
