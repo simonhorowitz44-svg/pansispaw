@@ -1592,7 +1592,9 @@ function clientBalances() {
   const map = {};
   const entry = o => (map[o.id] ||= { owner:o, dogs:new Set(), visits:0, billed:0, paid:0, bookings:[] });
 
+  const today = todayISO();
   DB.bookings.forEach(b => {
+    if (b.date > today) return;                             // hasn't happened — not owed yet
     if (line && b.date < line) return;
     if (b.packId) return;                                   // paid when the pack was bought
     if (b.cancelled && !b.cancelCharge) return;
@@ -1670,7 +1672,7 @@ function renderMoney() {
     return `<div class="mn-row ${e.balance > 0 ? 'owing' : 'clear'}" onclick="openClientMoney('${e.owner.id}')">
       <div>
         <div class="mn-name">${escapeHtml(e.owner.name)}</div>
-        <div class="mn-sub">${escapeHtml([...e.dogs].join(', '))} · ${n} visit${n===1?'':'s'} · ${money(e.billed)} billed</div>
+        <div class="mn-sub">${escapeHtml([...e.dogs].join(', '))} · ${n} visit${n===1?'':'s'} · paid ${money(e.paid)} of ${money(e.billed)}</div>
       </div>
       <div class="mn-bal">${e.balance > 0 ? money(e.balance) : '✓'}</div>
     </div>`;
@@ -1702,15 +1704,9 @@ function renderMoney() {
     </div>
 
     <div class="mn-line">
-      ${line ? `Counting from <b>${fmtDateShort(line)}</b>` : `Counting <b>everything</b> ever booked`}
-      <button class="btn tiny ghost" onclick="openSettleLine()">${line ? 'Change' : 'Draw a line'}</button>
+      <span>Visits up to today${line ? `, from ${fmtDateShort(line)}` : ''}. Future bookings aren't counted.</span>
+      <button class="btn tiny ghost" onclick="openSettleLine()">${line ? 'Change start date' : 'Set a start date'}</button>
     </div>
-
-    <label class="btn ghost block" style="cursor:pointer;margin-bottom:6px">
-      ${PAY_TXS.length ? 'Load a different bank CSV' : 'Load bank CSV (optional)'}
-      <input type="file" accept=".csv,text/csv" style="display:none" onchange="onReconFile(event)">
-    </label>
-    <p class="sub small" style="margin:0 0 16px">Read in your browser. It suggests who each payment belongs to — you confirm.</p>
 
     ${open.length ? `<div class="section-title">Payments to assign (${open.length})</div>
       ${PAY_TXS.map((t,i) => t.done ? '' : txRow(t,i)).join('')}` : ''}
@@ -1721,6 +1717,13 @@ function renderMoney() {
     ${settled.length ? `<div class="section-title" style="margin-top:18px">
       <button class="btn tiny ghost" onclick="togglePaidUp()">${PAY_SHOW_SETTLED ? 'Hide' : 'Show'} paid up (${settled.length})</button>
     </div>${PAY_SHOW_SETTLED ? settled.map(row).join('') : ''}` : ''}
+
+    <div class="section-title" style="margin-top:22px">Got a bank export?</div>
+    <label class="btn ghost block" style="cursor:pointer">
+      ${PAY_TXS.length ? 'Load a different CSV' : 'Load bank CSV'}
+      <input type="file" accept=".csv,text/csv" style="display:none" onchange="onReconFile(event)">
+    </label>
+    <p class="sub small" style="margin-top:8px">Optional. It reads the file in your browser and suggests who each payment came from — you confirm each one.</p>
   `);
 }
 
