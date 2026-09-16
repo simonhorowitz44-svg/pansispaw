@@ -232,6 +232,7 @@ body.modal-open { overflow: hidden; }
 .extras-note { font-size: 11px; color: var(--ink-3); margin-top: 6px; }
 .rc-weeknav { display:flex; align-items:center; justify-content:center; gap:14px;
   margin: 4px 0 16px; font-family: var(--font-serif); font-size: 16px; color: var(--ink); }
+.rc-presets { display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin:0 0 14px; }
 .rc-summary { display:grid; grid-template-columns: repeat(3,1fr); gap:8px; margin-bottom:18px; }
 .rc-summary > div { background: var(--paper-2); border:1px solid var(--edge-2); border-radius: var(--r2);
   padding: 10px 12px; text-align:center; }
@@ -1578,9 +1579,9 @@ function cleanRef(s) {
    and each payment attaches to it. Deliberately says nothing about older
    debt — that history isn't reliable. */
 
-let RECON_WEEK = null;   // Monday of the week under review
+let RECON_FROM = null;   // ISO date, start of the period under review
+let RECON_TO   = null;   // ISO date, end of it
 let RECON_TXS  = [];     // credits read from the CSV
-let RECON_SKIP = {};     // ownerId -> true, manually settled this session
 
 function mondayOf(d) {
   const x = new Date(d); x.setHours(0,0,0,0);
@@ -1594,16 +1595,36 @@ function weekBounds(monday) {
   const end = new Date(monday); end.setDate(monday.getDate() + 6);
   return { from: localISO(monday), to: localISO(end), monday, end };
 }
-function weekLabel(monday) {
-  const { end } = weekBounds(monday);
-  const f = d => d.toLocaleDateString('en-AU', { day:'numeric', month:'short' });
-  return `${f(monday)} – ${f(end)}`;
+/* Named periods. Upload one CSV covering the whole span and work through it. */
+function setReconPeriod(key) {
+  const today = new Date(); const m = mondayOf(today);
+  const back = n => { const d = new Date(m); d.setDate(d.getDate() - n * 7); return d; };
+  if (key === 'thisweek') { RECON_FROM = localISO(m); RECON_TO = localISO(weekBounds(m).end); }
+  else if (key === 'lastweek') { const w = back(1); RECON_FROM = localISO(w); RECON_TO = localISO(weekBounds(w).end); }
+  else if (key === '4weeks')  { RECON_FROM = localISO(back(3)); RECON_TO = localISO(weekBounds(m).end); }
+  else if (key === '12weeks') { RECON_FROM = localISO(back(11)); RECON_TO = localISO(weekBounds(m).end); }
+  else if (key === 'month')   { RECON_FROM = localISO(new Date(today.getFullYear(), today.getMonth(), 1));
+                                RECON_TO   = localISO(new Date(today.getFullYear(), today.getMonth() + 1, 0)); }
+  renderReconcile();
+}
+function setReconDate(which, v) {
+  if (!v) return;
+  if (which === 'from') RECON_FROM = v; else RECON_TO = v;
+  if (RECON_FROM && RECON_TO && RECON_FROM > RECON_TO) {
+    if (which === 'from') RECON_TO = v; else RECON_FROM = v;
+  }
+  renderReconcile();
+}
+function periodLabel() {
+  const f = iso => new Date(iso + 'T00:00:00').toLocaleDateString('en-AU', { day:'numeric', month:'short' });
+  const days = Math.round((new Date(RECON_TO) - new Date(RECON_FROM)) / 86400000) + 1;
+  return `${f(RECON_FROM)} – ${f(RECON_TO)} · ${days} day${days === 1 ? '' : 's'}`;
 }
 const money = n => '$' + Math.round(n).toLocaleString();
 
-/* Everything billed in the week, grouped by client. */
-function weekBilling(monday) {
-  const { from, to } = weekBounds(monday);
+/* Everything billed in the period, grouped by client. */
+function weekBilling(fromISO, toISO) {
+  const from = fromISO, to = toISO;
   const groups = {};
   DB.bookings.forEach(b => {
     if (b.date < from || b.date > to) return;
@@ -1615,7 +1636,7 @@ function weekBilling(monday) {
     if (!amt && !onPack) return;
     const g = groups[owner.id] ||= { owner, bookings: [], packDays: [], dogs: new Set(), billed: 0, dogIds: new Set() };
     g.dogs.add(dog.name); g.dogIds.add(dog.id);
-    // A pack day was paid for when the pack was bought — it's a visit, not money due this week.
+    // A pack day was paid for when the pack was bought — it's a visit, not money due now.
     if (onPack) { g.packDays.push(b); return; }
     g.bookings.push(b); g.billed += amt;
   });
@@ -1644,31 +1665,39 @@ function matchPayment(group, txs, taken) {
 }
 
 function reconcileWeek() {
-  const monday = RECON_WEEK || (RECON_WEEK = lastCompletedWeek());
-  const groups = weekBilling(monday);
+  if (!RECON_FROM || !RECON_TO) {
+    const w = lastCompletedWeek();
+    RECON_FROM = localISO(w); RECON_TO = localISO(weekBounds(w).end);
+  }
+  const groups = weekBilling(RECON_FROM, RECON_TO);
   const taken = {};
   const rows = groups.map(g => {
     const allOnPack  = g.bookings.length === 0 && g.packDays.length > 0;
     const alreadyPaid = g.bookings.length > 0 && g.bookings.every(b => b.paymentStatus === 'paid');
+    // How it was settled, if it was settled outside the bank feed
+    const method = (g.bookings.find(b => b.paidMethod) || {}).paidMethod || '';
     const m = (allOnPack || alreadyPaid) ? null : matchPayment(g, RECON_TXS, taken);
     if (m) taken[m.i] = true;
     // Days left on any live pack, so an unpaid week can be covered in one tap.
     const packLeft = [...g.dogIds].reduce((n, id) =>
       n + activePacksForDog(id).reduce((k, p) => k + (p.size - (p.daysUsed || 0)), 0), 0);
-    return { ...g, allOnPack, alreadyPaid, match: m, packLeft };
+    return { ...g, allOnPack, alreadyPaid, method, match: m, packLeft };
   });
   const loose = RECON_TXS.filter((_, i) => !taken[i]);
   const billed = rows.reduce((s,r) => s + r.billed, 0);
   const settled = rows.reduce((s,r) => s + (r.alreadyPaid || r.match || r.allOnPack ? r.billed : 0), 0);
   const packVisits = rows.reduce((s,r) => s + r.packDays.length, 0);
-  return { monday, rows, loose, billed, settled, packVisits, short: billed - settled };
+  return { rows, loose, billed, settled, packVisits, short: billed - settled };
 }
 
-function openReconcileSheet() { RECON_TXS = []; RECON_SKIP = {}; renderReconcile(); }
+function openReconcileSheet() { RECON_TXS = []; renderReconcile(); }
 
 function shiftReconWeek(n) {
-  const m = new Date(RECON_WEEK || lastCompletedWeek());
-  m.setDate(m.getDate() + n * 7); RECON_WEEK = m; renderReconcile();
+  if (!RECON_FROM) reconcileWeek();
+  const span = Math.round((new Date(RECON_TO) - new Date(RECON_FROM)) / 86400000) + 1;
+  const shift = d => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + n * span); return localISO(x); };
+  RECON_FROM = shift(RECON_FROM); RECON_TO = shift(RECON_TO);
+  renderReconcile();
 }
 
 function onReconFile(e) {
@@ -1694,14 +1723,16 @@ function renderReconcile() {
     const visits = `${n} visit${n>1?'s':''}${r.packDays.length ? ` · ${r.packDays.length} on pack` : ''}`;
     let right, cls, btn = '';
     if (r.allOnPack)        { cls = 'pack'; right = `<span class="rc-state pack">covered by pack</span>`; }
-    else if (r.alreadyPaid) { cls = 'ok';   right = `<span class="rc-state ok">already marked paid</span>`; }
+    else if (r.alreadyPaid) { cls = 'ok';   right = `<span class="rc-state ok">paid${r.method ? ' · ' + escapeHtml(r.method) : ''}</span>`; }
     else if (r.match)       { cls = 'ok';   right = `<span class="rc-state ok">${money(r.match.tx.amount)} received${r.match.exact ? '' : ' — amount differs'}</span>
                                                      <div class="rc-sub">${escapeHtml(r.match.tx.date)} · ${escapeHtml(r.match.tx.desc.slice(0,44))}</div>`;
                               btn = `<button class="btn tiny" onclick="settleClient('${r.owner.id}')">Mark paid</button>`; }
     else if (r.packLeft)    { cls = 'miss'; right = `<span class="rc-state miss">nothing found</span><div class="rc-sub">${r.packLeft} day${r.packLeft>1?'s':''} left on a pack</div>`;
                               btn = `<button class="btn tiny" onclick="coverFromPack('${r.owner.id}')">Use pack</button>`; }
-    else if (hasFile)       { cls = 'miss'; right = `<span class="rc-state miss">nothing found</span>`; }
-    else                    { cls = '';     right = `<span class="rc-state">—</span>`; }
+    else if (hasFile)       { cls = 'miss'; right = `<span class="rc-state miss">nothing found</span>`;
+                              btn = `<button class="btn tiny" onclick="settleManual('${r.owner.id}')">Settled ✓</button>`; }
+    else                    { cls = '';     right = `<span class="rc-state">—</span>`;
+                              btn = `<button class="btn tiny" onclick="settleManual('${r.owner.id}')">Settled ✓</button>`; }
     return `<div class="rc-row ${cls}">
       <div>
         <div class="rc-name">${escapeHtml(r.owner.name)}</div>
@@ -1719,8 +1750,17 @@ function renderReconcile() {
     <h2 class="sheet-title">Weekly payments</h2>
     <div class="rc-weeknav">
       <button class="btn tiny" onclick="shiftReconWeek(-1)">‹</button>
-      <span>${weekLabel(w.monday)}</span>
+      <span>${periodLabel()}</span>
       <button class="btn tiny" onclick="shiftReconWeek(1)">›</button>
+    </div>
+    <div class="rc-presets">
+      ${[['lastweek','Last week'],['thisweek','This week'],['4weeks','Last 4 weeks'],
+         ['12weeks','Last 12 weeks'],['month','This month']]
+        .map(([k,l]) => `<button class="pack-chip" onclick="setReconPeriod('${k}')">${l}</button>`).join('')}
+    </div>
+    <div class="field-row" style="margin-bottom:14px">
+      <div class="field-group"><label>From</label><input class="field" type="date" value="${RECON_FROM}" onchange="setReconDate('from', this.value)"></div>
+      <div class="field-group"><label>To</label><input class="field" type="date" value="${RECON_TO}" onchange="setReconDate('to', this.value)"></div>
     </div>
 
     <div class="rc-summary">
@@ -1781,6 +1821,24 @@ async function coverFromPack(ownerId) {
   if (!used) return toast('No pack days left for those dogs');
   await save(DB); renderReconcile();
   toast(`${used} visit${used>1?'s':''} taken off ${r.owner.name}'s pack`);
+}
+
+async function settleManual(ownerId) {
+  const w = reconcileWeek();
+  const r = w.rows.find(x => x.owner.id === ownerId);
+  if (!r || !r.bookings.length) return;
+  const how = prompt(
+    `How did ${r.owner.name} pay ${money(r.billed)}?\n\n` +
+    `cash · transfer · card · other week · waived\n` +
+    `(or type anything — it's just a note)`, 'cash');
+  if (how === null) return;                       // cancelled
+  const method = (how || 'manual').trim().slice(0, 40);
+  const now = new Date().toISOString();
+  r.bookings.forEach(b => {
+    b.paymentStatus = 'paid'; b.paidAt = now; b.paidMethod = method;
+  });
+  await save(DB); renderReconcile();
+  toast(`${r.owner.name} · ${money(r.billed)} settled (${method})`);
 }
 
 async function settleAllMatched() {
@@ -3556,7 +3614,8 @@ Object.assign(window, {
   setPackFilter, scoutsState,
   openCapacitySheet, saveCapacityForm,
   openImportSheet, importDataFile, exportBackup,
-  openReconcileSheet, onReconFile, shiftReconWeek, settleClient, settleAllMatched, coverFromPack,
+  openReconcileSheet, onReconFile, shiftReconWeek, setReconPeriod, setReconDate,
+  settleClient, settleAllMatched, settleManual, coverFromPack,
   closeSheet, closeRitual, startRitual,
   toggleMood, toggleMoment, skipRitualCard, sendRitualCard, onRitualPhoto, removeRitualPhoto,
   triggerQuickPhoto,
