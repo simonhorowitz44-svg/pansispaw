@@ -1582,6 +1582,7 @@ function cleanRef(s) {
 
 let PAY_TXS = [];        // credits read from a bank CSV, waiting to be assigned
 let PAY_SHOW_SETTLED = false;
+let PAY_SHOW_NOISE = false;
 
 const money = n => '$' + Math.round(n).toLocaleString();
 const settledBefore = () => (DB.meta && DB.meta.settledBefore) || '';
@@ -1644,6 +1645,41 @@ function suggestOwner(tx, balances) {
   return best;
 }
 
+/* A bank export is the whole account — your own transfers, interest, refunds.
+   Only a fraction is a client paying you. Filter the obvious noise and
+   anything outside the window being counted, so the list is short enough
+   to actually work through. */
+const NOT_A_PAYMENT = /credit interest|^interest\b|\binterest paid\b|dividend|refund|reversal|rebate|cashback|atm|bpay bill|fee|charge|rtn|dishonour/i;
+
+function isOwnTransfer(desc) {
+  // "Transfer from xx7698 CommBank app" — an account of yours, no payer name.
+  return /transfer (from|to) xx?\d+/i.test(desc) || /own account|savings|netbank/i.test(desc);
+}
+
+function txDateISO(raw) {
+  const m = String(raw).match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  if (!m) return '';
+  let [, d, mo, y] = m; if (y.length === 2) y = '20' + y;
+  return `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+
+/* Split the file into the ones worth looking at and the rest. */
+function sortCredits(txs) {
+  const line = settledBefore(), today = todayISO();
+  const keep = [], noise = [];
+  txs.forEach(t => {
+    const iso = txDateISO(t.date);
+    t.iso = iso;
+    if (NOT_A_PAYMENT.test(t.desc)) { noise.push(t); return; }
+    if (iso && line && iso < line) { noise.push(t); return; }
+    if (iso && iso > today) { noise.push(t); return; }
+    if (isOwnTransfer(t.desc)) { noise.push(t); return; }
+    keep.push(t);
+  });
+  keep.sort((a, b) => (b.iso || '').localeCompare(a.iso || ''));
+  return { keep, noise };
+}
+
 function openMoneySheet() { PAY_TXS = []; renderMoney(); }
 
 function onReconFile(e) {
@@ -1665,7 +1701,9 @@ function renderMoney() {
   const settled = all.filter(e => e.balance <= 0);
   const outstanding = owing.reduce((s, e) => s + e.balance, 0);
   const line = settledBefore();
-  const open = PAY_TXS.filter(t => !t.done);
+  const split = sortCredits(PAY_TXS);
+  const open  = split.keep.filter(t => !t.done);
+  const noise = split.noise.filter(t => !t.done);
 
   const row = e => {
     const n = e.visits;
@@ -1709,7 +1747,12 @@ function renderMoney() {
     </div>
 
     ${open.length ? `<div class="section-title">Payments to assign (${open.length})</div>
-      ${PAY_TXS.map((t,i) => t.done ? '' : txRow(t,i)).join('')}` : ''}
+      ${open.map(t => txRow(t, PAY_TXS.indexOf(t))).join('')}` : ''}
+
+    ${noise.length ? `<p class="sub small" style="margin:10px 0 0">
+        ${noise.length} other credit${noise.length===1?'':'s'} skipped — your own transfers, interest, or outside the dates.
+        <button class="btn tiny ghost" onclick="toggleNoise()">${PAY_SHOW_NOISE ? 'Hide' : 'Show'}</button></p>
+      ${PAY_SHOW_NOISE ? noise.map(t => txRow(t, PAY_TXS.indexOf(t))).join('') : ''}` : ''}
 
     <div class="section-title" style="margin-top:18px">Owing (${owing.length})</div>
     ${owing.length ? owing.map(row).join('') : '<p class="sub muted small">Nobody owes anything.</p>'}
@@ -1728,6 +1771,7 @@ function renderMoney() {
 }
 
 function togglePaidUp() { PAY_SHOW_SETTLED = !PAY_SHOW_SETTLED; renderMoney(); }
+function toggleNoise()  { PAY_SHOW_NOISE   = !PAY_SHOW_NOISE;   renderMoney(); }
 
 /* ---- one client ---- */
 function openClientMoney(ownerId) {
@@ -1788,7 +1832,7 @@ async function removePayment(id) {
 async function assignTx(i, ownerId) {
   const t = PAY_TXS[i]; if (!t || t.done) return;
   const o = ownerById(ownerId); if (!o) return;
-  DB.payments.push({ id: uid(), ownerId, amount: t.amount, date: todayISO(),
+  DB.payments.push({ id: uid(), ownerId, amount: t.amount, date: t.iso || txDateISO(t.date) || todayISO(),
                      method: 'bank', note: t.desc.slice(0, 60), createdAt: new Date().toISOString() });
   t.done = true;
   await save(DB); renderMoney();
@@ -3583,7 +3627,7 @@ Object.assign(window, {
   setPackFilter, scoutsState,
   openCapacitySheet, saveCapacityForm,
   openImportSheet, importDataFile, exportBackup,
-  openMoneySheet, onReconFile, renderMoney, togglePaidUp,
+  openMoneySheet, onReconFile, renderMoney, togglePaidUp, toggleNoise,
   openClientMoney, addPayment, removePayment,
   assignTx, assignTxPick, openSettleLine, applySettleLine,
   closeSheet, closeRitual, startRitual,
