@@ -224,6 +224,12 @@ body.modal-open { overflow: hidden; }
 .today-row.cancelled .today-name, .today-row.cancelled .today-meta { text-decoration: line-through; opacity: 0.55; }
 .week-dog-row.cancelled .week-dog-name, .week-dog-row.cancelled .week-dog-price { text-decoration: line-through; opacity: 0.55; }
 .row-cancel { font-size: 12px; color: var(--owe); }
+.extras-box { background: #fdf6e6; border: 1px solid var(--honey, #dba63f); border-radius: var(--r2);
+  padding: 10px 12px; margin: 0 0 var(--s4); }
+.extras-head { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); margin-bottom: 6px; }
+.extras-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 13.5px; color: var(--ink); }
+.extras-row b { font-family: var(--font-serif); font-size: 16px; white-space: nowrap; }
+.extras-note { font-size: 11px; color: var(--ink-3); margin-top: 6px; }
 .rc-weeknav { display:flex; align-items:center; justify-content:center; gap:14px;
   margin: 4px 0 16px; font-family: var(--font-serif); font-size: 16px; color: var(--ink); }
 .rc-summary { display:grid; grid-template-columns: repeat(3,1fr); gap:8px; margin-bottom:18px; }
@@ -625,6 +631,13 @@ const SESSION_LABELS = { meet:"Meet \u0026 greet", trial:"Trial day", half:"Half
 const SCOUTS_TRIPS = { am: { label:"Morning · from 7:30", start:"07:30" }, pm: { label:"Afternoon · from 1:30", start:"13:30" } };
 const SCOUTS_MAX_PER_TRIP = 4;
 
+// Late pickup. Published on services.html: after 5:30pm, $10 per 30 minutes,
+// 15-minute grace, capped at $40 a day. Change here and on the site together.
+const LATE_CUTOFF    = '17:30';
+const LATE_GRACE_MIN = 15;
+const LATE_PER_30    = 10;
+const LATE_CAP       = 40;
+
 // Cancellation policy. 24h+ notice is free; inside 24h is charged at this rate.
 const CANCEL_NOTICE_HOURS = 24;
 const CANCEL_CHARGE_RATE  = 0.5;
@@ -876,11 +889,28 @@ function scoutsCapNote(date, trip, excludeId) {
   return `${n} of ${SCOUTS_MAX_PER_TRIP} booked on that trip.`;
 }
 
+/* Late pickup fee, worked out from the time "Picked up" was actually tapped.
+   Grace is free; after that it's charged in whole 30-minute blocks. Never
+   applied to a free session, a cancellation, or where it's been waived. */
+function latePickupFee(b) {
+  const none = { minsLate: 0, fee: 0, blocks: 0 };
+  if (!b || b.lateFeeWaived || b.cancelled) return none;
+  if (b.session === 'meet' || b.session === 'trial' || b.session === 'scouts') return none;
+  const t = b.departureLogged;
+  if (!t || t.length < 4) return none;
+  const toMin = x => { const p = String(x).split(':'); return (+p[0]) * 60 + (+p[1] || 0); };
+  const minsLate = toMin(t) - toMin(LATE_CUTOFF);
+  if (minsLate <= LATE_GRACE_MIN) return none;
+  const blocks = Math.ceil((minsLate - LATE_GRACE_MIN) / 30);
+  return { minsLate, blocks, fee: Math.min(blocks * LATE_PER_30, LATE_CAP) };
+}
+
 function calcTotal(booking, dog) {
   if (booking.cancelled) return booking.cancelCharge || 0;
   if (booking.session === 'meet' || booking.session === 'trial') return 0;
-  if (booking.customPrice != null) return booking.customPrice;
-  if (!dog) return 0;
+  const late = latePickupFee(booking).fee;
+  if (booking.customPrice != null) return booking.customPrice + late;
+  if (!dog) return late;
   let t = PRICES[dog.size]?.[booking.session] || 0;
   // Scouts is a flat rate with transport included — daycare add-ons don't apply.
   if (booking.session === 'scouts') return t;
@@ -891,7 +921,7 @@ function calcTotal(booking, dog) {
   if (booking.addOns?.taxi)   t += ADDONS.taxi;
   if (booking.surcharges?.publicHoliday) t += SURCHARGES.publicHoliday;
   if (booking.surcharges?.xmasPeak) t += (booking.session === 'overnight' ? SURCHARGES.xmasPeakNight : SURCHARGES.xmasPeakDay);
-  return t;
+  return t + late;
 }
 
 function computeStays(bookings) {
@@ -1200,6 +1230,8 @@ function dogCard(b, state) {
   if (dog.aggression === 'yes') pills.push('<span class="pill med">⚠ aggression</span>');
   if (b.arrivalLogged) pills.push(`<span class="timestamp">✓ ${b.arrivalLogged}</span>`);
   if (b.departureLogged) pills.push(`<span class="timestamp">→ ${b.departureLogged}</span>`);
+  { const L = latePickupFee(b);
+    if (L.fee) pills.push(`<span class="pill hi">late ${L.minsLate} min · +$${L.fee}</span>`); }
 
   const primary = state === 'upcoming'
     ? `<button class="btn primary" data-arrive="${b.id}"><span class="primary-icon">✓</span> Mark arrived</button>`
@@ -2259,6 +2291,20 @@ function openBookingSheet(bookingId, prefillDate) {
         <p class="sub small" id="scoutsCap" style="margin:6px 0 0"></p>
       </div>
 
+      ${(() => { const L = latePickupFee(b);
+        const raw = { ...b, lateFeeWaived: false };
+        const would = latePickupFee(raw);
+        if (!would.fee) return '';
+        return `<div class="extras-box">
+          <div class="extras-head">Extras — worked out from the pickup time</div>
+          <div class="extras-row">
+            <span>Late pickup · collected ${escapeHtml(b.departureLogged)}, ${would.minsLate} min after ${LATE_CUTOFF}</span>
+            <b>${L.fee ? '+$' + L.fee : '<s>+$' + would.fee + '</s> waived'}</b>
+          </div>
+          <label class="chip" style="margin-top:8px"><input type="checkbox" name="lateFeeWaived" ${b.lateFeeWaived ? 'checked' : ''} style="margin-right:6px">Waive this fee</label>
+          <div class="extras-note">$${LATE_PER_30} per 30 min after ${LATE_CUTOFF}, ${LATE_GRACE_MIN} min grace, capped at $${LATE_CAP}.</div>
+        </div>`; })()}
+
       <div class="field-row">
         <div class="field-group"><label>Arrival time</label><input class="field" name="arrivalTime" type="time" value="${b.arrivalTime||''}"></div>
         <div class="field-group"><label>Departure time</label><input class="field" name="departureTime" type="time" value="${b.departureTime||''}"></div>
@@ -2494,6 +2540,7 @@ async function saveBookingForm(e, id, isNew) {
     id, dogId: f.dogId.value, date: f.date.value, session: f.session.value,
     scoutsTrip: f.session.value === 'scouts' ? (f.scoutsTrip ? f.scoutsTrip.value : 'am') : null,
     arrivalTime: f.arrivalTime.value, departureTime: f.departureTime.value,
+    lateFeeWaived: f.lateFeeWaived ? f.lateFeeWaived.checked : (existing?.lateFeeWaived || false),
     arrivalLogged: existing?.arrivalLogged || null, departureLogged: existing?.departureLogged || null,
     addOns: { senior: f.senior.checked, puppy: f.puppy.checked, med: f.med.checked, diet: f.diet.checked, taxi: f.taxi.checked },
     surcharges: { publicHoliday: f.ph.checked, xmas: false, xmasPeak: f.xmas.checked },
