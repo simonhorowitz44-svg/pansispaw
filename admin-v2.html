@@ -232,30 +232,22 @@ body.modal-open { overflow: hidden; }
 .extras-note { font-size: 11px; color: var(--ink-3); margin-top: 6px; }
 .rc-weeknav { display:flex; align-items:center; justify-content:center; gap:14px;
   margin: 4px 0 16px; font-family: var(--font-serif); font-size: 16px; color: var(--ink); }
-.rc-presets { display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin:0 0 14px; }
-.rc-summary { display:grid; grid-template-columns: repeat(3,1fr); gap:8px; margin-bottom:18px; }
-.rc-summary > div { background: var(--paper-2); border:1px solid var(--edge-2); border-radius: var(--r2);
-  padding: 10px 12px; text-align:center; }
-.rc-summary > div.short { background:#fdf3f1; border-color:#e6c4bc; }
-.rc-summary > div.clear { background:#eef4e8; border-color:#cfe0c0; }
-.rc-cap { display:block; font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color: var(--ink-3); margin-bottom:3px; }
-.rc-summary b { font-family: var(--font-serif); font-size: 20px; font-weight:600; color: var(--ink); }
-.rc-row { display:grid; grid-template-columns: 1.5fr auto 1.4fr auto; gap:12px; align-items:center;
-  padding: 11px 0; border-bottom: 1px solid var(--edge-2); }
-.rc-row.ok   { background: linear-gradient(90deg, #f2f7ee 0%, transparent 60%); }
-.rc-row.miss { background: linear-gradient(90deg, #fdf3f1 0%, transparent 60%); }
-.rc-row.pack { background: linear-gradient(90deg, #eef1f7 0%, transparent 60%); }
-.rc-name { font-family: var(--font-serif); font-size: 15px; color: var(--ink); }
-.rc-sub  { font-size: 11.5px; color: var(--ink-2); margin-top: 2px; }
-.rc-amt  { font-family: var(--font-serif); font-size: 16px; color: var(--ink); white-space: nowrap; }
-.rc-right { text-align: right; }
-.rc-state { font-size: 12px; color: var(--ink-2); }
-.rc-state.ok   { color: var(--sage-dark, #4d6d34); font-weight: 600; }
-.rc-state.miss { color: #a8442f; font-weight: 600; }
-.rc-state.pack { color: #4a5b7a; font-weight: 600; }
-@media (max-width: 560px) {
-  .rc-row { grid-template-columns: 1fr auto; row-gap: 4px; }
-  .rc-right, .rc-row > div:last-child { grid-column: 1 / -1; text-align: left; }
+.mn-hero { text-align:center; padding:18px 12px; border-radius:var(--r3); margin-bottom:14px;
+  background:#fdf3f1; border:1px solid #e6c4bc; }
+.mn-hero.clear { background:#eef4e8; border-color:#cfe0c0; }
+.mn-hero-num { font-family:var(--font-serif); font-size:34px; font-weight:600; color:var(--ink); line-height:1.1; }
+.mn-hero-cap { font-size:12.5px; color:var(--ink-2); margin-top:4px; }
+.mn-line { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+  font-size:12.5px; color:var(--ink-2); background:var(--kraft); border-radius:var(--r2);
+  padding:8px 12px; margin-bottom:14px; }
+.mn-row, .mn-tx { display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:11px 0; border-bottom:1px solid var(--edge-2); cursor:pointer; }
+.mn-tx { cursor:default; }
+.mn-row.owing { background:linear-gradient(90deg,#fdf3f1 0%,transparent 55%); }
+.mn-row.clear { opacity:.65; }
+.mn-name { font-family:var(--font-serif); font-size:15px; color:var(--ink); }
+.mn-sub  { font-size:11.5px; color:var(--ink-2); margin-top:2px; }
+.mn-bal  { font-family:var(--font-serif); font-size:17px; color:var(--ink); white-space:nowrap; }
 }
 .today-warn { background: #fdf3e7; color: #a8621f; font-size: 13px; line-height: 1.5;
   padding: 10px 12px; border-radius: var(--r2); margin-bottom: 14px; }
@@ -567,7 +559,7 @@ body.modal-open { overflow: hidden; }
     <div class="brand" onclick="switchTab('day')" role="button" tabindex="0">Pansi's</div>
     <div class="avatar" id="avatarBtn" role="button" aria-label="Menu" tabindex="0"></div>
     <div class="avatar-menu" id="avatarMenu">
-      <button onclick="openReconcileSheet()">💳 Weekly payments</button>
+      <button onclick="openMoneySheet()">💳 Money — who owes what</button>
       <button onclick="openImportSheet()">📥 Import data</button>
       <button onclick="exportBackup()">⬇ Export backup</button>
       <button onclick="openCapacitySheet()">🎯 Capacity limits</button>
@@ -665,7 +657,7 @@ const hapticTap = () => { try { navigator.vibrate?.(15); } catch {} };
 const hapticSuccess = () => { try { navigator.vibrate?.([20, 40, 30]); } catch {} };
 
 function emptyDb() {
-  return { owners: [], dogs: [], bookings: [], packs: [], meta: { version:2, createdAt: new Date().toISOString(), lastBackup: null, capacity:{maxDaycare:5, maxBoarding:3} } };
+  return { owners: [], dogs: [], bookings: [], packs: [], payments: [], meta: { version:2, settledBefore:'', createdAt: new Date().toISOString(), lastBackup: null, capacity:{maxDaycare:5, maxBoarding:3} } };
 }
 // Two records can never legitimately share an id — that only happens when a
 // double-tap pushed the same booking twice. Strip them on load.
@@ -685,6 +677,8 @@ function dedupeById(db) {
 function normalizeDb(db) {
   if (!db || typeof db !== 'object') return emptyDb();
   db.owners ||= []; db.dogs ||= []; db.bookings ||= []; db.packs ||= []; db.meta ||= {};
+  db.payments ||= [];                      // money received, as records
+  db.meta.settledBefore ||= '';            // everything before this date is done with
   db.meta.capacity ||= { maxDaycare:5, maxBoarding:3 };
   if (!(db.meta.capacity.maxDaycare > 0)) db.meta.capacity.maxDaycare = 5;
   if (!(db.meta.capacity.maxBoarding >= 0)) db.meta.capacity.maxBoarding = 3;
@@ -1579,280 +1573,252 @@ function cleanRef(s) {
    and each payment attaches to it. Deliberately says nothing about older
    debt — that history isn't reliable. */
 
-let RECON_FROM = null;   // ISO date, start of the period under review
-let RECON_TO   = null;   // ISO date, end of it
-let RECON_TXS  = [];     // credits read from the CSV
+/* ---------- MONEY ------------------------------------------------------
+   The question is "who still owes us", so the unit here is the client and
+   their balance — not the individual booking. People pay in lumps, late, in
+   cash, for three visits at once; asking "was booking #147 paid" is a
+   question nobody can answer. Payments are their own records and a balance
+   is simply billed minus paid. */
 
-function mondayOf(d) {
-  const x = new Date(d); x.setHours(0,0,0,0);
-  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
-  return x;
-}
-function lastCompletedWeek() {
-  const m = mondayOf(new Date()); m.setDate(m.getDate() - 7); return m;
-}
-function weekBounds(monday) {
-  const end = new Date(monday); end.setDate(monday.getDate() + 6);
-  return { from: localISO(monday), to: localISO(end), monday, end };
-}
-/* Named periods. Upload one CSV covering the whole span and work through it. */
-function setReconPeriod(key) {
-  const today = new Date(); const m = mondayOf(today);
-  const back = n => { const d = new Date(m); d.setDate(d.getDate() - n * 7); return d; };
-  if (key === 'thisweek') { RECON_FROM = localISO(m); RECON_TO = localISO(weekBounds(m).end); }
-  else if (key === 'lastweek') { const w = back(1); RECON_FROM = localISO(w); RECON_TO = localISO(weekBounds(w).end); }
-  else if (key === '4weeks')  { RECON_FROM = localISO(back(3)); RECON_TO = localISO(weekBounds(m).end); }
-  else if (key === '12weeks') { RECON_FROM = localISO(back(11)); RECON_TO = localISO(weekBounds(m).end); }
-  else if (key === 'month')   { RECON_FROM = localISO(new Date(today.getFullYear(), today.getMonth(), 1));
-                                RECON_TO   = localISO(new Date(today.getFullYear(), today.getMonth() + 1, 0)); }
-  renderReconcile();
-}
-function setReconDate(which, v) {
-  if (!v) return;
-  if (which === 'from') RECON_FROM = v; else RECON_TO = v;
-  if (RECON_FROM && RECON_TO && RECON_FROM > RECON_TO) {
-    if (which === 'from') RECON_TO = v; else RECON_FROM = v;
-  }
-  renderReconcile();
-}
-function periodLabel() {
-  const f = iso => new Date(iso + 'T00:00:00').toLocaleDateString('en-AU', { day:'numeric', month:'short' });
-  const days = Math.round((new Date(RECON_TO) - new Date(RECON_FROM)) / 86400000) + 1;
-  return `${f(RECON_FROM)} – ${f(RECON_TO)} · ${days} day${days === 1 ? '' : 's'}`;
-}
+let PAY_TXS = [];        // credits read from a bank CSV, waiting to be assigned
+let PAY_SHOW_SETTLED = false;
+
 const money = n => '$' + Math.round(n).toLocaleString();
+const settledBefore = () => (DB.meta && DB.meta.settledBefore) || '';
 
-/* Everything billed in the period, grouped by client. */
-function weekBilling(fromISO, toISO) {
-  const from = fromISO, to = toISO;
-  const groups = {};
+/* What a client has been billed since the line, and what they've paid. */
+function clientBalances() {
+  const line = settledBefore();
+  const map = {};
+  const entry = o => (map[o.id] ||= { owner:o, dogs:new Set(), visits:0, billed:0, paid:0, bookings:[] });
+
   DB.bookings.forEach(b => {
-    if (b.date < from || b.date > to) return;
+    if (line && b.date < line) return;
+    if (b.packId) return;                                   // paid when the pack was bought
     if (b.cancelled && !b.cancelCharge) return;
     const dog = dogById(b.dogId); if (!dog) return;
-    const owner = ownerOf(b.dogId); if (!owner) return;
+    const o = ownerOf(b.dogId); if (!o) return;
     const amt = b.cancelled ? (b.cancelCharge || 0) : (b.total != null ? b.total : calcTotal(b, dog));
-    const onPack = !!b.packId;
-    if (!amt && !onPack) return;
-    const g = groups[owner.id] ||= { owner, bookings: [], packDays: [], dogs: new Set(), billed: 0, dogIds: new Set() };
-    g.dogs.add(dog.name); g.dogIds.add(dog.id);
-    // A pack day was paid for when the pack was bought — it's a visit, not money due now.
-    if (onPack) { g.packDays.push(b); return; }
-    g.bookings.push(b); g.billed += amt;
+    if (!amt) return;
+    const e = entry(o);
+    e.dogs.add(dog.name); e.visits++; e.billed += amt; e.bookings.push(b);
+    // Older records were ticked booking-by-booking; honour that as payment.
+    if (b.paymentStatus === 'paid') e.paid += amt;
   });
-  return Object.values(groups)
-    .filter(g => g.bookings.length || g.packDays.length)
-    .sort((x,y) => y.billed - x.billed);
+
+  (DB.payments || []).forEach(p => {
+    if (line && p.date < line) return;
+    const o = ownerById(p.ownerId); if (!o) return;
+    entry(o).paid += p.amount || 0;
+  });
+
+  return Object.values(map)
+    .map(e => ({ ...e, balance: Math.round(e.billed - e.paid) }))
+    .sort((x, y) => y.balance - x.balance || y.billed - x.billed);
 }
 
-/* Best credit in the file for one client's week. Exact amount wins outright. */
-function matchPayment(group, txs, taken) {
-  const names = [group.owner.name || '', ...group.dogs];
+function paymentsFor(ownerId) {
+  const line = settledBefore();
+  return (DB.payments || [])
+    .filter(p => p.ownerId === ownerId && (!line || p.date >= line))
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
+
+/* Best guess at whose payment a bank credit is. Suggestion only — a human confirms. */
+function suggestOwner(tx, balances) {
+  const ref = cleanRef(tx.desc);
+  const words = ref.split(' ').filter(w => w.length > 2);
   let best = null;
-  txs.forEach((tx, i) => {
-    if (taken[i]) return;
-    const ref = cleanRef(tx.desc);
-    const words = ref.split(' ').filter(w => w.length > 2);
+  balances.forEach(e => {
+    const names = [e.owner.name || '', ...e.dogs];
     let hit = 0;
     names.forEach(n => String(n).toUpperCase().split(/\s+/).filter(p => p.length > 2)
       .forEach(p => { if (words.some(w => w === p || w.includes(p) || p.includes(w))) hit++; }));
-    if (!hit) return;
-    const exact = Math.abs(tx.amount - group.billed) < 0.01;
-    const score = hit * 10 + (exact ? 100 : 0);
-    if (!best || score > best.score) best = { i, tx, exact, score };
+    const exact = Math.abs(tx.amount - e.balance) < 0.01;
+    if (!hit && !exact) return;
+    const score = hit * 10 + (exact ? 60 : 0);
+    if (!best || score > best.score) best = { owner: e.owner, score, exact };
   });
   return best;
 }
 
-function reconcileWeek() {
-  if (!RECON_FROM || !RECON_TO) {
-    const w = lastCompletedWeek();
-    RECON_FROM = localISO(w); RECON_TO = localISO(weekBounds(w).end);
-  }
-  const groups = weekBilling(RECON_FROM, RECON_TO);
-  const taken = {};
-  const rows = groups.map(g => {
-    const allOnPack  = g.bookings.length === 0 && g.packDays.length > 0;
-    const alreadyPaid = g.bookings.length > 0 && g.bookings.every(b => b.paymentStatus === 'paid');
-    // How it was settled, if it was settled outside the bank feed
-    const method = (g.bookings.find(b => b.paidMethod) || {}).paidMethod || '';
-    const m = (allOnPack || alreadyPaid) ? null : matchPayment(g, RECON_TXS, taken);
-    if (m) taken[m.i] = true;
-    // Days left on any live pack, so an unpaid week can be covered in one tap.
-    const packLeft = [...g.dogIds].reduce((n, id) =>
-      n + activePacksForDog(id).reduce((k, p) => k + (p.size - (p.daysUsed || 0)), 0), 0);
-    return { ...g, allOnPack, alreadyPaid, method, match: m, packLeft };
-  });
-  const loose = RECON_TXS.filter((_, i) => !taken[i]);
-  const billed = rows.reduce((s,r) => s + r.billed, 0);
-  const settled = rows.reduce((s,r) => s + (r.alreadyPaid || r.match || r.allOnPack ? r.billed : 0), 0);
-  const packVisits = rows.reduce((s,r) => s + r.packDays.length, 0);
-  return { rows, loose, billed, settled, packVisits, short: billed - settled };
-}
-
-function openReconcileSheet() { RECON_TXS = []; renderReconcile(); }
-
-function shiftReconWeek(n) {
-  if (!RECON_FROM) reconcileWeek();
-  const span = Math.round((new Date(RECON_TO) - new Date(RECON_FROM)) / 86400000) + 1;
-  const shift = d => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + n * span); return localISO(x); };
-  RECON_FROM = shift(RECON_FROM); RECON_TO = shift(RECON_TO);
-  renderReconcile();
-}
+function openMoneySheet() { PAY_TXS = []; renderMoney(); }
 
 function onReconFile(e) {
   const f = e.target.files[0]; if (!f) return;
   const r = new FileReader();
   r.onload = () => {
     try {
-      RECON_TXS = readBankRows(parseCSV(r.result));
-      if (!RECON_TXS.length) return toast('No incoming payments found in that file');
-      renderReconcile();
+      PAY_TXS = readBankRows(parseCSV(r.result)).map(t => ({ ...t, done: false }));
+      if (!PAY_TXS.length) return toast('No incoming payments found in that file');
+      renderMoney();
     } catch (err) { toast('Could not read that file: ' + err.message); }
   };
   r.readAsText(f);
 }
 
-function renderReconcile() {
-  const w = reconcileWeek();
-  const hasFile = RECON_TXS.length > 0;
+function renderMoney() {
+  const all = clientBalances();
+  const owing   = all.filter(e => e.balance > 0);
+  const settled = all.filter(e => e.balance <= 0);
+  const outstanding = owing.reduce((s, e) => s + e.balance, 0);
+  const line = settledBefore();
+  const open = PAY_TXS.filter(t => !t.done);
 
-  const row = r => {
-    const dogs = [...r.dogs].join(', ');
-    const n = r.bookings.length + r.packDays.length;
-    const visits = `${n} visit${n>1?'s':''}${r.packDays.length ? ` · ${r.packDays.length} on pack` : ''}`;
-    let right, cls, btn = '';
-    if (r.allOnPack)        { cls = 'pack'; right = `<span class="rc-state pack">covered by pack</span>`; }
-    else if (r.alreadyPaid) { cls = 'ok';   right = `<span class="rc-state ok">paid${r.method ? ' · ' + escapeHtml(r.method) : ''}</span>`; }
-    else if (r.match)       { cls = 'ok';   right = `<span class="rc-state ok">${money(r.match.tx.amount)} received${r.match.exact ? '' : ' — amount differs'}</span>
-                                                     <div class="rc-sub">${escapeHtml(r.match.tx.date)} · ${escapeHtml(r.match.tx.desc.slice(0,44))}</div>`;
-                              btn = `<button class="btn tiny" onclick="settleClient('${r.owner.id}')">Mark paid</button>`; }
-    else if (r.packLeft)    { cls = 'miss'; right = `<span class="rc-state miss">nothing found</span><div class="rc-sub">${r.packLeft} day${r.packLeft>1?'s':''} left on a pack</div>`;
-                              btn = `<button class="btn tiny" onclick="coverFromPack('${r.owner.id}')">Use pack</button>`; }
-    else if (hasFile)       { cls = 'miss'; right = `<span class="rc-state miss">nothing found</span>`;
-                              btn = `<button class="btn tiny" onclick="settleManual('${r.owner.id}')">Settled ✓</button>`; }
-    else                    { cls = '';     right = `<span class="rc-state">—</span>`;
-                              btn = `<button class="btn tiny" onclick="settleManual('${r.owner.id}')">Settled ✓</button>`; }
-    return `<div class="rc-row ${cls}">
+  const row = e => {
+    const n = e.visits;
+    return `<div class="mn-row ${e.balance > 0 ? 'owing' : 'clear'}" onclick="openClientMoney('${e.owner.id}')">
       <div>
-        <div class="rc-name">${escapeHtml(r.owner.name)}</div>
-        <div class="rc-sub">${escapeHtml(dogs)} · ${visits}</div>
+        <div class="mn-name">${escapeHtml(e.owner.name)}</div>
+        <div class="mn-sub">${escapeHtml([...e.dogs].join(', '))} · ${n} visit${n===1?'':'s'} · ${money(e.billed)} billed</div>
       </div>
-      <div class="rc-amt">${r.billed ? money(r.billed) : '—'}</div>
-      <div class="rc-right">${right}</div>
-      <div>${btn}</div>
+      <div class="mn-bal">${e.balance > 0 ? money(e.balance) : '✓'}</div>
     </div>`;
   };
 
-  const matchedCount = w.rows.filter(r => !r.alreadyPaid && r.match).length;
+  const txRow = (t, i) => {
+    const s = suggestOwner(t, all);
+    return `<div class="mn-tx">
+      <div>
+        <div class="mn-name">${money(t.amount)}</div>
+        <div class="mn-sub">${escapeHtml(t.date)} · ${escapeHtml(t.desc.slice(0, 46))}</div>
+      </div>
+      <div>${s
+        ? `<button class="btn tiny" onclick="assignTx(${i}, '${s.owner.id}')">→ ${escapeHtml(s.owner.name.split(' ')[0])}</button>`
+        : ''}
+        <button class="btn tiny ghost" onclick="assignTxPick(${i})">Assign…</button>
+      </div>
+    </div>`;
+  };
 
   openSheet(`
-    <h2 class="sheet-title">Weekly payments</h2>
-    <div class="rc-weeknav">
-      <button class="btn tiny" onclick="shiftReconWeek(-1)">‹</button>
-      <span>${periodLabel()}</span>
-      <button class="btn tiny" onclick="shiftReconWeek(1)">›</button>
-    </div>
-    <div class="rc-presets">
-      ${[['lastweek','Last week'],['thisweek','This week'],['4weeks','Last 4 weeks'],
-         ['12weeks','Last 12 weeks'],['month','This month']]
-        .map(([k,l]) => `<button class="pack-chip" onclick="setReconPeriod('${k}')">${l}</button>`).join('')}
-    </div>
-    <div class="field-row" style="margin-bottom:14px">
-      <div class="field-group"><label>From</label><input class="field" type="date" value="${RECON_FROM}" onchange="setReconDate('from', this.value)"></div>
-      <div class="field-group"><label>To</label><input class="field" type="date" value="${RECON_TO}" onchange="setReconDate('to', this.value)"></div>
+    <h2 class="sheet-title">Money</h2>
+
+    <div class="mn-hero ${outstanding > 0 ? '' : 'clear'}">
+      <div class="mn-hero-num">${outstanding > 0 ? money(outstanding) : 'All square'}</div>
+      <div class="mn-hero-cap">${outstanding > 0
+        ? `outstanding across ${owing.length} client${owing.length===1?'':'s'}`
+        : 'nobody owes anything'}</div>
     </div>
 
-    <div class="rc-summary">
-      <div><span class="rc-cap">Billed</span><b>${money(w.billed)}</b></div>
-      <div><span class="rc-cap">Accounted for</span><b>${money(w.settled)}</b></div>
-      <div class="${w.short > 0 ? 'short' : 'clear'}">
-        <span class="rc-cap">${w.short > 0 ? 'Missing' : 'All in'}</span>
-        <b>${w.short > 0 ? money(w.short) : '✓'}</b>
-      </div>
+    <div class="mn-line">
+      ${line ? `Counting from <b>${fmtDateShort(line)}</b>` : `Counting <b>everything</b> ever booked`}
+      <button class="btn tiny ghost" onclick="openSettleLine()">${line ? 'Change' : 'Draw a line'}</button>
     </div>
-    ${w.packVisits ? `<p class="sub small" style="margin:-10px 0 14px;text-align:center">Plus ${w.packVisits} visit${w.packVisits>1?'s':''} taken from a pre-paid pack — no payment due this week.</p>` : ''}
 
-    ${!hasFile ? `<label class="btn primary block" style="cursor:pointer;margin-bottom:14px">
-        Load bank CSV for this week <input type="file" accept=".csv,text/csv" style="display:none" onchange="onReconFile(event)">
-      </label>
-      <p class="sub small" style="margin:-6px 0 16px">Read in your browser — the file isn't uploaded anywhere.</p>` : ''}
+    <label class="btn ghost block" style="cursor:pointer;margin-bottom:6px">
+      ${PAY_TXS.length ? 'Load a different bank CSV' : 'Load bank CSV (optional)'}
+      <input type="file" accept=".csv,text/csv" style="display:none" onchange="onReconFile(event)">
+    </label>
+    <p class="sub small" style="margin:0 0 16px">Read in your browser. It suggests who each payment belongs to — you confirm.</p>
 
-    ${w.rows.length ? w.rows.map(row).join('') : `<div class="day-empty">Nothing billed this week.</div>`}
+    ${open.length ? `<div class="section-title">Payments to assign (${open.length})</div>
+      ${PAY_TXS.map((t,i) => t.done ? '' : txRow(t,i)).join('')}` : ''}
 
-    ${matchedCount ? `<button class="btn primary block" style="margin-top:14px" onclick="settleAllMatched()">Mark all ${matchedCount} as paid</button>` : ''}
+    <div class="section-title" style="margin-top:18px">Owing (${owing.length})</div>
+    ${owing.length ? owing.map(row).join('') : '<p class="sub muted small">Nobody owes anything.</p>'}
 
-    ${w.loose.length ? `<div class="section-title" style="margin-top:22px">Payments with no booking this week (${w.loose.length})</div>
-      ${w.loose.map(t => `<div class="rc-row"><div><div class="rc-name">${escapeHtml(t.desc.slice(0,48))}</div><div class="rc-sub">${escapeHtml(t.date)}</div></div><div class="rc-amt">${money(t.amount)}</div><div class="rc-right"><span class="rc-state">unassigned</span></div><div></div></div>`).join('')}
-      <p class="sub small" style="margin-top:8px">Usually a pack, a different week, or someone paying ahead.</p>` : ''}
+    ${settled.length ? `<div class="section-title" style="margin-top:18px">
+      <button class="btn tiny ghost" onclick="togglePaidUp()">${PAY_SHOW_SETTLED ? 'Hide' : 'Show'} paid up (${settled.length})</button>
+    </div>${PAY_SHOW_SETTLED ? settled.map(row).join('') : ''}` : ''}
   `);
 }
 
-async function settleClient(ownerId) {
-  const w = reconcileWeek();
-  const r = w.rows.find(x => x.owner.id === ownerId);
-  if (!r || r.alreadyPaid) return;
-  const now = new Date().toISOString();
-  r.bookings.forEach(b => { b.paymentStatus = 'paid'; b.paidAt = now; });
-  await save(DB); renderReconcile();
-  toast(`${r.owner.name} · ${money(r.billed)} marked paid`);
+function togglePaidUp() { PAY_SHOW_SETTLED = !PAY_SHOW_SETTLED; renderMoney(); }
+
+/* ---- one client ---- */
+function openClientMoney(ownerId) {
+  const e = clientBalances().find(x => x.owner.id === ownerId);
+  if (!e) return;
+  const pays = paymentsFor(ownerId);
+  openSheet(`
+    <h2 class="sheet-title">${escapeHtml(e.owner.name)}</h2>
+    <p class="sheet-sub">${escapeHtml([...e.dogs].join(', '))}</p>
+
+    <div class="mn-hero ${e.balance > 0 ? '' : 'clear'}">
+      <div class="mn-hero-num">${e.balance > 0 ? money(e.balance) : 'Paid up'}</div>
+      <div class="mn-hero-cap">${money(e.billed)} billed · ${money(e.paid)} paid</div>
+    </div>
+
+    <button class="btn primary block" onclick="addPayment('${ownerId}', ${e.balance > 0 ? e.balance : 0})">＋ Record a payment</button>
+
+    ${pays.length ? `<div class="section-title" style="margin-top:20px">Payments</div>
+      ${pays.map(p => `<div class="mn-tx">
+        <div><div class="mn-name">${money(p.amount)}</div>
+          <div class="mn-sub">${fmtDateShort(p.date)}${p.method ? ' · ' + escapeHtml(p.method) : ''}${p.note ? ' · ' + escapeHtml(p.note) : ''}</div></div>
+        <button class="btn tiny ghost" onclick="removePayment('${p.id}')">Remove</button>
+      </div>`).join('')}` : ''}
+
+    <div class="section-title" style="margin-top:20px">Visits (${e.visits})</div>
+    ${e.bookings.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,20).map(b =>
+      `<div class="mn-tx" onclick="openBookingSheet('${b.id}')">
+        <div><div class="mn-name">${fmtDateShort(b.date)}</div>
+          <div class="mn-sub">${SESSION_LABELS[b.session] || b.session}</div></div>
+        <div class="mn-bal">${money(b.total || 0)}</div>
+      </div>`).join('')}
+
+    <button class="btn ghost block mt-2" onclick="renderMoney()">← Back to money</button>
+  `);
 }
 
-async function coverFromPack(ownerId) {
-  const w = reconcileWeek();
-  const r = w.rows.find(x => x.owner.id === ownerId);
-  if (!r || !r.bookings.length) return;
-  const eligible = r.bookings.filter(b => b.session !== 'overnight' && !b.cancelled);
-  if (!eligible.length) return toast('Nothing on this week can come off a pack');
-  if (!confirm(`Take ${eligible.length} visit(s) for ${r.owner.name} off their pack?`)) return;
-
-  const now = new Date().toISOString();
-  let used = 0;
-  eligible.forEach(b => {
-    const pack = activePacksForDog(b.dogId)[0];
-    if (!pack) return;                       // that dog has no days left
-    pack.daysUsed = (pack.daysUsed || 0) + 1;
-    b.packId = pack.id;
-    b.total = 0; b.customPrice = 0;
-    b.paymentStatus = 'paid'; b.paidAt = now;
-    b.notes = (b.notes ? b.notes + ' · ' : '') + `Redeemed from ${pack.size}-day pack`;
-    used++;
-  });
-  if (!used) return toast('No pack days left for those dogs');
-  await save(DB); renderReconcile();
-  toast(`${used} visit${used>1?'s':''} taken off ${r.owner.name}'s pack`);
+async function addPayment(ownerId, suggested) {
+  const o = ownerById(ownerId); if (!o) return;
+  const raw = prompt(`How much did ${o.name} pay?`, suggested ? String(Math.round(suggested)) : '');
+  if (raw === null) return;
+  const amount = parseFloat(String(raw).replace(/[^\d.]/g, ''));
+  if (!(amount > 0)) return toast('Enter an amount');
+  const method = (prompt('How? (bank, cash, card…)', 'bank') || 'bank').trim().slice(0, 30);
+  DB.payments.push({ id: uid(), ownerId, amount, date: todayISO(), method, note: '', createdAt: new Date().toISOString() });
+  await save(DB); openClientMoney(ownerId);
+  toast(`${money(amount)} recorded for ${o.name}`);
 }
 
-async function settleManual(ownerId) {
-  const w = reconcileWeek();
-  const r = w.rows.find(x => x.owner.id === ownerId);
-  if (!r || !r.bookings.length) return;
-  const how = prompt(
-    `How did ${r.owner.name} pay ${money(r.billed)}?\n\n` +
-    `cash · transfer · card · other week · waived\n` +
-    `(or type anything — it's just a note)`, 'cash');
-  if (how === null) return;                       // cancelled
-  const method = (how || 'manual').trim().slice(0, 40);
-  const now = new Date().toISOString();
-  r.bookings.forEach(b => {
-    b.paymentStatus = 'paid'; b.paidAt = now; b.paidMethod = method;
-  });
-  await save(DB); renderReconcile();
-  toast(`${r.owner.name} · ${money(r.billed)} settled (${method})`);
+async function removePayment(id) {
+  const p = (DB.payments || []).find(x => x.id === id); if (!p) return;
+  if (!confirm(`Remove this ${money(p.amount)} payment?`)) return;
+  const owner = p.ownerId;
+  DB.payments = DB.payments.filter(x => x.id !== id);
+  await save(DB); openClientMoney(owner);
 }
 
-async function settleAllMatched() {
-  const w = reconcileWeek();
-  const now = new Date().toISOString();
-  let n = 0, sum = 0;
-  w.rows.forEach(r => {
-    if (r.alreadyPaid || !r.match) return;
-    r.bookings.forEach(b => { b.paymentStatus = 'paid'; b.paidAt = now; });
-    n++; sum += r.billed;
-  });
-  if (!n) return;
-  await save(DB); renderReconcile();
-  toast(`${n} client${n>1?'s':''} · ${money(sum)} marked paid`);
+/* ---- assigning a bank credit ---- */
+async function assignTx(i, ownerId) {
+  const t = PAY_TXS[i]; if (!t || t.done) return;
+  const o = ownerById(ownerId); if (!o) return;
+  DB.payments.push({ id: uid(), ownerId, amount: t.amount, date: todayISO(),
+                     method: 'bank', note: t.desc.slice(0, 60), createdAt: new Date().toISOString() });
+  t.done = true;
+  await save(DB); renderMoney();
+  toast(`${money(t.amount)} → ${o.name}`);
+}
+
+function assignTxPick(i) {
+  const t = PAY_TXS[i]; if (!t) return;
+  const opts = DB.owners.slice().sort((a,b) => (a.name||'').localeCompare(b.name||''))
+    .map(o => `<option value="${o.id}">${escapeHtml(o.name)}</option>`).join('');
+  openSheet(`<h2 class="sheet-title">Who paid ${money(t.amount)}?</h2>
+    <p class="sheet-sub">${escapeHtml(t.date)} · ${escapeHtml(t.desc.slice(0,70))}</p>
+    <div class="field-group"><label>Client</label><select class="field" id="txOwner">${opts}</select></div>
+    <button class="btn primary block" onclick="assignTx(${i}, document.getElementById('txOwner').value)">Record it</button>
+    <button class="btn ghost block mt-2" onclick="renderMoney()">Cancel</button>`);
+}
+
+/* ---- the line under the past ---- */
+function openSettleLine() {
+  const cur = settledBefore() || todayISO();
+  openSheet(`<h2 class="sheet-title">Draw a line</h2>
+    <p class="sheet-sub">Everything booked before this date is treated as done and dusted —
+      it stops counting toward what anyone owes. Use it to start clean without deleting anything.</p>
+    <div class="field-group"><label>Count from</label><input class="field" type="date" id="lineDate" value="${cur}"></div>
+    <button class="btn primary block" onclick="applySettleLine(document.getElementById('lineDate').value)">Start counting from here</button>
+    ${settledBefore() ? `<button class="btn ghost block mt-2" onclick="applySettleLine('')">Count everything again</button>` : ''}
+    <button class="btn ghost block mt-2" onclick="renderMoney()">Cancel</button>`);
+}
+
+async function applySettleLine(v) {
+  DB.meta.settledBefore = v || '';
+  await save(DB); renderMoney();
+  toast(v ? `Counting from ${fmtDateShort(v)}` : 'Counting everything');
 }
 
 /* ---------- PACK ---------- */
@@ -3614,8 +3580,9 @@ Object.assign(window, {
   setPackFilter, scoutsState,
   openCapacitySheet, saveCapacityForm,
   openImportSheet, importDataFile, exportBackup,
-  openReconcileSheet, onReconFile, shiftReconWeek, setReconPeriod, setReconDate,
-  settleClient, settleAllMatched, settleManual, coverFromPack,
+  openMoneySheet, onReconFile, renderMoney, togglePaidUp,
+  openClientMoney, addPayment, removePayment,
+  assignTx, assignTxPick, openSettleLine, applySettleLine,
   closeSheet, closeRitual, startRitual,
   toggleMood, toggleMoment, skipRitualCard, sendRitualCard, onRitualPhoto, removeRitualPhoto,
   triggerQuickPhoto,
