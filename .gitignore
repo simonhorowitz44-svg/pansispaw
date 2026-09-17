@@ -20,6 +20,15 @@
 !/booking.js
 !/enrol.js
 !/pricing.json
+
+# Invoicing: shared by the panel and the Cloud Function that sends invoices
+!/invoice-core.js
+!/invoice-core.test.mjs
+!/firebase.json
+!/functions/
+!/functions/index.js
+!/functions/package.json
+!/functions/.gitignore
 !/images/
 !/scouts-club-logo.png
 !/scouts-club-logo.jpg

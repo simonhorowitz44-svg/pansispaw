@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs20",
+    "predeploy": ["cp \"$PWD/invoice-core.js\" \"$PWD/functions/invoice-core.js\""],
+    "ignore": ["node_modules", ".git", "*.log"]
+  }
+}

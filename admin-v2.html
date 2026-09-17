@@ -634,6 +634,21 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/fireba
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
+// Pricing, policy and invoice generation live in one file so the panel and the
+// Cloud Function that sends invoices bill from identical code. Don't reimplement
+// any of it here — see invoice-core.js.
+import {
+  PRICES, ADDONS, SURCHARGES, setPricing,
+  SESSION_LABELS, SCOUTS_TRIPS,
+  LATE_CUTOFF, LATE_GRACE_MIN, LATE_PER_30, LATE_CAP,
+  CANCEL_NOTICE_HOURS, CANCEL_CHARGE_RATE, INVOICE_TERMS_DAYS,
+  localISO, escapeHtml, cents, addDaysISO, friendlyTime, friendlyMins,
+  weekEndingFriday, invoiceWeek, weekOf,
+  calcTotal, latePickupFee,
+  buildInvoice, invoicesDue, sendableInvoices, blockers, orphanBookings,
+  weekRunComplete, renderInvoiceHTML, invoiceText, payRef, invoiceNumber
+} from './invoice-core.js';
+
 const firebaseConfig = {
   apiKey: "AIzaSyDAptLVEs0P5yto1ia_BzvuZqpGwT5kbXo",
   authDomain: "pansi-paws.firebaseapp.com",
@@ -649,36 +664,16 @@ const STATE_DOC = doc(fbDb, "pansis-admin", "state");
 const STORAGE_KEY = "pansis_admin_v1";
 const LAST_SAVE_KEY = "pansis_admin_last_save_ts";
 
-let PRICES = { small:{meet:0,trial:0,half:55,extended:70,full:80,overnight:100,scouts:75}, medium:{meet:0,trial:0,half:65,extended:80,full:90,overnight:115,scouts:75}, large:{meet:0,trial:0,half:75,extended:90,full:100,overnight:130,scouts:75} };
-let ADDONS = { senior:12, puppy:12, med:5, diet:3, taxi:35 };
-let SURCHARGES = { publicHoliday:25, xmasPeakDay:15, xmasPeakNight:30 };
 async function loadPricing() {
   try {
     const r = await fetch('pricing.json?t=' + Date.now());
-    if (r.ok) {
-      const p = await r.json();
-      PRICES = p.prices || PRICES;
-      ADDONS = { senior: p.addons?.senior?.amount ?? 12, puppy: p.addons?.puppy?.amount ?? 12, med: p.addons?.med?.amount ?? 5, diet: p.addons?.diet?.amount ?? 3, taxi: p.addons?.taxi?.amount ?? 35 };
-      SURCHARGES = { publicHoliday: p.surcharges?.publicHoliday?.amount ?? 25, xmasPeakDay: p.surcharges?.xmasPeakDay?.amount ?? 15, xmasPeakNight: p.surcharges?.xmasPeakNight?.amount ?? 30 };
-    }
+    if (r.ok) setPricing(await r.json());
   } catch {}
 }
 
-const SESSION_LABELS = { meet:"Meet \u0026 greet", trial:"Trial day", half:"Half day", extended:"Extended half", full:"Full day", overnight:"Overnight", scouts:"Scouts adventure" };
-// Scouts trips: first pickup 7:30am, afternoon trip from 1:30pm. Max 4 dogs per trip (NSW cap).
-const SCOUTS_TRIPS = { am: { label:"Morning · from 7:30", start:"07:30" }, pm: { label:"Afternoon · from 1:30", start:"13:30" } };
 const SCOUTS_MAX_PER_TRIP = 4;
 
-// Late pickup. Published on services.html: after 5:30pm, $10 per 30 minutes,
-// 15-minute grace, capped at $40 a day. Change here and on the site together.
-const LATE_CUTOFF    = '17:30';
-const LATE_GRACE_MIN = 15;
-const LATE_PER_30    = 10;
-const LATE_CAP       = 40;
 
-// Cancellation policy. 24h+ notice is free; inside 24h is charged at this rate.
-const CANCEL_NOTICE_HOURS = 24;
-const CANCEL_CHARGE_RATE  = 0.5;
 const SIZE_LABELS = { small:"Small ≤10kg", medium:"Medium 10–25kg", large:"Large 25kg+" };
 
 // Payment tracking is switched off for now. Flip to true to bring back
@@ -691,12 +686,10 @@ const SHOW_PAYMENTS = false;
 let savingBooking = false;
 
 const uid = () => Math.random().toString(16).slice(2,10);
-const localISO = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const todayISO = () => localISO(new Date());
 const nowTime = () => { const d = new Date(); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
 const isMeaningfulHealth = v => v && !/^(none|n\/a|nil|no|na|nothing|nope)( known)?[.!]?$/i.test(String(v).trim());
 const fmtDateShort = iso => new Date(iso + "T00:00:00").toLocaleDateString('en-AU', { weekday:'short', day:'numeric', month:'short' });
-const escapeHtml = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const truncate = (s, n) => { if (!s) return ''; s = String(s); return s.length > n ? s.slice(0, n) + '…' : s; };
 const hapticTap = () => { try { navigator.vibrate?.(15); } catch {} };
 const hapticSuccess = () => { try { navigator.vibrate?.([20, 40, 30]); } catch {} };
@@ -724,7 +717,11 @@ function normalizeDb(db) {
   db.owners ||= []; db.dogs ||= []; db.bookings ||= []; db.packs ||= []; db.meta ||= {};
   db.payments ||= [];                      // money received, as records
   db.meta.settledBefore ||= '';            // everything before this date is done with
-  db.meta.biz ||= { bsb:'', acct:'', abn:'' };
+  db.meta.biz ||= { bsb:'', acct:'', abn:'', stripeLink:'' };
+  db.meta.billed ||= {};                   // bookingId -> invoice number, so nothing bills twice
+  db.meta.invoicesSent ||= [];             // what went out, when, and how
+  db.meta.sendQueue ||= [];                // the panel's intent; the Cloud Function drains it
+  db.meta.invoicing ||= { mode:'off', goLive:'', replyTo:'', digestTo:'', batchCap:8 };
   db.meta.capacity ||= { maxDaycare:5, maxBoarding:3 };
   if (!(db.meta.capacity.maxDaycare > 0)) db.meta.capacity.maxDaycare = 5;
   if (!(db.meta.capacity.maxBoarding >= 0)) db.meta.capacity.maxBoarding = 3;
@@ -933,37 +930,6 @@ function scoutsCapNote(date, trip, excludeId) {
 /* Late pickup fee, worked out from the time "Picked up" was actually tapped.
    Grace is free; after that it's charged in whole 30-minute blocks. Never
    applied to a free session, a cancellation, or where it's been waived. */
-function latePickupFee(b) {
-  const none = { minsLate: 0, fee: 0, blocks: 0 };
-  if (!b || b.lateFeeWaived || b.cancelled) return none;
-  if (b.session === 'meet' || b.session === 'trial' || b.session === 'scouts') return none;
-  const t = b.departureLogged;
-  if (!t || t.length < 4) return none;
-  const toMin = x => { const p = String(x).split(':'); return (+p[0]) * 60 + (+p[1] || 0); };
-  const minsLate = toMin(t) - toMin(LATE_CUTOFF);
-  if (minsLate <= LATE_GRACE_MIN) return none;
-  const blocks = Math.ceil((minsLate - LATE_GRACE_MIN) / 30);
-  return { minsLate, blocks, fee: Math.min(blocks * LATE_PER_30, LATE_CAP) };
-}
-
-function calcTotal(booking, dog) {
-  if (booking.cancelled) return booking.cancelCharge || 0;
-  if (booking.session === 'meet' || booking.session === 'trial') return 0;
-  const late = latePickupFee(booking).fee;
-  if (booking.customPrice != null) return booking.customPrice + late;
-  if (!dog) return late;
-  let t = PRICES[dog.size]?.[booking.session] || 0;
-  // Scouts is a flat rate with transport included — daycare add-ons don't apply.
-  if (booking.session === 'scouts') return t;
-  if (booking.addOns?.senior) t += ADDONS.senior;
-  if (booking.addOns?.puppy)  t += ADDONS.puppy;
-  if (booking.addOns?.med)    t += ADDONS.med;
-  if (booking.addOns?.diet)   t += ADDONS.diet;
-  if (booking.addOns?.taxi)   t += ADDONS.taxi;
-  if (booking.surcharges?.publicHoliday) t += SURCHARGES.publicHoliday;
-  if (booking.surcharges?.xmasPeak) t += (booking.session === 'overnight' ? SURCHARGES.xmasPeakNight : SURCHARGES.xmasPeakDay);
-  return t + late;
-}
 
 function computeStays(bookings) {
   const nightly = bookings.filter(b => b.session === 'overnight');
@@ -1941,366 +1907,229 @@ const BIZ = {
                           // total doesn't reflect makes the bank line stop matching.
 };
 
-function weekEndingFriday(d) {
-  const x = new Date(d); x.setHours(0,0,0,0);
-  const add = (5 - x.getDay() + 7) % 7;          // forward to Friday
-  x.setDate(x.getDate() + add);
-  return x;
-}
-function invoiceWeek(fridayISO) {
-  const end = new Date(fridayISO + 'T00:00:00');
-  const start = new Date(end); start.setDate(end.getDate() - 6);
-  return { from: localISO(start), to: fridayISO };
-}
-const INVOICE_TERMS_DAYS = 7;
-
-function addDaysISO(iso, n) {
-  const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return localISO(d);
-}
-/* 5:30pm reads better than 17:30 on a document a dog owner reads. */
-function friendlyTime(hhmm) {
-  const [h, m] = String(hhmm || '').split(':').map(Number);
-  if (isNaN(h)) return hhmm || '';
-  const ampm = h < 12 ? 'am' : 'pm';
-  const h12  = h % 12 === 0 ? 12 : h % 12;
-  return m ? `${h12}.${String(m).padStart(2,'0')}${ampm}` : `${h12}${ampm}`;
-}
-function friendlyMins(mins) {
-  if (mins < 60) return `${mins} minutes`;
-  const h = Math.floor(mins / 60), m = mins % 60;
-  return `${h} hour${h===1?'':'s'}${m ? ` ${m} minutes` : ''}`;
-}
-function surnameTag(owner) {
-  const words = String(owner.name || '').trim().split(/\s+/).filter(Boolean);
-  const surname = words.length ? words[words.length - 1] : '';
-  return surname.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 8) || 'CLIENT';
-}
-/* Surname alone, unless someone else shares it — then three characters of the
-   id to keep them apart. Short references get typed correctly more often. */
-function ownerTag(owner) {
-  const tag = surnameTag(owner);
-  const shared = (DB.owners || []).some(o => o.id !== owner.id && surnameTag(o) === tag);
-  return shared ? `${tag}${String(owner.id).replace(/[^A-Za-z0-9]/g, '').slice(-3).toUpperCase()}` : tag;
-}
-/* A short, stable bank reference so a transfer can be identified. */
-function payRef(owner, fridayISO) {
-  return `${ownerTag(owner)}-${fridayISO.slice(5,7)}${fridayISO.slice(8,10)}`;
-}
-/* The invoice's own identity, unique across years. */
-function invoiceNumber(owner, fridayISO) {
-  return `PP-${fridayISO.replace(/-/g, '')}-${String(owner.id).replace(/[^A-Za-z0-9]/g, '').slice(-4).toUpperCase()}`;
-}
-
-/* The pack's redemptions, oldest first. daysUsed is a running counter and counts
-   bookings that haven't happened yet, so it can't be used to number a visit. */
-function packRedemptions(pack) {
-  return DB.bookings
-    .filter(x => x.packId === pack.id && !x.cancelled)
-    .sort((a, b) => a.date.localeCompare(b.date) || String(a.id).localeCompare(String(b.id)));
-}
-function packVisitNumber(pack, booking) {
-  const i = packRedemptions(pack).findIndex(x => x.id === booking.id);
-  return i < 0 ? 0 : Math.min(i + 1, pack.size);
-}
-/* Visits left as at a date — so a reprinted invoice says what it said then. */
-function packLeftAsAt(pack, isoDate) {
-  const used = packRedemptions(pack).filter(x => x.date <= isoDate).length;
-  return Math.max(0, pack.size - used);
-}
-
-/* Money is held in cents while we add up, so lines always sum to the total. */
-const cents = n => Math.round(Number(n || 0) * 100);
-
-/* What a client is allowed to see. Overnight stays are history the council has
-   since closed off — they must never appear as a service on a document. */
-function invoiceLabel(session) {
-  if (session === 'overnight') return 'Extended care';
-  return SESSION_LABELS[session] || session;
-}
-
-/* Every billable thing for one client in one week. Pure — never writes to DB. */
-function buildInvoice(ownerId, fridayISO) {
-  const { from, to } = invoiceWeek(fridayISO);
-  const owner = ownerById(ownerId); if (!owner) return null;
-  const lines = [], packNotes = [], warnings = [];
-  let totalC = 0;
-  const push = (o, amt) => { lines.push({ ...o, amt: amt / 100 }); totalC += amt; };
-
-  DB.bookings
-    .filter(b => b.date >= from && b.date <= to)
-    .filter(b => { const o = ownerOf(b.dogId); return o && o.id === ownerId; })
-    .sort((a,b) => a.date.localeCompare(b.date) || String(a.id).localeCompare(String(b.id)))
-    .forEach(b => {
-      const dog     = dogById(b.dogId);
-      const dogName = dog ? dog.name : 'Your dog';
-      const label = invoiceLabel(b.session);
-      const trip  = b.session === 'scouts' && b.scoutsTrip && SCOUTS_TRIPS[b.scoutsTrip]
-                  ? ' · ' + SCOUTS_TRIPS[b.scoutsTrip].label.split('·')[0].trim() : '';
-
-      if (b.cancelled) {
-        const amt = cents(b.cancelCharge);
-        if (!amt) return;
-        const full = calcTotal({ ...b, cancelled:false, departureLogged:null }, dog);
-        const pct  = full ? Math.round((b.cancelCharge / full) * 100) : 0;
-        push({ date:b.date, dog:dogName, what:`${label} — cancelled`,
-               note: pct ? `Cancelled at short notice — ${pct}% of the day's rate` : 'Cancellation charge' }, amt);
-        return;
-      }
-
-      const L = latePickupFee(b);
-      const addLate = () => {
-        if (!L.fee) return;
-        push({ date:b.date, dog:dogName, what:'Late pickup',
-               note:`picked up at ${friendlyTime(b.departureLogged)}, ${friendlyMins(L.minsLate)} after ${friendlyTime(LATE_CUTOFF)}` },
-             cents(L.fee));
-      };
-
-      if (b.packId) {
-        const pk = (DB.packs || []).find(p => p.id === b.packId);
-        if (!pk) {
-          // The pack record is gone. Don't give the day away silently.
-          warnings.push(`${dogName}'s visit on ${b.date} points at a pack that no longer exists — billed at the normal rate.`);
-        } else {
-          const n = packVisitNumber(pk, b);
-          push({ date:b.date, dog:dogName, what:`${label}${trip}`,
-                 note: n ? `visit ${n} of ${pk.size} on your pack` : 'on your pack', pack:true }, 0);
-          if (!packNotes.some(x => x.id === pk.id)) {
-            packNotes.push({ id:pk.id, dog:dogName, left: packLeftAsAt(pk, to), size: pk.size, expires: pk.expiryDate });
-          }
-          addLate();   // the pack buys the day, not the overtime
-          return;
-        }
-      }
-
-      // b.total is written by calcTotal at save time. Since departDog now records
-      // b.lateFee alongside it, we know exactly how much of it is the fee. Older
-      // rows have no lateFee — for those, a stored total that equals the current
-      // price plus the fee is the only case where the fee is already baked in.
-      const priced = calcTotal({ ...b, departureLogged:null }, dog);
-      let baseC;
-      if (b.total == null) {
-        baseC = cents(priced);
-      } else if (b.lateFee != null) {
-        baseC = cents(b.total) - cents(b.lateFee);
-      } else {
-        baseC = cents(b.total) === cents(priced + L.fee) ? cents(b.total) - cents(L.fee) : cents(b.total);
-      }
-      if (baseC < 0) baseC = 0;
-
-      if (baseC || b.session === 'meet' || b.session === 'trial') {
-        push({ date:b.date, dog:dogName, what:`${label}${trip}`,
-               note: baseC ? '' : 'on us', free: !baseC }, baseC);
-      }
-      addLate();
-    });
-
-  if (!lines.length) return null;
-  const total = totalC / 100;
-  return { owner, fridayISO, from, to, lines, packNotes, warnings,
-           total, ref: payRef(owner, fridayISO),
-           number: invoiceNumber(owner, fridayISO),
-           issuedISO: fridayISO, dueISO: addDaysISO(fridayISO, INVOICE_TERMS_DAYS),
-           nothingDue: total <= 0 };
-}
-
-/* Bookings in the week that can't be attributed to anyone — the dog or the owner
-   record is gone. These belong to no invoice, so they'd otherwise go unbilled. */
-function orphanBookings(fridayISO) {
-  const { from, to } = invoiceWeek(fridayISO);
-  return DB.bookings.filter(b => b.date >= from && b.date <= to && !ownerOf(b.dogId));
-}
-function invoicesForWeek(fridayISO) {
-  return DB.owners.map(o => buildInvoice(o.id, fridayISO)).filter(Boolean)
-    .sort((a,b) => b.total - a.total);
-}
-
-function renderInvoiceHTML(inv) {
-  const f  = d => new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { day:'numeric', month:'short' });
-  const fy = d => new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' });
-  const m  = n => '$' + Number(n).toFixed(2);
-  const bank = BIZ.bsb && BIZ.acct;
-  const bankOff = bank && BIZ.bankDiscount > 0 ? BIZ.bankDiscount : 0;
-  const isInv = !inv.nothingDue;
-
-  return `<div class="inv" id="invSheet">
-    <div class="inv-head">
-      <img class="inv-logo" src="images/logo.png" alt="Pansi's Paws">
-      <div class="inv-biz">
-        <div class="inv-biz-name">${escapeHtml(BIZ.name)}</div>
-        <div>${escapeHtml(BIZ.suburb)}</div>
-        <div>${escapeHtml(BIZ.phone)} · ${escapeHtml(BIZ.email)}</div>
-        ${BIZ.abn ? `<div>ABN ${escapeHtml(BIZ.abn)}</div>` : ''}
-      </div>
-      <div class="inv-kind">${isInv ? 'Invoice' : 'Summary'}</div>
-    </div>
-
-    <div class="inv-meta">
-      <div><span>${isInv ? 'Invoice for' : 'Summary for'}</span><b>${escapeHtml(inv.owner.name)}</b></div>
-      <div><span>Week ending</span><b>${fy(inv.fridayISO)}</b></div>
-      ${isInv ? `<div><span>Invoice no.</span><b>${escapeHtml(inv.number)}</b></div>
-      <div><span>Due</span><b>${fy(inv.dueISO)}</b></div>` : ''}
-    </div>
-
-    <table class="inv-table">
-      <thead><tr><th>Date</th><th>Dog</th><th>Service</th><th class="r">Amount</th></tr></thead>
-      <tbody>
-        ${inv.lines.map(l => `<tr class="${l.pack || l.free ? 'pack' : ''}">
-          <td>${f(l.date)}</td>
-          <td>${escapeHtml(l.dog)}</td>
-          <td>${escapeHtml(l.what)}${l.note ? `<span class="inv-note">${escapeHtml(l.note)}</span>` : ''}</td>
-          <td class="r">${l.amt ? m(l.amt) : '—'}</td>
-        </tr>`).join('')}
-      </tbody>
-      <tfoot><tr><td colspan="3">${isInv ? 'Total due' : 'Nothing to pay this week'}</td>
-        <td class="r">${m(inv.total)}</td></tr></tfoot>
-    </table>
-
-    ${inv.packNotes.map(p => `<div class="inv-pack">
-      <b>${escapeHtml(p.dog)}'s pack</b> — ${p.left} of ${p.size} visit${p.left===1?'':'s'} still to use${p.expires ? `, up to ${fmtDateShort(p.expires)}` : ''}.
-    </div>`).join('')}
-
-    ${isInv && bank ? `<div class="inv-pay">
-      <div class="inv-pay-title">How to pay · within ${INVOICE_TERMS_DAYS} days</div>
-      <div class="inv-pay-row"><b>Bank transfer</b> — BSB ${escapeHtml(BIZ.bsb)} · Account ${escapeHtml(BIZ.acct)}<br>
-        Please use the reference <b>${escapeHtml(inv.ref)}</b> so we can match your payment.${
-        bankOff ? `<br>Pay this way and it's <b>${m(inv.total - bankOff)}</b> — $${bankOff} off.` : ''}</div>
-      ${BIZ.stripeLink ? `<div class="inv-pay-row"><b>Card</b> — <a href="${escapeHtml(BIZ.stripeLink)}">pay online here</a>.</div>` : ''}
-    </div>` : ''}
-
-    <div class="inv-foot">
-      Thank you — ${escapeHtml(BIZ.person)} 🐾 · ${escapeHtml(BIZ.site)}<br>
-      <span>${isInv ? `Payment within ${INVOICE_TERMS_DAYS} days. ` : ''}No GST — not registered.
-      Cancellations are free with more than 24 hours' notice, and half the day's rate inside 24 hours.${
-        inv.lines.some(l => l.what === 'Late pickup')
-          ? ` Pickup after ${friendlyTime(LATE_CUTOFF)} is $${LATE_PER_30} per 30 minutes once a ${LATE_GRACE_MIN} minute grace period has passed, capped at $${LATE_CAP} a day.` : ''}</span>
-    </div>
-  </div>`;
-}
-
 
 /* ---- the invoices screen ---- */
-let INV_WEEK = null;
+/* Three states, and they're the whole model:
+   ready   — the client's week is finished and nothing is in the way
+   waiting — still has a booking to come, so we don't bill them yet
+   blocked — something needs a person before this can go out           */
 
-/* The week you want on a Saturday morning is the one that just closed. */
-function defaultInvoiceWeek() {
-  const now = new Date(); const day = now.getDay();
-  if (day === 6 || day === 0) { const d = new Date(now); d.setDate(d.getDate() - (day === 6 ? 1 : 2)); return localISO(d); }
-  return localISO(weekEndingFriday(now));
+const INV_MODES = {
+  off:     { label:'Off',       blurb:"Invoices are built here but nothing is sent. You send them yourself." },
+  approve: { label:'Approve',   blurb:"Andressa gets a nudge when a client's week is done. Nothing goes out until she taps send." },
+  auto:    { label:'Automatic', blurb:"An invoice is sent the moment a client's last booking of the week is collected. Nobody checks it first." }
+};
+
+function invSettings() {
+  const m = (DB.meta && DB.meta.invoicing) || {};
+  return { mode: m.mode || 'off', goLive: m.goLive || '', replyTo: m.replyTo || BIZ.email,
+           batchCap: m.batchCap == null ? 8 : m.batchCap, digestTo: m.digestTo || BIZ.email };
 }
 
-function openInvoicesSheet() {
-  hydrateBiz();
-  INV_WEEK = INV_WEEK || defaultInvoiceWeek();
-  renderInvoices();
+function invBuckets() {
+  const today = todayISO();
+  const all = invoicesDue(DB, { asAt: today });
+  const out = { ready: [], waiting: [], blocked: [] };
+  all.forEach(inv => {
+    const why = blockers(DB, inv, BIZ, today);
+    if (!why.length) out.ready.push(inv);
+    else if (why.length === 1 && why[0].startsWith('Still has')) out.waiting.push(inv);
+    else out.blocked.push({ inv, why });
+  });
+  return out;
 }
-function shiftInvoiceWeek(n) {
-  const d = new Date(INV_WEEK + 'T00:00:00'); d.setDate(d.getDate() + n * 7);
-  INV_WEEK = localISO(d); renderInvoices();
-}
-function invoiceReady() { return !!(BIZ.bsb && BIZ.acct); }
+
+function openInvoicesSheet() { hydrateBiz(); renderInvoices(); }
 
 function renderInvoices() {
-  const list = invoicesForWeek(INV_WEEK);
-  const due  = list.filter(i => !i.nothingDue);
-  const stmt = list.filter(i => i.nothingDue);
-  const total = due.reduce((s, i) => s + i.total, 0);
-  const flags = list.reduce((s, i) => s + i.warnings.length, 0);
-  const orphans = orphanBookings(INV_WEEK);
+  const S = invSettings();
+  const b = invBuckets();
+  const total = b.ready.reduce((s, i) => s + i.total, 0);
+  const sent = ((DB.meta && DB.meta.invoicesSent) || []).slice(-6).reverse();
+  const queued = ((DB.meta && DB.meta.sendQueue) || []).length;
+  const orphans = orphanBookings(DB, S.goLive || '0000-01-01', todayISO());
+
+  const card = (inv, why) => `<div class="mn-row ${why ? '' : 'owing'}" onclick="openOneInvoice('${escapeHtml(inv.owner.id)}')">
+    <div><div class="mn-name">${escapeHtml(inv.owner.name)}</div>
+      <div class="mn-sub">${inv.lines.length} line${inv.lines.length===1?'':'s'} · ${fmtDateShort(inv.periodFrom)}${inv.periodFrom!==inv.periodTo ? ' – ' + fmtDateShort(inv.periodTo) : ''}${why ? ' · ' + escapeHtml(why[0]) : ''}</div></div>
+    <div class="mn-bal">${inv.nothingDue ? 'summary' : '$' + inv.total.toFixed(2)}</div>
+  </div>`;
 
   openSheet(`
     <h2 class="sheet-title">Invoices</h2>
-    <div class="rc-weeknav">
-      <button class="btn tiny" onclick="shiftInvoiceWeek(-1)">‹</button>
-      <span>Week ending ${fmtDateShort(INV_WEEK)} ${INV_WEEK.slice(0,4)}</span>
-      <button class="btn tiny" onclick="shiftInvoiceWeek(1)">›</button>
+    <p class="sheet-sub">${escapeHtml(INV_MODES[S.mode].blurb)}</p>
+
+    <div class="mn-line">
+      <span>Sending is <b>${INV_MODES[S.mode].label.toLowerCase()}</b>${queued ? ` · ${queued} in the queue` : ''}</span>
+      <button class="btn tiny ghost" onclick="openInvoiceSettings()">Change</button>
     </div>
 
     <div class="mn-hero ${total ? '' : 'clear'}">
-      <div class="mn-hero-num">${total ? '$' + total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) : 'Nothing to bill'}</div>
-      <div class="mn-hero-cap">${due.length} invoice${due.length===1?'':'s'}${stmt.length ? ` · ${stmt.length} summar${stmt.length===1?'y':'ies'}` : ''}</div>
+      <div class="mn-hero-num">${total ? '$' + total.toFixed(2) : 'Nothing ready'}</div>
+      <div class="mn-hero-cap">${b.ready.length} ready to send${b.waiting.length ? ` · ${b.waiting.length} still mid-week` : ''}</div>
     </div>
 
-    ${!invoiceReady() ? `<div class="mn-line" style="background:#fdf3f1;border:1px solid #e6c4bc">
-      <span>Bank details aren't set, so nothing can be sent yet.</span>
+    ${!BIZ.bsb || !BIZ.acct ? `<div class="mn-line" style="background:#fdf3f1;border:1px solid #e6c4bc">
+      <span>Bank details aren't set, so nothing can go out.</span>
       <button class="btn tiny ghost" onclick="openBizSettings()">Add them</button></div>` : ''}
-    ${!BIZ.abn ? `<div class="mn-line">
-      <span>No ABN on the invoice. Fine for private clients, a problem for anyone claiming it.</span>
+    ${!BIZ.abn ? `<div class="mn-line"><span>No ABN on the invoice. Fine for private clients, a problem for anyone claiming it.</span>
       <button class="btn tiny ghost" onclick="openBizSettings()">Add one</button></div>` : ''}
-    ${flags ? `<div class="mn-line" style="background:#fdf3e7">
-      <span>${flags} line${flags===1?' needs':'s need'} a look before sending — open the invoice to see.</span></div>` : ''}
     ${orphans.length ? `<div class="mn-line" style="background:#fdf3e7">
-      <span>${orphans.length} booking${orphans.length===1?'':'s'} this week ${orphans.length===1?'has':'have'} no dog or owner on file, so ${orphans.length===1?'it isn\'t':'they aren\'t'} on any invoice.</span></div>` : ''}
+      <span>${orphans.length} booking${orphans.length===1?'':'s'} ${orphans.length===1?'has':'have'} no dog or owner on file, so ${orphans.length===1?"it can't":"they can't"} be billed.</span></div>` : ''}
 
-    ${list.length ? list.map(i => `<div class="mn-row ${i.nothingDue ? 'clear' : 'owing'}" onclick="openOneInvoice('${escapeHtml(i.owner.id)}')">
-      <div><div class="mn-name">${escapeHtml(i.owner.name)}</div>
-        <div class="mn-sub">${i.lines.length} line${i.lines.length===1?'':'s'}${i.packNotes.length ? ' · on a pack' : ''}${i.warnings.length ? ' · needs a look' : ''}</div></div>
-      <div class="mn-bal">${i.nothingDue ? 'summary' : '$' + i.total.toFixed(2)}</div>
-    </div>`).join('') : '<p class="sub muted small">Nothing booked that week.</p>'}
+    ${b.ready.length ? `<h3 class="grp-title">Ready to send</h3>
+      ${b.ready.map(i => card(i)).join('')}
+      ${S.mode !== 'auto' ? `<button class="btn primary block mt-2" onclick="queueAllReady()">
+        Send ${b.ready.length} invoice${b.ready.length===1?'':'s'} · $${total.toFixed(2)}</button>`
+      : `<p class="sub muted small">These go out on their own as each client's week finishes.</p>`}` : ''}
+
+    ${b.blocked.length ? `<h3 class="grp-title">Needs a look</h3>
+      ${b.blocked.map(x => card(x.inv, x.why)).join('')}` : ''}
+
+    ${b.waiting.length ? `<h3 class="grp-title">Still mid-week</h3>
+      ${b.waiting.map(i => card(i, ['waiting on their next booking'])).join('')}` : ''}
+
+    ${sent.length ? `<h3 class="grp-title">Recently sent</h3>
+      ${sent.map(x => `<div class="mn-row clear">
+        <div><div class="mn-name">${escapeHtml(x.ownerName || '—')}</div>
+          <div class="mn-sub">${escapeHtml(x.number)} · ${x.sentAt ? fmtDateShort(x.sentAt.slice(0,10)) : ''}${x.mode ? ' · ' + escapeHtml(x.mode) : ''}</div></div>
+        <div class="mn-bal">$${Number(x.total||0).toFixed(2)}</div></div>`).join('')}` : ''}
+
+    ${!b.ready.length && !b.blocked.length && !b.waiting.length
+      ? '<p class="sub muted small">Nothing to bill — everything up to today has been invoiced.</p>' : ''}
   `);
 }
 
 function openOneInvoice(ownerId) {
-  const inv = buildInvoice(ownerId, INV_WEEK);
+  const today = todayISO();
+  const inv = buildInvoice(DB, ownerId, { asAt: today });
   if (!inv) return;
-  const ready = invoiceReady();
+  const why = blockers(DB, inv, BIZ, today);
   openSheet(`
     <h2 class="sheet-title">${escapeHtml(inv.owner.name)}</h2>
-    <p class="sheet-sub">Week ending ${fmtDateShort(inv.fridayISO)} ${inv.fridayISO.slice(0,4)}</p>
+    <p class="sheet-sub">${fmtDateShort(inv.periodFrom)}${inv.periodFrom!==inv.periodTo ? ' – ' + fmtDateShort(inv.periodTo) : ''} ${inv.periodTo.slice(0,4)}</p>
     ${inv.warnings.length ? `<div class="today-warn">${inv.warnings.map(escapeHtml).join('<br>')}</div>` : ''}
-    ${renderInvoiceHTML(inv)}
+    ${why.length && !inv.warnings.length ? `<div class="today-warn">${escapeHtml(why.join(' · '))}</div>` : ''}
+    ${renderInvoiceHTML(inv, BIZ)}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
-      ${ready ? `<button class="btn primary" onclick="printInvoice('${escapeHtml(ownerId)}')">Print / save PDF</button>
+      ${!why.length ? `<button class="btn primary" onclick="queueInvoice('${escapeHtml(ownerId)}')">Send it</button>` : ''}
+      <button class="btn ghost" onclick="printInvoice('${escapeHtml(ownerId)}')">Print / save PDF</button>
       <button class="btn ghost" onclick="copyInvoiceText('${escapeHtml(ownerId)}')">Copy as text</button>
-      ${inv.owner.email ? `<button class="btn ghost" onclick="emailInvoice('${escapeHtml(ownerId)}')">Email</button>` : ''}`
-      : `<button class="btn primary" onclick="openBizSettings()">Add bank details to send this</button>`}
+      ${inv.owner.email ? `<button class="btn ghost" onclick="emailInvoice('${escapeHtml(ownerId)}')">Open in mail</button>` : ''}
+      <button class="btn ghost" onclick="markInvoiceSent('${escapeHtml(ownerId)}')">Already paid / sent</button>
     </div>
     <button class="btn ghost block mt-2" onclick="renderInvoices()">← All invoices</button>`);
 }
 
+/* The panel never sends. It writes the intent; the Cloud Function does the
+   sending, so it works whether or not this tab is open. */
+async function queueInvoice(ownerId) {
+  const today = todayISO();
+  const inv = buildInvoice(DB, ownerId, { asAt: today });
+  if (!inv) return;
+  const why = blockers(DB, inv, BIZ, today);
+  if (why.length) return toast(why[0]);
+  DB.meta.sendQueue = DB.meta.sendQueue || [];
+  DB.meta.sendQueue.push({ ownerId, asAt: today, number: inv.number,
+                           bookingIds: inv.bookingIds, total: inv.total, queuedAt: new Date().toISOString() });
+  await save(DB);
+  toast(`Queued for ${inv.owner.name}`);
+  renderInvoices();
+}
+
+async function queueAllReady() {
+  const S = invSettings();
+  const ready = invBuckets().ready;
+  if (!ready.length) return;
+  if (ready.length > S.batchCap &&
+      !confirm(`That's ${ready.length} invoices at once, more than the usual ${S.batchCap}.\n\nThis normally means bookings were just imported or back-filled. Send them all?`))
+    return;
+  if (!confirm(`Send ${ready.length} invoice${ready.length===1?'':'s'} totalling $${ready.reduce((s,i)=>s+i.total,0).toFixed(2)}?`)) return;
+  const today = todayISO();
+  DB.meta.sendQueue = DB.meta.sendQueue || [];
+  ready.forEach(inv => DB.meta.sendQueue.push({ ownerId: inv.owner.id, asAt: today, number: inv.number,
+    bookingIds: inv.bookingIds, total: inv.total, queuedAt: new Date().toISOString() }));
+  await save(DB);
+  toast(`${ready.length} queued`);
+  renderInvoices();
+}
+
+/* Paid in cash, or sent by hand. Closes the lines off without emailing. */
+async function markInvoiceSent(ownerId) {
+  const today = todayISO();
+  const inv = buildInvoice(DB, ownerId, { asAt: today });
+  if (!inv) return;
+  if (!confirm(`Mark ${inv.lines.length} line${inv.lines.length===1?'':'s'} for ${inv.owner.name} as dealt with?\n\nThey won't appear again and no email is sent.`)) return;
+  DB.meta.billed = DB.meta.billed || {};
+  inv.bookingIds.forEach(id => { DB.meta.billed[id] = inv.number; });
+  DB.meta.invoicesSent = DB.meta.invoicesSent || [];
+  DB.meta.invoicesSent.push({ number: inv.number, ownerId, ownerName: inv.owner.name, asAt: today,
+    total: inv.total, bookingIds: inv.bookingIds, sentAt: new Date().toISOString(), mode: 'by hand' });
+  await save(DB);
+  toast('Closed off');
+  renderInvoices();
+}
+
 function printInvoice(ownerId) {
-  const inv = ownerId ? buildInvoice(ownerId, INV_WEEK) : null;
+  const inv = ownerId ? buildInvoice(DB, ownerId, { asAt: todayISO() }) : null;
   const was = document.title;
   if (inv) document.title = `${inv.number} ${inv.owner.name}`.replace(/[^\w\- ]/g, '');
   window.print();
   setTimeout(() => { document.title = was; }, 1000);
 }
 
-/* Plain-text version, for WhatsApp or an email body. Mirrors the printed one. */
-function invoiceText(inv) {
-  const f = d => new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { day:'numeric', month:'short' });
-  const fy = d => new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' });
-  const first = String(inv.owner.name || '').trim().split(/\s+/)[0] || 'there';
-  const L = [`Hi ${first},`, ''];
-  L.push(inv.nothingDue
-    ? `Here's a summary of your week with us, ending ${fy(inv.fridayISO)}.`
-    : `Here's your invoice for the week ending ${fy(inv.fridayISO)}.`);
-  L.push('');
-  inv.lines.forEach(l => L.push(
-    `${f(l.date)}  ${l.dog} · ${l.what}${l.note ? ' (' + l.note + ')' : ''}  ${l.amt ? '$' + l.amt.toFixed(2) : '—'}`));
-  L.push('');
-  L.push(inv.nothingDue ? 'Nothing to pay this week.' : `Total due: $${inv.total.toFixed(2)} by ${fy(inv.dueISO)}`);
-  inv.packNotes.forEach(p => L.push(`${p.dog}'s pack — ${p.left} of ${p.size} still to use${p.expires ? ', up to ' + fmtDateShort(p.expires) : ''}.`));
-  if (!inv.nothingDue && BIZ.bsb && BIZ.acct) {
-    L.push('', 'How to pay', `Bank transfer: BSB ${BIZ.bsb}, Account ${BIZ.acct}`, `Reference: ${inv.ref}`);
-    if (BIZ.stripeLink) L.push(`Or by card: ${BIZ.stripeLink}`);
-  }
-  L.push('', `Thank you — ${BIZ.person} 🐾`, BIZ.name + (BIZ.abn ? ` · ABN ${BIZ.abn}` : ''), 'No GST — not registered.');
-  return L.join('\n');
-}
-
 async function copyInvoiceText(ownerId) {
-  const inv = buildInvoice(ownerId, INV_WEEK); if (!inv) return;
-  try { await navigator.clipboard.writeText(invoiceText(inv)); toast('Copied'); }
+  const inv = buildInvoice(DB, ownerId, { asAt: todayISO() }); if (!inv) return;
+  try { await navigator.clipboard.writeText(invoiceText(inv, BIZ)); toast('Copied'); }
   catch { toast('Could not copy'); }
 }
 
 function emailInvoice(ownerId) {
-  const inv = buildInvoice(ownerId, INV_WEEK); if (!inv) return;
-  const subj = `${BIZ.name} — ${inv.nothingDue ? 'your week' : 'invoice ' + inv.number}`;
+  const inv = buildInvoice(DB, ownerId, { asAt: todayISO() }); if (!inv) return;
+  const subj = `${BIZ.name} — ${inv.nothingDue ? 'your visits' : 'invoice ' + inv.number}`;
   // The address goes in raw; some mail handlers choke on a percent-encoded @.
-  const href = `mailto:${inv.owner.email || ''}`
-    + `?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(invoiceText(inv))}`;
-  window.open(href, '_blank');
+  window.open(`mailto:${inv.owner.email || ''}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(invoiceText(inv, BIZ))}`, '_blank');
+}
+
+/* ---- settings ---- */
+
+function openInvoiceSettings() {
+  const S = invSettings();
+  openSheet(`<h2 class="sheet-title">Sending invoices</h2>
+    <p class="sheet-sub">How invoices leave the building.</p>
+    ${Object.entries(INV_MODES).map(([k, v]) => `
+      <label class="chip block" style="display:block;padding:12px;margin-bottom:8px;text-align:left">
+        <input type="radio" name="invmode" value="${k}" ${S.mode===k?'checked':''} style="margin-right:8px">
+        <b>${v.label}</b><br><span class="muted small">${escapeHtml(v.blurb)}</span>
+      </label>`).join('')}
+    <div class="field-group"><label>Don't bill anything before</label>
+      <input class="field" type="date" id="invGoLive" value="${escapeHtml(S.goLive)}">
+      <span class="muted small">Stops months of old bookings going out the first time this is switched on. Leave blank and everything unbilled is fair game.</span></div>
+    <div class="field-group"><label>Replies go to</label>
+      <input class="field" id="invReplyTo" value="${escapeHtml(S.replyTo)}"></div>
+    <div class="field-group"><label>Tell Andressa at</label>
+      <input class="field" id="invDigestTo" value="${escapeHtml(S.digestTo)}">
+      <span class="muted small">Gets a copy of what went out, and anything that couldn't.</span></div>
+    <div class="field-group"><label>Hold a batch bigger than</label>
+      <input class="field" type="number" id="invBatchCap" value="${S.batchCap}" min="1">
+      <span class="muted small">A sudden pile of invoices usually means a data import, not a busy week.</span></div>
+    <button class="btn primary block" onclick="saveInvoiceSettings()">Save</button>
+    <button class="btn ghost block mt-2" onclick="renderInvoices()">Cancel</button>`);
+}
+
+async function saveInvoiceSettings() {
+  const mode = document.querySelector('input[name="invmode"]:checked')?.value || 'off';
+  const goLive = document.getElementById('invGoLive').value;
+  if (mode === 'auto' && !confirm(
+      'Automatic means invoices reach clients without anyone reading them first.\n\n' +
+      'A booking that was never logged, or logged wrong, becomes a wrong invoice in someone\'s inbox.\n\nTurn it on?')) return;
+  DB.meta.invoicing = {
+    mode, goLive,
+    replyTo:  document.getElementById('invReplyTo').value.trim(),
+    digestTo: document.getElementById('invDigestTo').value.trim(),
+    batchCap: Math.max(1, parseInt(document.getElementById('invBatchCap').value, 10) || 8)
+  };
+  await save(DB); renderInvoices(); toast('Saved');
 }
 
 /* Business + bank details, needed before anything goes out. */
@@ -4107,8 +3936,9 @@ Object.assign(window, {
   openCapacitySheet, saveCapacityForm,
   openImportSheet, importDataFile, exportBackup,
   openMoneySheet, onReconFile, renderMoney, togglePaidUp, toggleNoise,
-  openInvoicesSheet, renderInvoices, shiftInvoiceWeek, openOneInvoice,
-  printInvoice, copyInvoiceText, emailInvoice, openBizSettings, saveBizSettings,
+  openInvoicesSheet, renderInvoices, openOneInvoice, printInvoice,
+  copyInvoiceText, emailInvoice, openBizSettings, saveBizSettings,
+  openInvoiceSettings, saveInvoiceSettings, queueInvoice, queueAllReady, markInvoiceSent,
   openClientMoney, addPayment, removePayment,
   assignTx, assignTxPick, openSettleLine, applySettleLine,
   closeSheet, closeRitual, startRitual,
