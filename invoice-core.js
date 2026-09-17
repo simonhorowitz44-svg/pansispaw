@@ -531,10 +531,13 @@ export function planRun(db, biz, cfg = {}, today) {
   if (!biz || !biz.bsb || !biz.acct) return { jobs: [], refused: [], skipped: 'no bank details on file' };
 
   const jobs = [], refused = [], seen = new Set();
+  // The caller's config wins over whatever is on the db — otherwise a run can
+  // be told one go-live date and quietly bill from another.
+  const opts = { asAt, from: cfg.goLive || undefined };
 
   for (const q of (db.meta?.sendQueue || [])) {
     if (seen.has(q.ownerId)) continue;
-    const inv = buildInvoice(db, q.ownerId, { asAt });
+    const inv = buildInvoice(db, q.ownerId, opts);
     if (!inv) {
       const o = ownerById(db, q.ownerId);
       refused.push({ ownerId: q.ownerId, who: o?.name || q.ownerId, why: 'nothing left to bill — already invoiced?' });
@@ -551,7 +554,7 @@ export function planRun(db, biz, cfg = {}, today) {
   }
 
   if (mode === 'auto') {
-    for (const inv of sendableInvoices(db, biz, { asAt })) {
+    for (const inv of sendableInvoices(db, biz, opts)) {
       if (!seen.has(inv.owner.id)) { seen.add(inv.owner.id); jobs.push(inv); }
     }
   }

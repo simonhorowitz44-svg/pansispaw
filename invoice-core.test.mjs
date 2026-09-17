@@ -310,5 +310,21 @@ console.log('\nDates must not drift with the timezone');
   eq('a Friday week still ends on the Friday', C.weekOf('2026-09-17').to, '2026-09-18');
 }
 
+
+console.log('\nThe run honours the config it is given');
+{
+  const d = base();
+  d.meta.invoicing = { mode:'auto', batchCap:99, goLive:'2020-01-01' };  // db says bill everything
+  d.bookings = [
+    { id:'old', dogId:'d1', date:'2026-08-01', session:'full', total:100, departureLogged:'16:00' },
+    { id:'new', dogId:'d1', date:'2026-09-16', session:'full', total:100, departureLogged:'16:00' }
+  ];
+  const wide   = C.planRun(d, BIZ, { mode:'auto', batchCap:99, goLive:'2020-01-01' }, '2026-09-16');
+  const narrow = C.planRun(d, BIZ, { mode:'auto', batchCap:99, goLive:'2026-09-01' }, '2026-09-16');
+  eq('a wide go-live picks up the old visit too', wide.jobs[0].total, 200);
+  eq("a narrow go-live in the caller's config is respected", narrow.jobs[0].total, 100);
+  eq('and it is the recent visit that survives', narrow.jobs[0].lines[0].date, '2026-09-16');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
