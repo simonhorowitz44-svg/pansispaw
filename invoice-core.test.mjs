@@ -291,5 +291,24 @@ console.log('\nThe email');
     C.renderInvoiceEmail({ ...i, owner:{ ...i.owner, name:'Ben & Jo <script>' } }, BIZ).includes('&amp;'));
 }
 
+
+console.log('\nDates must not drift with the timezone');
+{
+  /* toISOString() converts to UTC, so in Sydney it reports the previous day for
+     any local midnight. Every date on an invoice has to come from addDaysISO. */
+  const wrong = n => { const d = new Date('2026-09-17T00:00:00'); d.setDate(d.getDate() - n); return d.toISOString().slice(0,10); };
+  const tzShifts = wrong(1) !== C.addDaysISO('2026-09-17', -1);
+  eq('addDaysISO is stable whatever the timezone', C.addDaysISO('2026-09-17', -1), '2026-09-16');
+  eq('a day forward',                              C.addDaysISO('2026-09-17',  1), '2026-09-18');
+  eq('across a month boundary',                    C.addDaysISO('2026-09-30',  1), '2026-10-01');
+  eq('across a year boundary',                     C.addDaysISO('2026-12-31',  1), '2027-01-01');
+  eq('across a leap day',                          C.addDaysISO('2028-02-28',  1), '2028-02-29');
+  eq('60 days out lands on the right day',         C.addDaysISO('2026-09-17', 60), '2026-11-16');
+  console.log(`       (this machine is ${Intl.DateTimeFormat().resolvedOptions().timeZone}; ` +
+              `toISOString ${tzShifts ? 'DOES' : 'does not'} shift here)`);
+  eq('the due date is 7 days after the invoice date', C.addDaysISO('2026-09-17', C.INVOICE_TERMS_DAYS), '2026-09-24');
+  eq('a Friday week still ends on the Friday', C.weekOf('2026-09-17').to, '2026-09-18');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

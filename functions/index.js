@@ -24,7 +24,8 @@ import { initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
 import {
-  setPricing, planRun, buildInvoice, renderInvoiceEmail, invoiceText, invoiceSubject, orphanBookings
+  setPricing, planRun, buildInvoice, renderInvoiceEmail, invoiceText, invoiceSubject,
+  orphanBookings, addDaysISO
 } from './invoice-core.js';
 
 const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
@@ -251,7 +252,9 @@ export const sendTestInvoice = onCall(
     await loadPricing();
 
     const today = sydneyToday();
-    const day = n => { const d = new Date(today + 'T00:00:00'); d.setDate(d.getDate() - n); return d.toISOString().slice(0,10); };
+    // addDaysISO, not toISOString — the latter converts to UTC, so east of
+    // Greenwich every date comes out a day early.
+    const day = n => addDaysISO(today, -n);
 
     /* Deliberately a busy week: a Scouts run, a pack day, a late pickup and a
        late cancellation, so one email shows every kind of line. */

@@ -447,6 +447,7 @@ export function renderInvoiceEmail(inv, biz, o = {}) {
   const period = inv.periodFrom === inv.periodTo
     ? fmtDayY(inv.periodTo) : `${fmtDay(inv.periodFrom)} – ${fmtDayY(inv.periodTo)}`;
   const logo = o.logoUrl || 'https://pansispaws.com.au/images/logo.png';
+  const logoW = o.logoWidth || 84;
   const cell = `padding:9px 8px 9px 0;border-bottom:1px solid ${edge};color:${ink2};font-size:14px;vertical-align:top`;
 
   const rows = inv.lines.map(l => `<tr>
@@ -462,7 +463,7 @@ export function renderInvoiceEmail(inv, biz, o = {}) {
 
   <tr><td style="padding-bottom:16px;border-bottom:2px solid ${edge}">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-      <td width="72" style="vertical-align:middle"><img src="${logo}" width="64" alt="Pansi's Paws" style="display:block;width:64px;height:auto"></td>
+      <td width="${logoW + 12}" style="vertical-align:middle"><img src="${logo}" width="${logoW}" alt="Pansi's Paws" style="display:block;width:${logoW}px;height:auto"></td>
       <td style="vertical-align:middle;font-family:Helvetica,Arial,sans-serif">
         <div style="font-size:17px;color:${ink};font-weight:bold;font-family:Georgia,serif">${escapeHtml(biz.name)}</div>
         <div style="font-size:12px;color:${ink2};line-height:1.5">${escapeHtml(biz.suburb)}<br>
