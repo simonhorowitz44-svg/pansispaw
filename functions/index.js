@@ -54,12 +54,17 @@ async function loadPricing() {
 
 /* ---------- sending ---------- */
 
-async function sendMail({ to, replyTo, subject, html, text, apiKey }) {
+/* Resend will send from this without any DNS set up, but only to the address
+   that owns the Resend account. Fine for a test, useless for a client. */
+const SHARED_SENDER = 'Pansi\'s Paws <onboarding@resend.dev>';
+const ownSender = cfg => cfg?.mailFrom || '';
+
+async function sendMail({ to, from, replyTo, subject, html, text, apiKey }) {
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from: `Pansi's Paws <invoices@pansispaws.com.au>`,
+      from: from || SHARED_SENDER,
       to: [to], reply_to: replyTo || undefined, subject, html, text
     })
   });
@@ -78,6 +83,9 @@ async function runInvoicing(reason, apiKey) {
   const biz = { ...DEFAULT_BIZ, ...(state.meta?.biz || {}) };
   if (cfg.mode !== 'auto' && cfg.mode !== 'approve') return { skipped: `mode is ${cfg.mode || 'off'}` };
   if (!biz.bsb || !biz.acct) return { skipped: 'no bank details on file' };
+  // A client must never receive an invoice from a shared testing address —
+  // it looks like a scam and it won't survive their spam filter.
+  if (!ownSender(cfg)) return { skipped: 'no verified sending address — set mailFrom once the domain is verified in Resend' };
 
   await loadPricing();
   const today = sydneyToday();
@@ -104,7 +112,7 @@ async function runInvoicing(reason, apiKey) {
   for (const inv of jobs) {
     try {
       const id = await sendMail({
-        to: inv.owner.email, replyTo: cfg.replyTo || biz.email, apiKey,
+        to: inv.owner.email, from: ownSender(cfg), replyTo: cfg.replyTo || biz.email, apiKey,
         subject: invoiceSubject(inv, biz),
         html: renderInvoiceEmail(inv, biz), text: invoiceText(inv, biz)
       });
@@ -153,7 +161,7 @@ async function notifyAndressa(cfg, biz, apiKey, subject, body) {
   const to = cfg.digestTo || biz.email;
   if (!to) return;
   try {
-    await sendMail({ to, apiKey, subject: `Pansi's Paws — ${subject}`,
+    await sendMail({ to, from: ownSender(cfg) || undefined, apiKey, subject: `Pansi's Paws — ${subject}`,
       html: `<pre style="font:14px/1.6 -apple-system,Helvetica,Arial,sans-serif;white-space:pre-wrap">${body
         .replace(/&/g,'&amp;').replace(/</g,'&lt;')}</pre>`, text: body });
   } catch (e) { logger.error('could not reach Andressa', e); }
@@ -233,6 +241,7 @@ export const sendTestInvoice = onCall(
 
     const snap = await fs.doc(STATE).get();
     const biz = { ...DEFAULT_BIZ, ...(snap.exists ? snap.data().meta?.biz || {} : {}) };
+    const cfg = snap.exists ? snap.data().meta?.invoicing || {} : {};
     if (!biz.bsb || !biz.acct) throw new HttpsError('failed-precondition',
       'No BSB or account number set. Add them in the panel first — otherwise the test invoice has no way to pay it.');
     await loadPricing();
@@ -259,13 +268,19 @@ export const sendTestInvoice = onCall(
     const inv = buildInvoice(fixture, 'test_owner', { asAt: today });
     if (!inv) throw new HttpsError('internal', 'The fixture produced no invoice, which should not happen.');
 
+    /* Falls back to Resend's shared sender so this works before the domain is
+       verified — it will only reach the Resend account owner, which is the
+       point of a test. Real invoices refuse to use it. */
+    const from = ownSender(cfg);
     const id = await sendMail({
-      to, apiKey: RESEND_API_KEY.value(),
+      to, from: from || undefined, apiKey: RESEND_API_KEY.value(),
       subject: `[TEST] ${invoiceSubject(inv, biz)}`,
       html: renderInvoiceEmail(inv, biz), text: invoiceText(inv, biz)
     });
     logger.info('test invoice sent', { to, total: inv.total, id });
-    return { sent: to, total: inv.total, lines: inv.lines.length, providerId: id,
-             note: 'Made-up bookings. Nothing was marked as billed and no client was touched.' };
+    return { sent: to, from: from || SHARED_SENDER, total: inv.total, lines: inv.lines.length, providerId: id,
+             note: from
+               ? 'Made-up bookings. Nothing was marked as billed and no client was touched.'
+               : "Made-up bookings, sent from Resend's shared address because no verified domain is set yet. Real invoices will not send until meta.invoicing.mailFrom is set." };
   }
 );

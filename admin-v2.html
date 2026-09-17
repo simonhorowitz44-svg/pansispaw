@@ -721,7 +721,7 @@ function normalizeDb(db) {
   db.meta.billed ||= {};                   // bookingId -> invoice number, so nothing bills twice
   db.meta.invoicesSent ||= [];             // what went out, when, and how
   db.meta.sendQueue ||= [];                // the panel's intent; the Cloud Function drains it
-  db.meta.invoicing ||= { mode:'off', goLive:'', replyTo:'', digestTo:'', batchCap:8 };
+  db.meta.invoicing ||= { mode:'off', goLive:'', mailFrom:'', replyTo:'', digestTo:'', batchCap:8 };
   db.meta.capacity ||= { maxDaycare:5, maxBoarding:3 };
   if (!(db.meta.capacity.maxDaycare > 0)) db.meta.capacity.maxDaycare = 5;
   if (!(db.meta.capacity.maxBoarding >= 0)) db.meta.capacity.maxBoarding = 3;
@@ -1923,6 +1923,7 @@ const INV_MODES = {
 function invSettings() {
   const m = (DB.meta && DB.meta.invoicing) || {};
   return { mode: m.mode || 'off', goLive: m.goLive || '', replyTo: m.replyTo || BIZ.email,
+           mailFrom: m.mailFrom || '',
            batchCap: m.batchCap == null ? 8 : m.batchCap, digestTo: m.digestTo || BIZ.email };
 }
 
@@ -2105,6 +2106,9 @@ function openInvoiceSettings() {
     <div class="field-group"><label>Don't bill anything before</label>
       <input class="field" type="date" id="invGoLive" value="${escapeHtml(S.goLive)}">
       <span class="muted small">Stops months of old bookings going out the first time this is switched on. Leave blank and everything unbilled is fair game.</span></div>
+    <div class="field-group"><label>Invoices come from</label>
+      <input class="field" id="invMailFrom" value="${escapeHtml(S.mailFrom)}" placeholder="Pansi's Paws &lt;invoices@pansispaws.com.au&gt;">
+      <span class="muted small">Must be an address on a domain verified in Resend. Nothing will send to a client until this is set — an invoice from an unverified address goes to spam or looks like a scam.</span></div>
     <div class="field-group"><label>Replies go to</label>
       <input class="field" id="invReplyTo" value="${escapeHtml(S.replyTo)}"></div>
     <div class="field-group"><label>Tell Andressa at</label>
@@ -2125,6 +2129,7 @@ async function saveInvoiceSettings() {
       'A booking that was never logged, or logged wrong, becomes a wrong invoice in someone\'s inbox.\n\nTurn it on?')) return;
   DB.meta.invoicing = {
     mode, goLive,
+    mailFrom: document.getElementById('invMailFrom').value.trim(),
     replyTo:  document.getElementById('invReplyTo').value.trim(),
     digestTo: document.getElementById('invDigestTo').value.trim(),
     batchCap: Math.max(1, parseInt(document.getElementById('invBatchCap').value, 10) || 8)
