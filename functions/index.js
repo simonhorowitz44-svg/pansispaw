@@ -16,6 +16,7 @@
 
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import { setGlobalOptions } from 'firebase-functions/v2';
 import * as logger from 'firebase-functions/logger';
@@ -23,7 +24,7 @@ import { initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
 import {
-  setPricing, planRun, renderInvoiceEmail, invoiceText, invoiceSubject, orphanBookings
+  setPricing, planRun, buildInvoice, renderInvoiceEmail, invoiceText, invoiceSubject, orphanBookings
 } from './invoice-core.js';
 
 const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
@@ -207,5 +208,64 @@ export const nightlySweep = onSchedule(
   async () => {
     const r = await runInvoicing('nightly sweep', RESEND_API_KEY.value());
     logger.info('nightly sweep', r);
+  }
+);
+
+/* ---------- a test send, before any of this touches a client ---------- */
+
+/* Fires one invoice at an address you name, built from made-up bookings — no
+   client data, no ledger write, nothing marked as billed. This is how you check
+   that Resend is configured, the domain verifies, and the thing actually looks
+   right in Gmail rather than in a preview.
+ *
+ *   firebase functions:shell
+ *   sendTestInvoice({to: 'you@example.com'})
+ *
+ * or, deployed:
+ *   curl -X POST https://australia-southeast1-pansi-paws.cloudfunctions.net/sendTestInvoice \
+ *        -H 'Content-Type: application/json' -d '{"data":{"to":"you@example.com"}}'
+ */
+export const sendTestInvoice = onCall(
+  { secrets: [RESEND_API_KEY] },
+  async request => {
+    const to = request.data?.to;
+    if (!to || !/.+@.+\..+/.test(to)) throw new HttpsError('invalid-argument', 'Pass a "to" address.');
+
+    const snap = await fs.doc(STATE).get();
+    const biz = { ...DEFAULT_BIZ, ...(snap.exists ? snap.data().meta?.biz || {} : {}) };
+    if (!biz.bsb || !biz.acct) throw new HttpsError('failed-precondition',
+      'No BSB or account number set. Add them in the panel first — otherwise the test invoice has no way to pay it.');
+    await loadPricing();
+
+    const today = sydneyToday();
+    const day = n => { const d = new Date(today + 'T00:00:00'); d.setDate(d.getDate() - n); return d.toISOString().slice(0,10); };
+
+    /* Deliberately a busy week: a Scouts run, a pack day, a late pickup and a
+       late cancellation, so one email shows every kind of line. */
+    const fixture = {
+      meta: { billed:{}, invoicesSent:[], sendQueue:[], invoicing:{ goLive: day(30) } },
+      owners: [{ id:'test_owner', name:'Sample Client', email: to }],
+      dogs:   [{ id:'test_dog', ownerId:'test_owner', name:'Biscuit', size:'medium' }],
+      packs:  [{ id:'test_pack', dogId:'test_dog', size:10, daysUsed:2, expiryDate: day(-60) }],
+      bookings: [
+        { id:'t1', dogId:'test_dog', date: day(4), session:'scouts', scoutsTrip:'am' },
+        { id:'t2', dogId:'test_dog', date: day(3), session:'full', departureLogged:'16:20' },
+        { id:'t3', dogId:'test_dog', date: day(2), session:'full', packId:'test_pack', departureLogged:'16:05' },
+        { id:'t4', dogId:'test_dog', date: day(1), session:'full', departureLogged:'18:40' },
+        { id:'t5', dogId:'test_dog', date: day(1), session:'full', cancelled:true, cancelCharge:45 }
+      ]
+    };
+
+    const inv = buildInvoice(fixture, 'test_owner', { asAt: today });
+    if (!inv) throw new HttpsError('internal', 'The fixture produced no invoice, which should not happen.');
+
+    const id = await sendMail({
+      to, apiKey: RESEND_API_KEY.value(),
+      subject: `[TEST] ${invoiceSubject(inv, biz)}`,
+      html: renderInvoiceEmail(inv, biz), text: invoiceText(inv, biz)
+    });
+    logger.info('test invoice sent', { to, total: inv.total, id });
+    return { sent: to, total: inv.total, lines: inv.lines.length, providerId: id,
+             note: 'Made-up bookings. Nothing was marked as billed and no client was touched.' };
   }
 );
