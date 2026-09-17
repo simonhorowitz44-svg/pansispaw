@@ -1,3 +1,9 @@
 node_modules/
 invoice-core.js
 package-lock.json
+
+# Local secret values for the functions shell and emulator. Never commit these.
+.secret.local
+*.local
+.env
+.env.*
