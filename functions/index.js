@@ -236,8 +236,12 @@ export const nightlySweep = onSchedule(
 export const sendTestInvoice = onCall(
   { secrets: [RESEND_API_KEY] },
   async request => {
-    const to = request.data?.to;
-    if (!to || !/.+@.+\..+/.test(to)) throw new HttpsError('invalid-argument', 'Pass a "to" address.');
+    /* The functions shell passes the raw body for v2 callables, so the argument
+       arrives unwrapped there and wrapped in .data everywhere else. Accept both
+       rather than making the caller remember which. */
+    const to = request?.data?.to || request?.to;
+    if (!to || !/.+@.+\..+/.test(to)) throw new HttpsError('invalid-argument',
+      'Pass a "to" address, e.g. sendTestInvoice({data: {to: "you@example.com"}}).');
 
     const snap = await fs.doc(STATE).get();
     const biz = { ...DEFAULT_BIZ, ...(snap.exists ? snap.data().meta?.biz || {} : {}) };
