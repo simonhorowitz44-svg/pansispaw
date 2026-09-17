@@ -352,6 +352,9 @@ body.modal-open { overflow: hidden; }
   border: 1px solid var(--edge-2); background: transparent; color: var(--ink-2); }
 .pack-chip[aria-pressed="true"] { background: var(--pine, #4d6d34); border-color: var(--pine, #4d6d34); color: #fef3c7; font-weight: 600; }
 .pack-chip .n { opacity: .65; margin-left: 4px; }
+.dogless { background:#fdf3e7; border-radius:var(--r2); padding:10px 12px; margin:0 0 14px; }
+.dogless-head { font-size:11px; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-3); margin-bottom:8px; }
+.dogless-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:4px 0; }
 .scouts-legend { text-align: center; font-size: 11.5px; color: var(--ink-3); margin: -4px 0 var(--s4); }
 .scouts-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin: 0 3px 0 10px; vertical-align: middle; font-style: normal; }
 .scouts-legend i.m { background: var(--pine, #4d6d34); }
@@ -684,6 +687,7 @@ const SHOW_PAYMENTS = false;
 // Guards a double-tap on Save. The booking id is minted when the sheet opens,
 // so two submits would push the SAME id twice and you'd get a duplicate row.
 let savingBooking = false;
+let savingOwner = false;   // same double-tap problem, same fix
 
 const uid = () => Math.random().toString(16).slice(2,10);
 const todayISO = () => localISO(new Date());
@@ -699,17 +703,25 @@ function emptyDb() {
 }
 // Two records can never legitimately share an id — that only happens when a
 // double-tap pushed the same booking twice. Strip them on load.
+/* A double-tapped save used to push the same record more than once — the id is
+   minted when the sheet opens, so the copies share it. Bookings were already
+   swept; owners, dogs and packs can collide the same way. */
 function dedupeById(db) {
-  if (!db || !Array.isArray(db.bookings)) return 0;
-  const seen = new Set();
-  const before = db.bookings.length;
-  db.bookings = db.bookings.filter(b => {
-    if (!b || !b.id) return true;
-    if (seen.has(b.id)) return false;
-    seen.add(b.id);
-    return true;
+  if (!db) return 0;
+  let dropped = 0;
+  ['bookings', 'owners', 'dogs', 'packs'].forEach(key => {
+    if (!Array.isArray(db[key])) return;
+    const seen = new Set();
+    const before = db[key].length;
+    db[key] = db[key].filter(r => {
+      if (!r || !r.id) return true;
+      if (seen.has(r.id)) return false;
+      seen.add(r.id);
+      return true;
+    });
+    dropped += before - db[key].length;
   });
-  return before - db.bookings.length;
+  return dropped;
 }
 
 function normalizeDb(db) {
@@ -726,7 +738,7 @@ function normalizeDb(db) {
   if (!(db.meta.capacity.maxDaycare > 0)) db.meta.capacity.maxDaycare = 5;
   if (!(db.meta.capacity.maxBoarding >= 0)) db.meta.capacity.maxBoarding = 3;
   const dropped = dedupeById(db);
-  if (dropped) console.warn('Removed ' + dropped + ' duplicate booking(s) sharing an id');
+  if (dropped) console.warn('Removed ' + dropped + ' duplicate record(s) sharing an id');
   return db;
 }
 
@@ -2177,6 +2189,19 @@ function renderPack() {
     </div>`;
   if (nScouts) html += `<p class="scouts-legend"><i class="m"></i> member <i class="l"></i> lead — not signed up yet</p>`;
 
+  // This page lists dogs, so a client whose dog hasn't been added yet appears
+  // nowhere at all — they look like the save failed. Surface them.
+  const dogless = DB.owners.filter(o => !DB.dogs.some(d => d.ownerId === o.id));
+  if (dogless.length) {
+    html += `<div class="dogless">
+      <div class="dogless-head">${dogless.length} client${dogless.length===1?'':'s'} with no dog yet</div>
+      ${dogless.map(o => `<div class="dogless-row">
+        <button class="btn tiny ghost" data-openowner="${escapeHtml(o.id)}">${escapeHtml(o.name || 'Unnamed')}</button>
+        <button class="btn tiny" data-adddog="${escapeHtml(o.id)}">＋ Add their dog</button>
+      </div>`).join('')}
+    </div>`;
+  }
+
   if (!DB.dogs.length) {
     html += `<div class="day-empty">No dogs yet.</div>
       <p class="text-center"><button class="btn primary" data-openowner="">＋ Add your first client</button></p>`;
@@ -3510,6 +3535,8 @@ async function applyMergeOwner(fromId, toId) {
 }
 async function saveOwnerForm(e, id, isNew) {
   e.preventDefault();
+  if (savingOwner) return false;          // a second tap would push the id again
+  savingOwner = true;
   const f = e.target;
   const existing = isNew ? null : DB.owners.find(o => o.id === id);
   const rec = {
@@ -3518,10 +3545,17 @@ async function saveOwnerForm(e, id, isNew) {
     pickupAddress: f.pickupAddress ? f.pickupAddress.value.trim() : (existing?.pickupAddress || ''),
     source: existing?.source || 'manual', createdAt: existing?.createdAt || new Date().toISOString()
   };
-  if (isNew) DB.owners.push(rec);
-  else { const i = DB.owners.findIndex(o => o.id === id); if (i >= 0) DB.owners[i] = rec; }
-  await save(DB); closeSheet(); render();
-  toast(isNew?'Client added':'Saved');
+  // Treat it as an edit if the id is already there, whatever isNew claims —
+  // a re-submitted form still says isNew.
+  const at = DB.owners.findIndex(o => o.id === id);
+  if (at >= 0) DB.owners[at] = rec; else DB.owners.push(rec);
+  try {
+    await save(DB); closeSheet(); render();
+    toast(isNew ? 'Client added' : 'Saved');
+    // A client with no dog is invisible in The Pack, which lists dogs. Offer
+    // the next step rather than leaving them wondering where it went.
+    if (isNew && !DB.dogs.some(d => d.ownerId === id)) openDogEditSheet(null, id);
+  } finally { savingOwner = false; }
   return false;
 }
 async function deleteOwner(id) {
