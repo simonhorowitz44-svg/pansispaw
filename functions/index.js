@@ -81,6 +81,8 @@ async function runInvoicing(reason, apiKey) {
   const state = snap.data();
 
   const cfg = state.meta?.invoicing || {};
+  // meta.biz can override the contact address, so a bouncing one can be fixed
+  // from the panel without a redeploy.
   const biz = { ...DEFAULT_BIZ, ...(state.meta?.biz || {}) };
   if (cfg.mode !== 'auto' && cfg.mode !== 'approve') return { skipped: `mode is ${cfg.mode || 'off'}` };
   if (!biz.bsb || !biz.acct) return { skipped: 'no bank details on file' };

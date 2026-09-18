@@ -729,7 +729,7 @@ function normalizeDb(db) {
   db.owners ||= []; db.dogs ||= []; db.bookings ||= []; db.packs ||= []; db.meta ||= {};
   db.payments ||= [];                      // money received, as records
   db.meta.settledBefore ||= '';            // everything before this date is done with
-  db.meta.biz ||= { bsb:'', acct:'', abn:'', stripeLink:'' };
+  db.meta.biz ||= { bsb:'', acct:'', abn:'', stripeLink:'', email:'' };
   db.meta.billed ||= {};                   // bookingId -> invoice number, so nothing bills twice
   db.meta.invoicesSent ||= [];             // what went out, when, and how
   db.meta.sendQueue ||= [];                // the panel's intent; the Cloud Function drains it
@@ -1723,6 +1723,7 @@ function hydrateBiz() {
   const b = (DB.meta && DB.meta.biz) || {};
   BIZ.bsb = b.bsb || ''; BIZ.acct = b.acct || ''; BIZ.abn = b.abn || '';
   BIZ.stripeLink = b.stripeLink || '';
+  if (b.email) BIZ.email = b.email;
 }
 
 function renderMoney() {
@@ -2160,6 +2161,9 @@ function openBizSettings() {
       <div class="field-group"><label>Account</label><input class="field" id="bizAcct" value="${escapeHtml(BIZ.acct)}" placeholder="00000000"></div>
     </div>
     <div class="field-group"><label>ABN</label><input class="field" id="bizAbn" value="${escapeHtml(BIZ.abn)}" placeholder="00 000 000 000"></div>
+    <div class="field-group"><label>Contact email shown on the invoice</label>
+      <input class="field" id="bizEmail" value="${escapeHtml(BIZ.email)}" placeholder="andressa@pansispaws.com.au">
+      <span class="muted small">Where a client replying to an invoice will write. It has to be a mailbox that actually receives mail — check it before a client finds out it doesn't.</span></div>
     <div class="field-group"><label>Card payment link <span class="muted small">— optional</span></label>
       <input class="field" id="bizStripe" value="${escapeHtml(BIZ.stripeLink)}" placeholder="https://buy.stripe.com/..."></div>
     <button class="btn primary block" onclick="saveBizSettings()">Save</button>
@@ -2179,7 +2183,8 @@ async function saveBizSettings() {
   BIZ.acct = stripLabel(document.getElementById('bizAcct').value, 'account', 'acct', 'acc', 'a/c');
   BIZ.abn  = stripLabel(document.getElementById('bizAbn').value, 'abn');
   BIZ.stripeLink = document.getElementById('bizStripe').value.trim();
-  DB.meta.biz = { bsb: BIZ.bsb, acct: BIZ.acct, abn: BIZ.abn, stripeLink: BIZ.stripeLink };
+  BIZ.email = document.getElementById('bizEmail').value.trim() || BIZ.email;
+  DB.meta.biz = { bsb: BIZ.bsb, acct: BIZ.acct, abn: BIZ.abn, stripeLink: BIZ.stripeLink, email: BIZ.email };
   await save(DB); renderInvoices(); toast('Saved');
 }
 
