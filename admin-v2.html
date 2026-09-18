@@ -3382,6 +3382,8 @@ function openDogEditSheet(dogId, prefillOwnerId) {
       <div class="field-group"><label>Toilet routine</label><textarea class="field" name="toiletRoutine" rows="2">${escapeHtml(rec.toiletRoutine||'')}</textarea></div>
       <div class="field-group"><label>Additional behaviours / notes</label><textarea class="field" name="additionalBehaviours" rows="2">${escapeHtml(rec.additionalBehaviours||'')}</textarea></div>
       <button type="submit" class="btn primary block">${isNew ? 'Add dog' : 'Save'}</button>
+      ${!isNew && DB.dogs.filter(d => d.ownerId === rec.ownerId).length > 1
+        ? `<button type="button" class="btn ghost block mt-2" onclick="openMergeDogSheet('${rec.id}')">⇄ Merge into another dog</button>` : ''}
       ${!isNew ? `<button type="button" class="btn danger block mt-2" onclick="deleteDog('${rec.id}')">Delete dog</button>` : ''}
     </form>`);
 }
@@ -3420,6 +3422,68 @@ async function saveDogForm(e, id, isNew) {
   toast(isNew ? 'Dog added' : 'Saved');
   return false;
 }
+/* ---------- MERGE DOGS ----------
+   The same dog entered twice — usually a spelling difference, "Jex" and "JEX",
+   or "Haven" and "Haven Midnight". Each copy owns part of the booking history,
+   so deleting either loses days. This moves everything onto the one you keep. */
+function mergeDogSummary(fromId, toId) {
+  const from = dogById(fromId), to = dogById(toId);
+  const fills = ['breed','size','age','sex','weight','vaccinated','vaccDate',
+                 'allergies','medicalConditions','vet','notes','photo']
+    .filter(k => !(to && to[k]) && from && from[k]);
+  return { from, to, fills,
+           bookings: DB.bookings.filter(b => b.dogId === fromId).length,
+           packs: (DB.packs || []).filter(p => p.dogId === fromId).length };
+}
+
+function openMergeDogSheet(fromId) {
+  const from = dogById(fromId);
+  if (!from) return;
+  const siblings = DB.dogs.filter(d => d.ownerId === from.ownerId && d.id !== fromId)
+    .sort((a,b) => (a.name||'').localeCompare(b.name||''));
+  if (!siblings.length) return toast('No other dog on this client to merge with');
+  openSheet(`<h2 class="sheet-title">Merge ${escapeHtml(from.name)}</h2>
+    <p class="sheet-sub">Every booking and pack belonging to <strong>${escapeHtml(from.name)}</strong>
+       moves onto the dog you pick. ${escapeHtml(from.name)} is then removed. Nothing is deleted.</p>
+    <div class="field-group"><label>Keep this dog</label>
+      <select class="field" id="mergeDogTarget">
+        <option value="">Choose which one to keep…</option>
+        ${siblings.map(d => `<option value="${d.id}">${escapeHtml(d.name)}${d.breed ? ' · ' + escapeHtml(d.breed) : ''}</option>`).join('')}
+      </select></div>
+    <div id="mergeDogPreview" class="sheet-sub" style="min-height:44px"></div>
+    <button class="btn primary block" id="mergeDogGo" disabled
+            onclick="applyMergeDog('${fromId}', document.getElementById('mergeDogTarget').value)">Merge</button>
+    <button class="btn ghost block mt-2" onclick="closeSheet(); openDogEditSheet('${fromId}')">Cancel</button>`);
+  const sel = document.getElementById('mergeDogTarget');
+  const box = document.getElementById('mergeDogPreview');
+  const go  = document.getElementById('mergeDogGo');
+  sel.onchange = () => {
+    if (!sel.value) { box.innerHTML = ''; go.disabled = true; return; }
+    const m = mergeDogSummary(fromId, sel.value);
+    const bits = [];
+    if (m.bookings) bits.push(`${m.bookings} booking${m.bookings>1?'s':''} move across`);
+    if (m.packs)    bits.push(`${m.packs} pack${m.packs>1?'s':''} move across`);
+    if (m.fills.length) bits.push(`fills in ${m.fills.join(', ')}`);
+    box.innerHTML = bits.length ? escapeHtml(bits.join(' · ')) : 'Nothing to move — the record is empty.';
+    go.disabled = false;
+  };
+}
+
+async function applyMergeDog(fromId, toId) {
+  if (!toId || fromId === toId) return;
+  const m = mergeDogSummary(fromId, toId);
+  if (!m.from || !m.to) return;
+  if (m.from.ownerId !== m.to.ownerId) return toast('Those dogs belong to different clients');
+  if (!confirm(`Merge ${m.from.name} into ${m.to.name}?\n\n` +
+               `${m.bookings} booking(s) move across. ${m.from.name} is then removed.`)) return;
+  DB.bookings.forEach(b => { if (b.dogId === fromId) b.dogId = toId; });
+  (DB.packs || []).forEach(p => { if (p.dogId === fromId) p.dogId = toId; });
+  m.fills.forEach(k => { m.to[k] = m.from[k]; });
+  DB.dogs = DB.dogs.filter(d => d.id !== fromId);
+  await save(DB); closeSheet(); render();
+  toast(`Merged into ${m.to.name}`);
+}
+
 async function deleteDog(id) {
   if (!confirm('Delete this dog and all their bookings?')) return;
   DB.dogs = DB.dogs.filter(d => d.id !== id);
@@ -3980,6 +4044,7 @@ Object.assign(window, {
   openAddMenuSheet, openBookingSheet, saveBookingForm, deleteBooking,
   openStaySheet,
   openDogSheet, openDogEditSheet, saveDogForm, deleteDog,
+  openMergeDogSheet, applyMergeDog,
   openOwnerSheet, saveOwnerForm, deleteOwner,
   openMergeOwnerSheet, applyMergeOwner,
   setPackFilter, scoutsState,
