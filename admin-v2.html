@@ -2107,6 +2107,7 @@ function emailInvoice(ownerId) {
 /* ---- settings ---- */
 
 function openInvoiceSettings() {
+  hydrateBiz();
   const S = invSettings();
   openSheet(`<h2 class="sheet-title">Sending invoices</h2>
     <p class="sheet-sub">How invoices leave the building.</p>
@@ -2151,6 +2152,7 @@ async function saveInvoiceSettings() {
 
 /* Business + bank details, needed before anything goes out. */
 function openBizSettings() {
+  hydrateBiz();
   openSheet(`<h2 class="sheet-title">Invoice details</h2>
     <p class="sheet-sub">Shown on every invoice. Saved with the rest of the panel's data.</p>
     <div class="field-row">
@@ -2163,10 +2165,19 @@ function openBizSettings() {
     <button class="btn primary block" onclick="saveBizSettings()">Save</button>
     <button class="btn ghost block mt-2" onclick="renderInvoices()">Cancel</button>`);
 }
+/* "BSB 062-948" typed into the BSB field would print as "BSB BSB 062-948".
+   Strip a label people naturally include when copying off a bank statement. */
+function stripLabel(v, ...labels) {
+  let out = String(v || '').trim();
+  const re = new RegExp('^(?:' + labels.join('|') + ')[\\s:.\\-]*', 'i');
+  while (re.test(out)) out = out.replace(re, '').trim();
+  return out;
+}
+
 async function saveBizSettings() {
-  BIZ.bsb  = document.getElementById('bizBsb').value.trim();
-  BIZ.acct = document.getElementById('bizAcct').value.trim();
-  BIZ.abn  = document.getElementById('bizAbn').value.trim();
+  BIZ.bsb  = stripLabel(document.getElementById('bizBsb').value, 'bsb');
+  BIZ.acct = stripLabel(document.getElementById('bizAcct').value, 'account', 'acct', 'acc', 'a/c');
+  BIZ.abn  = stripLabel(document.getElementById('bizAbn').value, 'abn');
   BIZ.stripeLink = document.getElementById('bizStripe').value.trim();
   DB.meta.biz = { bsb: BIZ.bsb, acct: BIZ.acct, abn: BIZ.abn, stripeLink: BIZ.stripeLink };
   await save(DB); renderInvoices(); toast('Saved');
