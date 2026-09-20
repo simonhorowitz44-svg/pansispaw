@@ -32,6 +32,12 @@
   --highlight-ink:#7a5a10;
   --night:       #3a3660;
   --night-2:     #ebe6f2;
+
+  /* Booking colours in the week view. Kept muted so a full day still reads as
+     one calendar rather than a bag of highlighters. */
+  --k-scouts:    #4f8a3d;  --k-scouts-bg: #edf5e7;  --k-scouts-hv: #e2efd8;
+  --k-night:     #3f6ea8;  --k-night-bg:  #e7eff8;  --k-night-hv:  #d9e5f3;
+  --k-day:       #cf9a2c;  --k-day-bg:    #fdf3dd;  --k-day-hv:    #f8e9c6;
   --owe:         #c26a4f;
   --owe-2:       #f7e0d6;
   --medical:     #c94a3d;
@@ -213,6 +219,25 @@ body.modal-open { overflow: hidden; }
 .week-dog-row { display: flex; align-items: center; gap: var(--s3); padding: 8px; margin: 0 -8px; border-top: 1px dashed var(--edge-2); cursor: pointer; transition: background var(--dur); border-radius: 6px; }
 .week-dog-row:first-of-type { border-top: 0; }
 .week-dog-row:hover { background: var(--paper-3); }
+/* Colour by session type. Inset shadow rather than a border so the stripe
+   costs no layout and the desktop column view keeps its alignment. */
+.week-dog-row.k-day    { background: var(--k-day-bg);    box-shadow: inset 3px 0 0 var(--k-day); }
+.week-dog-row.k-night  { background: var(--k-night-bg);  box-shadow: inset 3px 0 0 var(--k-night); }
+.week-dog-row.k-scouts { background: var(--k-scouts-bg); box-shadow: inset 3px 0 0 var(--k-scouts); }
+.week-dog-row.k-day:hover    { background: var(--k-day-hv); }
+.week-dog-row.k-night:hover  { background: var(--k-night-hv); }
+.week-dog-row.k-scouts:hover { background: var(--k-scouts-hv); }
+.week-dog-row.k-day    .week-dog-face { border-color: var(--k-day); }
+.week-dog-row.k-night  .week-dog-face { border-color: var(--k-night); }
+.week-dog-row.k-scouts .week-dog-face { border-color: var(--k-scouts); }
+/* A cancelled booking keeps its colour but stops shouting. */
+.week-dog-row.cancelled { box-shadow: none; opacity: 0.7; }
+.cal-legend { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin: 0 0 12px; font-size: 12px; color: var(--ink-2); }
+.cal-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.cal-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.cal-legend i.day    { background: var(--k-day); }
+.cal-legend i.night  { background: var(--k-night); }
+.cal-legend i.scouts { background: var(--k-scouts); }
 .week-dog-face { width: 34px; height: 34px; border-radius: 50%; background: var(--paper-3); display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; border: 1.5px solid var(--edge); overflow: hidden; }
 .week-dog-face img { width: 100%; height: 100%; object-fit: cover; }
 .week-dog-face.night { background: var(--night-2); border-color: var(--night); }
@@ -1360,7 +1385,12 @@ function renderWeek() {
 
   let html = `<h1 class="greet">${title}</h1>
     <p class="sub tight">${sub}</p>
-    ${modeToggle}`;
+    ${modeToggle}
+    <div class="cal-legend">
+      <span><i class="day"></i>Daycare</span>
+      <span><i class="scouts"></i>Scouts Club</span>
+      <span><i class="night"></i>Overnight</span>
+    </div>`;
 
   const stays = computeStays(DB.bookings);
 
@@ -1490,10 +1520,19 @@ function showMoreWeeks() {
 }
 function setWeekMode(m) { weekViewMode = m; render(); window.scrollTo({ top: 0, behavior:'smooth' }); }
 
+/* Colour bucket for the week view. Three buckets, not six: the point is to
+   scan a week and see the shape of it, not to re-read the session type. */
+function bookingKind(b) {
+  if (b.session === 'scouts')    return 'scouts';
+  if (b.session === 'overnight') return 'night';
+  return 'day';
+}
+
 function weekDogRow(b, opts = {}) {
   const dog = dogById(b.dogId);
   const amt = opts.amt != null ? opts.amt : (b.total != null ? b.total : calcTotal(b, dog));
   const isNight = b.session === 'overnight';
+  const kind = bookingKind(b);
 
   // A booking with no dog record still costs money and still counts toward the
   // day total — so it gets a visible row. Silently dropping it made the rows
@@ -1512,7 +1551,7 @@ function weekDogRow(b, opts = {}) {
   const owner = ownerOf(b.dogId);
   const unpaidTag = (SHOW_PAYMENTS && b.paymentStatus !== 'paid') ? ' · <span class="text-owe">unpaid</span>' : '';
   const context = opts.context ? ` · ${opts.context}` : '';
-  return `<div class="week-dog-row ${b.cancelled ? 'cancelled' : ''}" data-openbk="${b.id}">
+  return `<div class="week-dog-row k-${kind} ${b.cancelled ? 'cancelled' : ''}" data-openbk="${b.id}">
     <div class="week-dog-face ${isNight?'night':''}">${photoOrGlyph(dog)}</div>
     <div class="week-dog-body">
       <div class="week-dog-name">${escapeHtml(dog.name)} <span class="muted small">· ${escapeHtml(owner?.name || '—')}</span></div>
