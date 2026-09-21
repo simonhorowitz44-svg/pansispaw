@@ -41,9 +41,9 @@ const sydneyToday = () =>
     .format(new Date());
 
 const DEFAULT_BIZ = {
-  name: "Pansi's Paws Home Daycare", person: 'Andressa Ubida', suburb: 'Annandale, Sydney',
+  name: "Pansi's Paws Home Daycare", person: 'Andressa Ubida Fernandes', suburb: 'Annandale, Sydney',
   phone: '0410 151 509', email: 'andressa@pansispaws.com.au', site: 'pansispaws.com.au',
-  bsb: '', acct: '', abn: '', stripeLink: '', bankDiscount: 0
+  acctName: '', bsb: '', acct: '', abn: '', stripeLink: '', bankDiscount: 0
 };
 
 async function loadPricing() {
