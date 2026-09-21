@@ -25,8 +25,12 @@ export function setPricing(p) {
   // Merge per size rather than replacing the table. pricing.json only carries
   // the three daycare sessions, so a wholesale replace left scouts, meet, trial
   // and overnight undefined — and calcTotal's `|| 0` turned undefined into free.
-  // Four real Scouts bookings were sitting at $0 before this was caught. A price
-  // that goes missing must fall back to the built-in one, never to nothing.
+  // No money was lost to this: every Scouts booking on the books carries a
+  // customPrice typed in by hand, so calcTotal never priced them. The trap is
+  // the first one saved without one — it would be free, and a zero-priced
+  // booking produces no invoice line at all, so it reads as a smaller total
+  // rather than a missing charge. A price that goes missing must fall back to
+  // the built-in one, never to nothing.
   if (p.prices) {
     const merged = {};
     for (const size of new Set([...Object.keys(PRICES), ...Object.keys(p.prices)])) {
