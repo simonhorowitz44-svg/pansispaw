@@ -392,7 +392,8 @@ export function renderInvoiceHTML(inv, biz, o = {}) {
 
     ${isInv && bank ? `<div class="inv-pay">
       <div class="inv-pay-title">How to pay · within ${INVOICE_TERMS_DAYS} days</div>
-      <div class="inv-pay-row"><b>Bank transfer</b> — BSB ${escapeHtml(biz.bsb)} · Account ${escapeHtml(biz.acct)}<br>
+      <div class="inv-pay-row"><b>Bank transfer</b>${biz.acctName ? ` — ${escapeHtml(biz.acctName)}` : ''}<br>
+        BSB ${escapeHtml(biz.bsb)} · Account ${escapeHtml(biz.acct)}<br>
         Please use the reference <b>${escapeHtml(inv.ref)}</b> so we can match your payment.${
         bankOff ? `<br>Pay this way and it's <b>${m(inv.total - bankOff)}</b> — $${bankOff} off.` : ''}</div>
       ${biz.stripeLink ? `<div class="inv-pay-row"><b>Card</b> — <a href="${escapeHtml(biz.stripeLink)}">pay online here</a>.</div>` : ''}
@@ -424,7 +425,9 @@ export function invoiceText(inv, biz) {
   L.push(inv.nothingDue ? 'Nothing to pay.' : `Total due: $${inv.total.toFixed(2)} by ${fmtDayY(inv.dueISO)}`);
   inv.packNotes.forEach(p => L.push(`${p.dog}'s pack — ${p.left} of ${p.size} still to use${p.expires ? ', up to ' + fmtDayWk(p.expires) : ''}.`));
   if (!inv.nothingDue && biz.bsb && biz.acct) {
-    L.push('', 'How to pay', `Bank transfer: BSB ${biz.bsb}, Account ${biz.acct}`, `Reference: ${inv.ref}`);
+    L.push('', 'How to pay', 'Bank transfer');
+    if (biz.acctName) L.push(`Account name: ${biz.acctName}`);
+    L.push(`BSB ${biz.bsb}, Account ${biz.acct}`, `Reference: ${inv.ref}`);
     if (biz.stripeLink) L.push(`Or by card: ${biz.stripeLink}`);
   }
   L.push('', `Thank you — ${biz.person} 🐾`, biz.name + (biz.abn ? ` · ABN ${biz.abn}` : ''), 'No GST — not registered.');
@@ -495,7 +498,8 @@ export function renderInvoiceEmail(inv, biz, o = {}) {
   ${isInv && bank ? `<tr><td style="padding-top:16px">
     <div style="background:${kraft};border-radius:8px;padding:14px 16px;font-family:Helvetica,Arial,sans-serif;font-size:13px;color:${ink2};line-height:1.6">
       <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:${ink3};margin-bottom:8px">How to pay · within ${INVOICE_TERMS_DAYS} days</div>
-      <b style="color:${ink}">Bank transfer</b> — BSB ${escapeHtml(biz.bsb)} · Account ${escapeHtml(biz.acct)}<br>
+      <b style="color:${ink}">Bank transfer</b>${biz.acctName ? ` — ${escapeHtml(biz.acctName)}` : ''}<br>
+      BSB ${escapeHtml(biz.bsb)} · Account ${escapeHtml(biz.acct)}<br>
       Please use the reference <b style="color:${ink}">${escapeHtml(inv.ref)}</b> so we can match your payment.
       ${biz.stripeLink ? `<br><br><b style="color:${ink}">Card</b> — <a href="${escapeHtml(biz.stripeLink)}" style="color:#6a8f4a">pay online here</a>.` : ''}
     </div></td></tr>` : ''}

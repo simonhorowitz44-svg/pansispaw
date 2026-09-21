@@ -754,7 +754,7 @@ function normalizeDb(db) {
   db.owners ||= []; db.dogs ||= []; db.bookings ||= []; db.packs ||= []; db.meta ||= {};
   db.payments ||= [];                      // money received, as records
   db.meta.settledBefore ||= '';            // everything before this date is done with
-  db.meta.biz ||= { bsb:'', acct:'', abn:'', stripeLink:'', email:'' };
+  db.meta.biz ||= { acctName:'', bsb:'', acct:'', abn:'', stripeLink:'', email:'' };
   db.meta.billed ||= {};                   // bookingId -> invoice number, so nothing bills twice
   db.meta.invoicesSent ||= [];             // what went out, when, and how
   db.meta.sendQueue ||= [];                // the panel's intent; the Cloud Function drains it
@@ -1760,7 +1760,7 @@ function onReconFile(e) {
 
 function hydrateBiz() {
   const b = (DB.meta && DB.meta.biz) || {};
-  BIZ.bsb = b.bsb || ''; BIZ.acct = b.acct || ''; BIZ.abn = b.abn || '';
+  BIZ.acctName = b.acctName || ''; BIZ.bsb = b.bsb || ''; BIZ.acct = b.acct || ''; BIZ.abn = b.abn || '';
   BIZ.stripeLink = b.stripeLink || '';
   if (b.email) BIZ.email = b.email;
 }
@@ -2196,6 +2196,8 @@ function openBizSettings() {
   openSheet(`<h2 class="sheet-title">Invoice details</h2>
     <p class="sheet-sub">Shown on every invoice. Saved with the rest of the panel's data.</p>
     <div class="field-row">
+      <div class="field-group"><label>Account name</label><input class="field" id="bizAcctName" value="${escapeHtml(BIZ.acctName||'')}" placeholder="Andressa Fernandes">
+        <span class="muted small">Exactly as the bank has it. Clients check this before they send money.</span></div>
       <div class="field-group"><label>BSB</label><input class="field" id="bizBsb" value="${escapeHtml(BIZ.bsb)}" placeholder="000-000"></div>
       <div class="field-group"><label>Account</label><input class="field" id="bizAcct" value="${escapeHtml(BIZ.acct)}" placeholder="00000000"></div>
     </div>
@@ -2218,12 +2220,13 @@ function stripLabel(v, ...labels) {
 }
 
 async function saveBizSettings() {
+  BIZ.acctName = stripLabel(document.getElementById('bizAcctName').value, 'account name', 'name');
   BIZ.bsb  = stripLabel(document.getElementById('bizBsb').value, 'bsb');
   BIZ.acct = stripLabel(document.getElementById('bizAcct').value, 'account', 'acct', 'acc', 'a/c');
   BIZ.abn  = stripLabel(document.getElementById('bizAbn').value, 'abn');
   BIZ.stripeLink = document.getElementById('bizStripe').value.trim();
   BIZ.email = document.getElementById('bizEmail').value.trim() || BIZ.email;
-  DB.meta.biz = { bsb: BIZ.bsb, acct: BIZ.acct, abn: BIZ.abn, stripeLink: BIZ.stripeLink, email: BIZ.email };
+  DB.meta.biz = { acctName: BIZ.acctName, bsb: BIZ.bsb, acct: BIZ.acct, abn: BIZ.abn, stripeLink: BIZ.stripeLink, email: BIZ.email };
   await save(DB); renderInvoices(); toast('Saved');
 }
 

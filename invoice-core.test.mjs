@@ -326,5 +326,33 @@ console.log('\nThe run honours the config it is given');
   eq('and it is the recent visit that survives', narrow.jobs[0].lines[0].date, '2026-09-16');
 }
 
+
+
+console.log('\nThe account name reaches the client');
+{
+  /* Clients check the name before they send money — a transfer to the right
+     BSB under an unexpected name is the thing that makes people stop and ring. */
+  const d = base();
+  d.bookings = [{ id:'n1', dogId:'d1', date:'2026-09-16', session:'full', total:100, departureLogged:'16:00' }];
+  const inv = C.buildInvoice(d, 'own_kirsten_1', { asAt:'2026-09-16' });
+  const named = { ...BIZ, acctName:'Andressa Fernandes' };
+
+  t('the printed invoice names the account',  C.renderInvoiceHTML(inv, named).includes('Andressa Fernandes'));
+  t('the email names the account',            C.renderInvoiceEmail(inv, named).includes('Andressa Fernandes'));
+  t('the plain-text version names it too',    C.invoiceText(inv, named).includes('Account name: Andressa Fernandes'));
+
+  t('the BSB survives alongside it',          C.renderInvoiceEmail(inv, named).includes('062-000'));
+  t('and so does the account number',         C.renderInvoiceEmail(inv, named).includes('12345678'));
+
+  /* Not every business has one saved yet, and a stray dash where a name should
+     be looks worse than no name at all. */
+  t('no name saved leaves no empty dash in the email', !C.renderInvoiceEmail(inv, BIZ).includes('</b> — <br>'));
+  t('no name saved still shows the BSB',      C.renderInvoiceEmail(inv, BIZ).includes('062-000'));
+  t('no name saved omits the text line',      !C.invoiceText(inv, BIZ).includes('Account name:'));
+
+  /* A name is a nicety, not a routing detail — it must never block a send. */
+  eq('a missing account name does not block sending', C.blockers(d, inv, BIZ, '2026-09-16').filter(x=>/name/i.test(x)), []);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
