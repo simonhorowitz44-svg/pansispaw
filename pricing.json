@@ -1,21 +1,30 @@
 {
   "version": 1,
-  "updated": "2026-08-19",
+  "updated": "2026-09-21",
   "prices": {
     "small": {
       "half": 55,
       "extended": 70,
-      "full": 80
+      "full": 80,
+      "meet": 0,
+      "trial": 0,
+      "scouts": 75
     },
     "medium": {
       "half": 65,
       "extended": 80,
-      "full": 90
+      "full": 90,
+      "meet": 0,
+      "trial": 0,
+      "scouts": 75
     },
     "large": {
       "half": 75,
       "extended": 90,
-      "full": 100
+      "full": 100,
+      "meet": 0,
+      "trial": 0,
+      "scouts": 75
     }
   },
   "addons": {
@@ -41,12 +50,12 @@
     },
     "taxi": {
       "amount": 35,
-      "label": "Pickup & dropoff \u22645km",
+      "label": "Pickup & dropoff ≤5km",
       "unit": "trip"
     },
     "taxi10": {
       "amount": 50,
-      "label": "Pickup & dropoff 5\u201310km",
+      "label": "Pickup & dropoff 5–10km",
       "unit": "trip"
     }
   },

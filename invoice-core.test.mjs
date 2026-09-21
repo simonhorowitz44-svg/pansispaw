@@ -354,5 +354,42 @@ console.log('\nThe account name reaches the client');
   eq('a missing account name does not block sending', C.blockers(d, inv, BIZ, '2026-09-16').filter(x=>/name/i.test(x)), []);
 }
 
+
+console.log('\nA partial pricing.json must not make anything free');
+{
+  /* The live pricing.json only carries half, extended and full. setPricing used
+     to replace the whole table, so scouts fell through calcTotal's `|| 0` and
+     every Scouts Club booking invoiced at $0. Four real ones had already been
+     saved that way. */
+  const dog = { id:'dx', size:'medium' };
+  const scouts = { id:'s1', dogId:'dx', date:'2026-09-21', session:'scouts', scoutsTrip:'am' };
+
+  C.setPricing({ prices:{ medium:{ half:65, extended:80, full:90 } } });   // exactly what the file holds
+  eq('scouts keeps its price when the file omits it', C.calcTotal(scouts, dog), 75);
+  eq('a full day still takes the price from the file', C.calcTotal({ ...scouts, session:'full' }, dog), 90);
+  eq('meet is still free',                            C.calcTotal({ ...scouts, session:'meet'  }, dog), 0);
+
+  C.setPricing({ prices:{ medium:{ full:120 } } });
+  eq('an override of one session wins',      C.calcTotal({ ...scouts, session:'full' }, dog), 120);
+  eq('and leaves the others untouched',      C.calcTotal({ ...scouts, session:'half' }, dog), 65);
+  eq('scouts survives a second partial load', C.calcTotal(scouts, dog), 75);
+
+  /* A Scouts booking priced at zero vanishes from the invoice entirely, which is
+     how this went unnoticed — no line, no warning, just a smaller total. */
+  const d = base();
+  d.dogs.push({ id:'dz', ownerId:'own_kirsten_1', name:'Scout', size:'medium' });
+  d.bookings = [{ id:'sc1', dogId:'dz', date:'2026-09-16', session:'scouts', scoutsTrip:'am' }];
+  const inv = C.buildInvoice(d, 'own_kirsten_1', { asAt:'2026-09-16', from:'2026-09-01' });
+  t('a Scouts booking reaches the invoice', inv.lines.some(l => /Scouts/i.test(l.what)));
+  eq('and carries its price',               inv.total, 75);
+}
+
+// Restore the fixture pricing for anything that follows.
+C.setPricing({ prices: {
+  medium: { meet:0, trial:0, half:65, extended:80, full:100, overnight:115, scouts:75 },
+  small:  { meet:0, trial:0, half:55, extended:70, full:80,  overnight:100, scouts:75 }
+}});
+
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

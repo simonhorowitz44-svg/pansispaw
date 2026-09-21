@@ -22,7 +22,18 @@ export let SURCHARGES = { publicHoliday:25, xmasPeakDay:15, xmasPeakNight:30 };
 /* Accepts the shape of pricing.json, or plain {prices, addons, surcharges}. */
 export function setPricing(p) {
   if (!p) return;
-  if (p.prices) PRICES = p.prices;
+  // Merge per size rather than replacing the table. pricing.json only carries
+  // the three daycare sessions, so a wholesale replace left scouts, meet, trial
+  // and overnight undefined — and calcTotal's `|| 0` turned undefined into free.
+  // Four real Scouts bookings were sitting at $0 before this was caught. A price
+  // that goes missing must fall back to the built-in one, never to nothing.
+  if (p.prices) {
+    const merged = {};
+    for (const size of new Set([...Object.keys(PRICES), ...Object.keys(p.prices)])) {
+      merged[size] = { ...(PRICES[size] || {}), ...(p.prices[size] || {}) };
+    }
+    PRICES = merged;
+  }
   if (p.addons) ADDONS = {
     senior: p.addons.senior?.amount ?? p.addons.senior ?? ADDONS.senior,
     puppy:  p.addons.puppy?.amount  ?? p.addons.puppy  ?? ADDONS.puppy,
