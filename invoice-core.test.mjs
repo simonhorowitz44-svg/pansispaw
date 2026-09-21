@@ -391,5 +391,71 @@ C.setPricing({ prices: {
 }});
 
 
+
+console.log('\nAn open booking holds the whole client back, not just one dog');
+{
+  /* The rule people assume is per-dog. It is per-client: two dogs in one
+     household get one invoice, so the later dog's booking has to hold it. */
+  const db = base();
+  db.dogs.push({ id:'d1b', ownerId:'own_kirsten_1', name:'Juno', size:'medium' });
+  db.bookings = [
+    { id:'k1', dogId:'d1',  date:'2026-09-14', session:'full', total:100, departureLogged:'16:00' },
+    { id:'k2', dogId:'d1b', date:'2026-09-18', session:'full', total:100 }
+  ];
+  t('Leo is home but Juno is booked Friday — not finished',
+    !C.weekRunComplete(db, 'own_kirsten_1', '2026-09-16'));
+  t('and nothing is sendable for that client',
+    !C.sendableInvoices(db, BIZ, { asAt:'2026-09-16' }).some(i => i.owner.id === 'own_kirsten_1'));
+
+  db.bookings[1].departureLogged = '15:40';
+  t('once Juno is collected the week is finished',
+    C.weekRunComplete(db, 'own_kirsten_1', '2026-09-16'));
+  t('and the invoice becomes sendable',
+    C.sendableInvoices(db, BIZ, { asAt:'2026-09-16' }).some(i => i.owner.id === 'own_kirsten_1'));
+}
+
+{
+  /* One client's open booking must not hold a different client's invoice. */
+  const db = base();
+  db.bookings = [
+    { id:'z1', dogId:'d2', date:'2026-09-14', session:'full', total:100, departureLogged:'16:00' },
+    { id:'k9', dogId:'d1', date:'2026-09-18', session:'full', total:100 }
+  ];
+  t("Zoe's week is finished even though Kirsten is still coming Friday",
+    C.weekRunComplete(db, 'own_zoe_2', '2026-09-16'));
+  const s = C.sendableInvoices(db, BIZ, { asAt:'2026-09-16' }).map(i => i.owner.id);
+  t('Zoe is sendable',          s.includes('own_zoe_2'));
+  t('Kirsten is held back',    !s.includes('own_kirsten_1'));
+}
+
+{
+  /* A visit Andressa forgot to tap "collected" on is in the past. If a stale
+     row held the week open the client would never be invoiced at all, so the
+     rule only looks forward. Worth knowing: it means a forgotten tap bills at
+     the price saved before pickup, without any late fee. */
+  const db = base();
+  db.bookings = [
+    { id:'f1', dogId:'d1', date:'2026-09-14', session:'full', total:100 },              // never collected
+    { id:'f2', dogId:'d1', date:'2026-09-16', session:'full', total:100, departureLogged:'16:00' }
+  ];
+  t('a past uncollected visit does not hold the week open forever',
+    C.weekRunComplete(db, 'own_kirsten_1', '2026-09-16'));
+  eq('and it is still billed, at the pre-pickup price',
+    C.buildInvoice(db, 'own_kirsten_1', { asAt:'2026-09-16', from:'2026-09-01' }).total, 200);
+}
+
+{
+  /* Today counts as open. Someone collected at 4pm is finished; someone still
+     here at 2pm is not — and the sweep runs at 7pm for exactly this reason. */
+  const db = base();
+  db.bookings = [{ id:'t1', dogId:'d1', date:'2026-09-16', session:'full', total:100 }];
+  t("today's booking with no departure holds the week open",
+    !C.weekRunComplete(db, 'own_kirsten_1', '2026-09-16'));
+  db.bookings[0].departureLogged = '16:05';
+  t('and releases it the moment they are collected',
+    C.weekRunComplete(db, 'own_kirsten_1', '2026-09-16'));
+}
+
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
