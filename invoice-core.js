@@ -521,6 +521,8 @@ export function renderInvoiceEmail(inv, biz, o = {}) {
 
   <tr><td style="padding-top:18px;border-top:1px solid ${edge};margin-top:16px;text-align:center;font-family:Helvetica,Arial,sans-serif;font-size:13px;color:${ink2};line-height:1.6">
     Thank you — ${escapeHtml(biz.person)} 🐾<br>
+    <span style="font-family:Georgia,'Times New Roman',serif;font-size:14px;color:${ink}">${escapeHtml(biz.name)}</span><br>
+    <span style="font-size:12px;color:${ink2}">${escapeHtml(biz.suburb || '')}${biz.suburb && biz.phone ? ' · ' : ''}${escapeHtml(biz.phone || '')}</span><br>
     <span style="font-size:11px;color:${ink3}">${escapeHtml(biz.site)} · No GST — not registered.<br>
     Cancellations are free with more than 24 hours' notice, and half the day's rate inside 24 hours.${
       inv.lines.some(l => l.what === 'Late pickup')
