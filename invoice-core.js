@@ -412,11 +412,19 @@ export function buildInvoice(db, ownerId, opts = {}) {
       if (splittable) extras.forEach(x =>
         push({ date:b.date, dog:dogName, what:x.what }, cents(x.amt), b));
 
-      /* A one-off charge Andressa adds by hand, with her reason. Its own line
-         rather than folded into the price, and below the day it relates to —
-         a charge printed above the thing it is charging for reads backwards. */
+      /* A one-off charge Andressa adds by hand. Its own line rather than folded
+         into the price, and below the day it relates to — a charge printed above
+         the thing it is charging for reads backwards.
+
+         Where she has not written a reason, work one out rather than printing
+         "Additional charge" and nothing else: on a stay the times are already
+         recorded, so the invoice can say what they were. That line is the one
+         most likely to be queried, so it is the worst one to leave bare. */
       if (b.extraCharge) {
-        push({ date:b.date, dog:dogName, what: b.extraNote || 'Additional charge' },
+        const bh = boardingHoursFee(b);
+        push({ date:b.date, dog:dogName,
+               what: b.extraNote || (bh.why ? 'Outside check-in hours' : 'Additional charge'),
+               note: bh.why || '' },
              cents(b.extraCharge), b);
       }
       addLate();

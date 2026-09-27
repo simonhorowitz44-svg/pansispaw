@@ -750,7 +750,7 @@ console.log('\nAn ad-hoc charge explains itself');
   unnamed.bookings = [{ id:'e2', dogId:'d1', date:'2026-09-16', session:'full', total:100,
                         departureLogged:'16:00', extraCharge:15 }];
   const u = C.buildInvoice(unnamed, 'own_kirsten_1', { asAt:'2026-09-16', from:'2026-09-01' });
-  eq('an unlabelled extra still says something', u.lines.find(l => l.amt === 15).what, 'Additional charge');
+  eq('an unlabelled extra on a daycare day says something', u.lines.find(l => l.amt === 15).what, 'Additional charge');
 
   const none = base();
   none.bookings = [{ id:'e3', dogId:'d1', date:'2026-09-16', session:'full', total:100, departureLogged:'16:00' }];
@@ -895,6 +895,42 @@ console.log('\nA stay shows when it started and ended');
   day.bookings = [{ id:'s4', dogId:'d1', date:'2026-09-26', session:'full', total:100, departureLogged:'16:00' }];
   eq('a daycare day says nothing about next day',
      C.buildInvoice(day, 'own_kirsten_1', { asAt:'2026-09-27', from:'2026-09-21' }).lines[0].note, '');
+}
+
+
+
+console.log('\nAn unexplained charge explains itself');
+{
+  /* "Additional charge $40" and nothing else is the line most likely to be
+     queried, and the worst one to leave bare. On a stay the times are already
+     recorded, so the invoice can say what they were without Andressa typing
+     anything. */
+  const stay = n => {
+    const d = base(); d.dogs[0].size = 'medium';
+    d.bookings = [{ id:'x', dogId:'d1', date:'2026-09-26', session:'overnight', total:115,
+                    customPrice:115, arrivalTime:'13:00', departureTime:'11:30',
+                    extraCharge:40, extraNote:n }];
+    return C.buildInvoice(d, 'own_kirsten_1', { asAt:'2026-09-27', from:'2026-09-21' })
+            .lines.find(l => l.amt === 40);
+  };
+
+  const bare = stay('');
+  eq('it names itself when she has not',  bare.what, 'Outside check-in hours');
+  t('and says which hours',               /before 3pm/.test(bare.note) && /after 10am/.test(bare.note));
+
+  const hers = stay('Extended hours');
+  eq('her own wording still wins',        hers.what, 'Extended hours');
+  t('and keeps the explanation',          /before 3pm/.test(hers.note));
+
+  /* A charge with no times behind it has nothing to explain, so it stays plain
+     rather than inventing a reason. */
+  const d2 = base();
+  d2.bookings = [{ id:'y', dogId:'d1', date:'2026-09-26', session:'full', total:100,
+                   departureLogged:'16:00', extraCharge:25, extraNote:'' }];
+  const plain = C.buildInvoice(d2, 'own_kirsten_1', { asAt:'2026-09-27', from:'2026-09-21' })
+                 .lines.find(l => l.amt === 25);
+  eq('a daycare extra stays generic',     plain.what, 'Additional charge');
+  eq('with nothing made up',              plain.note, '');
 }
 
 
