@@ -343,6 +343,14 @@ export function buildInvoice(db, ownerId, opts = {}) {
       else                          baseC = cents(b.total) === cents(priced + L.fee) ? cents(b.total) - cents(L.fee) : cents(b.total);
       if (baseC < 0) baseC = 0;
 
+      /* A one-off charge Andressa adds by hand, with her reason. Kept apart
+         from the day's price so the client reads "Extended hours $40" and not
+         a night that silently costs more than the rate. */
+      if (b.extraCharge) {
+        push({ date:b.date, dog:dogName, what: b.extraNote || 'Additional charge' },
+             cents(b.extraCharge), b);
+      }
+
       /* Split the extras back out of the day's price so each one is named.
          They were added by calcTotal, so subtracting them leaves the session
          rate. If that doesn't come out positive the row is odd — show it whole

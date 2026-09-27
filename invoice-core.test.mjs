@@ -729,5 +729,34 @@ console.log('\nThe late pickup cap is a day, not a dog');
 }
 
 
+
+console.log('\nAn ad-hoc charge explains itself');
+{
+  /* Boarding has check-in and check-out times but no published fee structure
+     yet. Rather than inflating the nightly rate — which leaves the client
+     reading a number that does not match what they were quoted — an extra is
+     its own line with Andressa's own wording. */
+  const d = base();
+  d.bookings = [{ id:'e1', dogId:'d1', date:'2026-09-16', session:'full', total:100,
+                  departureLogged:'16:00', extraCharge:40, extraNote:'Extended hours' }];
+  const inv = C.buildInvoice(d, 'own_kirsten_1', { asAt:'2026-09-16', from:'2026-09-01' });
+
+  eq('the day is still the day',        inv.lines.find(l => l.what === 'Full day').amt, 100);
+  eq('the extra is its own line',       inv.lines.find(l => l.what === 'Extended hours').amt, 40);
+  eq('and the total is both',           inv.total, 140);
+  eq('lines sum to the total',          inv.lines.reduce((t,l)=>t+Math.round(l.amt*100),0)/100, inv.total);
+
+  const unnamed = base();
+  unnamed.bookings = [{ id:'e2', dogId:'d1', date:'2026-09-16', session:'full', total:100,
+                        departureLogged:'16:00', extraCharge:15 }];
+  const u = C.buildInvoice(unnamed, 'own_kirsten_1', { asAt:'2026-09-16', from:'2026-09-01' });
+  eq('an unlabelled extra still says something', u.lines.find(l => l.amt === 15).what, 'Additional charge');
+
+  const none = base();
+  none.bookings = [{ id:'e3', dogId:'d1', date:'2026-09-16', session:'full', total:100, departureLogged:'16:00' }];
+  eq('and nothing appears when there is no extra',
+     C.buildInvoice(none, 'own_kirsten_1', { asAt:'2026-09-16', from:'2026-09-01' }).lines.length, 1);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

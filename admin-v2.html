@@ -2667,7 +2667,7 @@ function openAddMenuSheet() {
 function openBookingSheet(bookingId, prefillDate) {
   const bk = bookingId ? DB.bookings.find(b => b.id === bookingId) : null;
   const isNew = !bk;
-  const b = bk || { id: uid(), dogId: '', date: prefillDate || todayISO(), session: 'full', arrivalTime:'', departureTime:'', arrivalLogged:null, departureLogged:null, addOns:{senior:false,puppy:false,med:false,diet:false,taxi:false}, surcharges:{publicHoliday:false,xmasPeak:false}, customPrice:null, total:0, paymentStatus:'pending', paidAt:null, notes:'', report:null };
+  const b = bk || { id: uid(), dogId: '', date: prefillDate || todayISO(), session: 'full', arrivalTime:'', departureTime:'', arrivalLogged:null, departureLogged:null, addOns:{senior:false,puppy:false,med:false,diet:false,taxi:false}, surcharges:{publicHoliday:false,xmasPeak:false}, customPrice:null, extraCharge:null, extraNote:'', total:0, paymentStatus:'pending', paidAt:null, notes:'', report:null };
   if (!DB.dogs.length) {
     openSheet(`<h2 class="sheet-title">No dogs yet</h2><p class="sheet-sub">Add a client and dog first.</p>
       <button class="btn primary block" onclick="closeSheet(); openOwnerSheet(null)">＋ Add a client</button>`);
@@ -2800,6 +2800,13 @@ function openBookingSheet(bookingId, prefillDate) {
       </div>
       <div class="field-group" id="packOfferSlot"></div>
       <div class="field-group"><label>Custom price (blank = auto)</label><input class="field" name="customPrice" type="number" value="${b.customPrice ?? ''}" placeholder="Auto-calculated"></div>
+      <div class="field-row">
+        <div class="field-group"><label>Extra charge</label><input class="field" name="extraCharge" type="number" value="${b.extraCharge ?? ''}" placeholder="e.g. 40"></div>
+        <div class="field-group"><label>What for</label><input class="field" name="extraNote" value="${escapeHtml(b.extraNote || '')}" placeholder="Extended hours"></div>
+      </div>
+      <span class="muted small">Its own line on the invoice, in your words. Use this rather than
+        raising the price — a night that costs more than the rate, with no reason given, is what
+        gets queried.</span>
       <div class="field-group"><label>Notes</label><textarea class="field" name="notes" rows="2">${escapeHtml(b.notes||'')}</textarea></div>
 
       <div class="field-row">
@@ -3017,6 +3024,8 @@ async function saveBookingForm(e, id, isNew) {
     addOns: { senior: f.senior.checked, puppy: f.puppy.checked, med: f.med.checked, diet: f.diet.checked, taxi: f.taxi.checked },
     surcharges: { publicHoliday: f.ph.checked, xmas: false, xmasPeak: f.xmas.checked },
     customPrice: (custom != null && !isNaN(custom)) ? custom : null,
+    extraCharge: (() => { const v = parseFloat(f.extraCharge?.value); return isNaN(v) || v === 0 ? null : v; })(),
+    extraNote: (f.extraNote?.value || '').trim(),
     total: 0, paymentStatus: f.paymentStatus.value, paidAt: existing?.paidAt || null,
     notes: f.notes.value, createdAt: existing?.createdAt || new Date().toISOString(),
     seriesId: existing?.seriesId, seriesPattern: existing?.seriesPattern,
