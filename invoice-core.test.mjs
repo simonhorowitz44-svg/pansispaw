@@ -125,7 +125,11 @@ t('it reads as extended care instead', chico.lines.some(l => l.what === 'Extende
 const html = C.renderInvoiceHTML(inv, BIZ);
 t('no internal instruction to Andressa appears on the document', !/Settings/i.test(html));
 t('the document calls itself an Invoice', /inv-kind">Invoice</.test(html));
-t('GST status is stated so nobody assumes it is included', /No GST — not registered/.test(html));
+// Was: the invoice stated "No GST — not registered". Removed once turnover got
+// close to the $75k threshold — a standing claim about tax status is a bad
+// thing to leave on a document nobody re-reads. Silence is accurate either way
+// until the accountant answers.
+t('the invoice makes no claim about GST at all', !/GST/i.test(html));
 t('payment terms are on it', /within 7 days/.test(html));
 t('the pay block vanishes without bank details',
   !/inv-pay/.test(C.renderInvoiceHTML(inv, { ...BIZ, bsb:'', acct:'' })));
@@ -515,6 +519,29 @@ console.log('\nThe invoice can leave the email address off');
 
   /* Replies do not depend on it: reply-to is set on the message itself. */
   eq('a missing contact email never blocks a send', C.blockers(d, inv, noEmail, '2026-09-16'), []);
+}
+
+
+
+console.log('\nThe invoice says nothing about GST');
+{
+  /* Turnover is close to the $75k threshold and the answer is with an
+     accountant. An invoice that volunteers "not registered" is a claim that
+     could go stale without anyone noticing, so it says nothing either way.
+     If she registers, this test should fail and be rewritten deliberately —
+     a tax invoice has to show GST, it is not a line to quietly re-add. */
+  const d = base();
+  d.bookings = [{ id:'g1', dogId:'d1', date:'2026-09-16', session:'full', total:100, departureLogged:'16:00' }];
+  const inv = C.buildInvoice(d, 'own_kirsten_1', { asAt:'2026-09-16' });
+
+  t('the email mentions no GST either way',    !/GST/i.test(C.renderInvoiceEmail(inv, BIZ)));
+  t('nor does the printed invoice',            !/GST/i.test(C.renderInvoiceHTML(inv, BIZ)));
+  t('nor the plain-text version',              !/GST/i.test(C.invoiceText(inv, BIZ)));
+
+  /* The rest of the footer has to survive its removal. */
+  t('the payment terms are still there',        /7 days/.test(C.renderInvoiceHTML(inv, BIZ)));
+  t('the cancellation terms are still there',   /Cancellations are free/.test(C.renderInvoiceHTML(inv, BIZ)));
+  t('the ABN is still there',                   C.invoiceText(inv, BIZ).includes('12 345 678 901'));
 }
 
 

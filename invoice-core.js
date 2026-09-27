@@ -416,7 +416,7 @@ export function renderInvoiceHTML(inv, biz, o = {}) {
 
     <div class="inv-foot">
       Thank you — ${escapeHtml(biz.person)} 🐾 · ${escapeHtml(biz.site)}<br>
-      <span>${isInv ? `Payment within ${INVOICE_TERMS_DAYS} days. ` : ''}No GST — not registered.
+      <span>${isInv ? `Payment within ${INVOICE_TERMS_DAYS} days. ` : ''}
       Cancellations are free with more than 24 hours' notice, and half the day's rate inside 24 hours.${
         inv.lines.some(l => l.what === 'Late pickup')
           ? ` Pickup after ${friendlyTime(LATE_CUTOFF)} is $${LATE_PER_30} per 30 minutes once a ${LATE_GRACE_MIN} minute grace period has passed, capped at $${LATE_CAP} a day.` : ''}</span>
@@ -445,7 +445,7 @@ export function invoiceText(inv, biz) {
     L.push(`BSB ${biz.bsb}, Account ${biz.acct}`, `Reference: ${inv.ref}`);
     if (biz.stripeLink) L.push(`Or by card: ${biz.stripeLink}`);
   }
-  L.push('', `Thank you — ${biz.person} 🐾`, biz.name + (biz.abn ? ` · ABN ${biz.abn}` : ''), 'No GST — not registered.');
+  L.push('', `Thank you — ${biz.person} 🐾`, biz.name + (biz.abn ? ` · ABN ${biz.abn}` : ''));
   return L.join('\n');
 }
 
@@ -523,7 +523,7 @@ export function renderInvoiceEmail(inv, biz, o = {}) {
     Thank you — ${escapeHtml(biz.person)} 🐾<br>
     <span style="font-family:Georgia,'Times New Roman',serif;font-size:14px;color:${ink}">${escapeHtml(biz.name)}</span><br>
     <span style="font-size:12px;color:${ink2}">${escapeHtml(biz.suburb || '')}${biz.suburb && biz.phone ? ' · ' : ''}${escapeHtml(biz.phone || '')}</span><br>
-    <span style="font-size:11px;color:${ink3}">${escapeHtml(biz.site)} · No GST — not registered.<br>
+    <span style="font-size:11px;color:${ink3}">${escapeHtml(biz.site)}<br>
     Cancellations are free with more than 24 hours' notice, and half the day's rate inside 24 hours.${
       inv.lines.some(l => l.what === 'Late pickup')
         ? ` Pickup after ${friendlyTime(LATE_CUTOFF)} is $${LATE_PER_30} per 30 minutes after a ${LATE_GRACE_MIN} minute grace period, capped at $${LATE_CAP} a day.` : ''}
