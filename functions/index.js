@@ -265,6 +265,12 @@ export const sendTestInvoice = onCall(
     /* The functions shell passes the raw body for v2 callables, so the argument
        arrives unwrapped there and wrapped in .data everywhere else. Accept both
        rather than making the caller remember which. */
+    /* Callable functions are public URLs. Without this anyone who knows the
+       project id can post an address and have a real invoice — carrying the
+       real BSB and account number — sent from the verified domain. */
+    if (!request?.auth) throw new HttpsError('unauthenticated',
+      'Sign in to the panel first. This sends a real email with real bank details on it.');
+
     const to = request?.data?.to || request?.to;
     if (!to || !/.+@.+\..+/.test(to)) throw new HttpsError('invalid-argument',
       'Pass a "to" address, e.g. sendTestInvoice({data: {to: "you@example.com"}}).');

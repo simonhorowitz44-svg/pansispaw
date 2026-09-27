@@ -622,5 +622,34 @@ C.setPricing({ prices: {
 }});
 
 
+
+console.log('\nA run without a go-live date bills nothing');
+{
+  /* Found in an end-to-end audit before launch. goLive defaults to '' in the
+     panel. buildInvoice falls back to year zero, so the first automatic run
+     would bill a client's entire history in one email — and the batch cap
+     counts invoices, not visits, so one client with 34 old bookings passes
+     straight through it. */
+  const d = base();
+  d.bookings = [
+    { id:'old1', dogId:'d1', date:'2024-01-10', session:'full', total:100, departureLogged:'16:00' },
+    { id:'old2', dogId:'d1', date:'2025-06-02', session:'full', total:100, departureLogged:'16:00' },
+    { id:'new1', dogId:'d1', date:'2026-09-16', session:'full', total:100, departureLogged:'16:00' }
+  ];
+
+  const blank = C.planRun(d, BIZ, { mode:'auto', batchCap:8, goLive:'' }, '2026-09-16');
+  eq('a blank go-live sends nothing',        blank.jobs.length, 0);
+  eq('and says why',                          blank.skipped, 'no go-live date set');
+
+  const missing = C.planRun(d, BIZ, { mode:'auto', batchCap:8 }, '2026-09-16');
+  eq('a missing go-live is refused too',      missing.jobs.length, 0);
+
+  const set = C.planRun(d, BIZ, { mode:'auto', batchCap:8, goLive:'2026-09-01' }, '2026-09-16');
+  eq('with a date it runs',                   set.jobs.length, 1);
+  eq('and bills only what is inside it',      set.jobs[0].total, 100);
+  eq('one line, not three years',             set.jobs[0].lines.length, 1);
+}
+
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

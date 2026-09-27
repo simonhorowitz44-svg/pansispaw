@@ -588,6 +588,11 @@ export function planRun(db, biz, cfg = {}, today) {
   const asAt = today || localISO(new Date());
   const mode = cfg.mode || 'off';
   if (mode === 'off')            return { jobs: [], refused: [], skipped: 'sending is off' };
+  /* A blank go-live means "bill everything ever", which on the first automatic
+     run is years of history in one email. The batch cap counts invoices, not
+     visits, so a single client with 34 old bookings sails straight through it.
+     Refuse rather than guess a date. */
+  if (!cfg.goLive)               return { jobs: [], refused: [], skipped: 'no go-live date set' };
   if (!biz || !biz.bsb || !biz.acct) return { jobs: [], refused: [], skipped: 'no bank details on file' };
 
   const jobs = [], refused = [], seen = new Set();
