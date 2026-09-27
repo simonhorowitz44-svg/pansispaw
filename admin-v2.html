@@ -2017,6 +2017,11 @@ function renderInvoices() {
       <button class="btn tiny ghost" onclick="openInvoiceSettings()">Change</button>
     </div>
 
+    <div class="mn-line">
+      <span>Paid into <b>${BIZ.bsb && BIZ.acct ? escapeHtml(BIZ.acctName || 'BSB ' + BIZ.bsb) : 'nowhere yet'}</b></span>
+      <button class="btn tiny ghost" onclick="openBizSettings()">Bank details</button>
+    </div>
+
     <div class="mn-hero ${total ? '' : 'clear'}">
       <div class="mn-hero-num">${total ? '$' + total.toFixed(2) : 'Nothing ready'}</div>
       <div class="mn-hero-cap">${b.ready.length} ready to send${b.waiting.length ? ` · ${b.waiting.length} still mid-week` : ''}</div>
