@@ -1762,7 +1762,7 @@ function hydrateBiz() {
   const b = (DB.meta && DB.meta.biz) || {};
   BIZ.acctName = b.acctName || ''; BIZ.bsb = b.bsb || ''; BIZ.acct = b.acct || ''; BIZ.abn = b.abn || '';
   BIZ.stripeLink = b.stripeLink || '';
-  if (b.email) BIZ.email = b.email;
+  if (b.email !== undefined) BIZ.email = b.email;
 }
 
 function renderMoney() {
@@ -1974,9 +1974,9 @@ const INV_MODES = {
 
 function invSettings() {
   const m = (DB.meta && DB.meta.invoicing) || {};
-  return { mode: m.mode || 'off', goLive: m.goLive || '', replyTo: m.replyTo || BIZ.email,
+  return { mode: m.mode || 'off', goLive: m.goLive || '', replyTo: m.replyTo || BIZ.email || '',
            mailFrom: m.mailFrom || '',
-           batchCap: m.batchCap == null ? 8 : m.batchCap, digestTo: m.digestTo || BIZ.email };
+           batchCap: m.batchCap == null ? 8 : m.batchCap, digestTo: m.digestTo || BIZ.email || '' };
 }
 
 function invBuckets() {
@@ -2230,7 +2230,9 @@ async function saveBizSettings() {
   BIZ.acct = stripLabel(document.getElementById('bizAcct').value, 'account', 'acct', 'acc', 'a/c');
   BIZ.abn  = stripLabel(document.getElementById('bizAbn').value, 'abn');
   BIZ.stripeLink = document.getElementById('bizStripe').value.trim();
-  BIZ.email = document.getElementById('bizEmail').value.trim() || BIZ.email;
+  // An empty field means "print no contact address", not "keep the old one".
+  // Her clients use WhatsApp; an address nobody writes to just bounces.
+  BIZ.email = document.getElementById('bizEmail').value.trim();
   DB.meta.biz = { acctName: BIZ.acctName, bsb: BIZ.bsb, acct: BIZ.acct, abn: BIZ.abn, stripeLink: BIZ.stripeLink, email: BIZ.email };
   await save(DB); renderInvoices(); toast('Saved');
 }
