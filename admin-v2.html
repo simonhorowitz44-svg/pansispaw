@@ -1703,6 +1703,21 @@ function paymentsFor(ownerId) {
 function suggestOwner(tx, balances) {
   const ref = cleanRef(tx.desc);
   const words = ref.split(' ').filter(w => w.length > 2);
+
+  /* Every invoice now asks the client to quote a reference — ELVIS-0927. When
+     one turns up in the bank description that is not a guess, it is the client
+     telling you which invoice they just paid. Checked before the name matching,
+     which is guesswork by comparison. */
+  const squashed = ref.replace(/[^A-Z0-9]/g, '');
+  const hit = (DB.meta?.invoicesSent || []).find(x =>
+    x.ref && squashed.includes(String(x.ref).toUpperCase().replace(/[^A-Z0-9]/g, '')));
+  if (hit) {
+    const e = balances.find(x => x.owner.id === hit.ownerId);
+    const owner = e ? e.owner : (DB.owners || []).find(o => o.id === hit.ownerId);
+    if (owner) return { owner, score: 1000, exact: Math.abs(tx.amount - hit.total) < 0.01,
+                        byRef: hit.ref, invoice: hit.number };
+  }
+
   let best = null;
   balances.forEach(e => {
     const names = [e.owner.name || '', ...e.dogs];

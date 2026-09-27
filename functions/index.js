@@ -167,9 +167,15 @@ async function runInvoicing(reason, apiKey) {
         inv.bookingIds.forEach(bid => { meta.billed[bid] = inv.number; });
         meta.invoicesSent.push({
           number: inv.number, ownerId: inv.owner.id, ownerName: inv.owner.name,
+          /* The reference is what the client types into their bank, so it is
+             the one field that lets a credit be matched to an invoice with
+             certainty rather than by guessing at names. Recording the due date
+             alongside it is what makes "who is overdue" answerable at all. */
+          ref: inv.ref, dueISO: inv.dueISO,
           asAt: inv.asAt, total: inv.total, bookingIds: inv.bookingIds,
           to: inv.owner.email, providerId: id,
-          sentAt: new Date().toISOString(), mode: cfg.mode, reason
+          sentAt: new Date().toISOString(), mode: cfg.mode, reason,
+          paidAt: null, paidAmount: null
         });
       });
       // Clear the queue entries we dealt with, either way — a refusal that stays
