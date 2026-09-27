@@ -545,5 +545,82 @@ console.log('\nThe invoice says nothing about GST');
 }
 
 
+
+console.log('\nEvery charge on the invoice is named, not folded in');
+{
+  /* Add-ons and surcharges used to be absorbed into the day rate, so four
+     "Full day" lines could carry four different amounts with no explanation.
+     The money was right; the document was not. */
+  C.setPricing({ prices:{ medium:{ meet:0, trial:0, half:65, extended:80, full:90, scouts:75 } },
+                 addons:{ senior:{amount:12}, puppy:{amount:12}, med:{amount:5},
+                          diet:{amount:3}, taxi:{amount:35} },
+                 surcharges:{ publicHoliday:{amount:25}, xmasPeakDay:{amount:15}, xmasPeakNight:{amount:30} } });
+
+  const d = base();
+  const put = b => { b.dogId = 'd1';
+    b.total = C.calcTotal({ ...b, departureLogged:null }, d.dogs[0]);
+    const L = C.latePickupFee(b); b.lateFee = L.fee; if (L.fee) b.total += L.fee;
+    d.bookings.push(b); };
+
+  d.bookings = [];
+  put({ id:'x1', date:'2026-09-21', session:'full' });
+  put({ id:'x2', date:'2026-09-22', session:'full', addOns:{ senior:true } });
+  put({ id:'x3', date:'2026-09-23', session:'full', addOns:{ med:true, diet:true } });
+  put({ id:'x4', date:'2026-09-24', session:'full', addOns:{ taxi:true } });
+  put({ id:'x5', date:'2026-09-25', session:'half', addOns:{ senior:true, med:true }, departureLogged:'18:30' });
+  put({ id:'x6', date:'2026-09-26', session:'full', surcharges:{ publicHoliday:true } });
+
+  eq('a plain full day is the rate',            d.bookings[0].total, 90);
+  eq('senior care is added at save time',       d.bookings[1].total, 102);
+  eq('two small add-ons stack',                 d.bookings[2].total, 98);
+  eq('transport is the dear one',               d.bookings[3].total, 125);
+  eq('add-ons and a late pickup together',      d.bookings[4].total, 102);
+  eq('a public holiday surcharge',              d.bookings[5].total, 115);
+
+  const inv = C.buildInvoice(d, 'own_kirsten_1', { asAt:'2026-09-27', from:'2026-09-01' });
+  const day = inv.lines.filter(l => l.what === 'Full day').map(l => l.amt);
+  eq('every full day now reads the same rate',  [...new Set(day)], [90]);
+
+  const named = n => inv.lines.some(l => l.what === n);
+  t('senior care is named',        named('Senior care'));
+  t('medication is named',         named('Medication'));
+  t('special diet is named',       named('Special diet'));
+  t('transport is named',          named('Pickup & drop-off'));
+  t('the public holiday is named', named('Public holiday'));
+  t('late pickup is still named',  named('Late pickup'));
+
+  eq('and the total is untouched by naming them', inv.total, 632);
+  eq('the lines add up to the total',
+     inv.lines.reduce((t2,l)=>t2+Math.round(l.amt*100),0)/100, inv.total);
+}
+
+{
+  /* Cases where a breakdown would be wrong or misleading. */
+  const d = base();
+  d.bookings = [
+    { id:'c1', dogId:'d1', date:'2026-09-21', session:'full', customPrice:70,
+      addOns:{ senior:true }, total:70, departureLogged:'16:00' },
+    { id:'c2', dogId:'d1', date:'2026-09-22', session:'scouts', scoutsTrip:'am',
+      addOns:{ taxi:true }, total:75 },
+    { id:'c3', dogId:'d1', date:'2026-09-23', session:'full', cancelled:true, cancelCharge:45,
+      addOns:{ senior:true } }
+  ];
+  const inv = C.buildInvoice(d, 'own_kirsten_1', { asAt:'2026-09-27', from:'2026-09-01' });
+
+  t('a hand-typed price is not broken apart',   !inv.lines.some(l => l.what === 'Senior care' && l.date === '2026-09-21'));
+  eq('and it bills exactly what she typed',      inv.lines.find(l => l.date === '2026-09-21').amt, 70);
+  t('Scouts has transport in the rate already', !inv.lines.some(l => l.date === '2026-09-22' && l.what === 'Pickup & drop-off'));
+  t('a cancelled day charges no add-ons',       !inv.lines.some(l => l.date === '2026-09-23' && l.what === 'Senior care'));
+  eq('just the cancellation charge',             inv.lines.filter(l => l.date === '2026-09-23').length, 1);
+  eq('the whole thing still reconciles',         inv.total, 190);
+}
+
+// Back to the fixture pricing for anything after this.
+C.setPricing({ prices: {
+  medium: { meet:0, trial:0, half:65, extended:80, full:100, overnight:115, scouts:75 },
+  small:  { meet:0, trial:0, half:55, extended:70, full:80,  overnight:100, scouts:75 }
+}});
+
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

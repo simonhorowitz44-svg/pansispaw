@@ -19,6 +19,34 @@ export let PRICES = {
 export let ADDONS     = { senior:12, puppy:12, med:5, diet:3, taxi:35 };
 export let SURCHARGES = { publicHoliday:25, xmasPeakDay:15, xmasPeakNight:30 };
 
+/* What a client should see an add-on called. Without these the extra is folded
+   silently into the day's price and four identical "Full day" lines carry four
+   different amounts, which is how an invoice earns a phone call. */
+export const ADDON_LABELS = {
+  senior: 'Senior care', puppy: 'Puppy care', med: 'Medication',
+  diet: 'Special diet', taxi: 'Pickup & drop-off'
+};
+export const SURCHARGE_LABELS = {
+  publicHoliday: 'Public holiday', xmasPeakDay: 'Peak season', xmasPeakNight: 'Peak season'
+};
+
+/* The extras baked into a booking's price, as {what, amt} the invoice can show
+   as their own lines. Empty where they don't apply: a custom price is whatever
+   Andressa typed, and Scouts is a flat rate with transport already in it. */
+export function bookingExtras(b) {
+  if (!b || b.cancelled || b.customPrice != null || b.session === 'scouts') return [];
+  const out = [];
+  for (const k of ['senior', 'puppy', 'med', 'diet', 'taxi'])
+    if (b.addOns?.[k] && ADDONS[k]) out.push({ what: ADDON_LABELS[k], amt: ADDONS[k] });
+  if (b.surcharges?.publicHoliday && SURCHARGES.publicHoliday)
+    out.push({ what: SURCHARGE_LABELS.publicHoliday, amt: SURCHARGES.publicHoliday });
+  if (b.surcharges?.xmasPeak) {
+    const amt = b.session === 'overnight' ? SURCHARGES.xmasPeakNight : SURCHARGES.xmasPeakDay;
+    if (amt) out.push({ what: SURCHARGE_LABELS.xmasPeakDay, amt });
+  }
+  return out;
+}
+
 /* Accepts the shape of pricing.json, or plain {prices, addons, surcharges}. */
 export function setPricing(p) {
   if (!p) return;
@@ -298,10 +326,21 @@ export function buildInvoice(db, ownerId, opts = {}) {
       else                          baseC = cents(b.total) === cents(priced + L.fee) ? cents(b.total) - cents(L.fee) : cents(b.total);
       if (baseC < 0) baseC = 0;
 
-      if (baseC || b.session === 'meet' || b.session === 'trial') {
+      /* Split the extras back out of the day's price so each one is named.
+         They were added by calcTotal, so subtracting them leaves the session
+         rate. If that doesn't come out positive the row is odd — show it whole
+         rather than invent a breakdown. */
+      const extras  = bookingExtras(b);
+      const extrasC = extras.reduce((t, x) => t + cents(x.amt), 0);
+      const splittable = extras.length && baseC - extrasC > 0;
+      const dayC = splittable ? baseC - extrasC : baseC;
+
+      if (dayC || b.session === 'meet' || b.session === 'trial') {
         push({ date:b.date, dog:dogName, what:`${label}${trip}`,
-               note: baseC ? '' : 'on us', free: !baseC }, baseC, b);
+               note: dayC ? '' : 'on us', free: !dayC }, dayC, b);
       }
+      if (splittable) extras.forEach(x =>
+        push({ date:b.date, dog:dogName, what:x.what }, cents(x.amt), b));
       addLate();
     });
 
