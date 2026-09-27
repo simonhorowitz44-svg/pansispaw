@@ -189,7 +189,12 @@ export function ownerOf(db, dogId) {
 export function latePickupFee(b) {
   const none = { minsLate: 0, fee: 0, blocks: 0 };
   if (!b || b.lateFeeWaived || b.cancelled) return none;
-  if (b.session === 'meet' || b.session === 'trial' || b.session === 'scouts') return none;
+  /* Boarding has its own window — 3pm in, 10am out — and boardingHoursFee
+     charges against it. Leaving overnight stays subject to the daycare 5.30pm
+     cutoff as well billed the same lateness twice: a dog collected at 6pm the
+     day after cost $10 here and $40 there. */
+  if (b.session === 'meet' || b.session === 'trial' || b.session === 'scouts'
+      || b.session === 'overnight') return none;
   const t = b.departureLogged;
   if (!t || t.length < 4) return none;
   const toMin = x => { const p = String(x).split(':'); return (+p[0]) * 60 + (+p[1] || 0); };

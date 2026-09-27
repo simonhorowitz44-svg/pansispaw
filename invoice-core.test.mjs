@@ -830,5 +830,32 @@ console.log('\nBoarding has check-in and check-out hours');
 }
 
 
+
+console.log('\nA stay is charged by one rule, not two');
+{
+  /* Overnight was subject to the daycare 5.30pm cutoff as well as its own 10am
+     checkout, so a dog collected at 6pm the day after was billed for the same
+     lateness twice — $10 under one rule and $40 under the other. */
+  const late = { session:'overnight', arrivalTime:'15:00', departureLogged:'18:00' };
+  eq('the daycare rule stays out of boarding', C.latePickupFee(late).fee, 0);
+  eq('boarding charges it once',               C.boardingHoursFee(late).fee, C.LATE_CAP);
+
+  /* And a morning collection is measured against checkout, not the evening. */
+  const morning = { session:'overnight', arrivalTime:'15:00', departureLogged:'11:30' };
+  eq('90 minutes past 10am',                   C.boardingHoursFee(morning).fee, 30);
+  eq('and nothing from the daycare cutoff',    C.latePickupFee(morning).fee, 0);
+
+  /* Daycare itself is untouched. */
+  eq('a daycare dog at 6.30pm still pays',     C.latePickupFee({ session:'full', departureLogged:'18:30' }).fee, 20);
+  eq('and at 8pm still caps',                  C.latePickupFee({ session:'full', departureLogged:'20:00' }).fee, C.LATE_CAP);
+
+  /* calcTotal must not quietly add the old fee to a stay either. */
+  const dog = { id:'d1', size:'medium' };
+  C.setPricing({ prices:{ medium:{ meet:0, trial:0, half:65, extended:80, full:90, overnight:115, scouts:75 } } });
+  eq('an overnight price is the rate, nothing bolted on',
+     C.calcTotal({ session:'overnight', departureLogged:'18:00' }, dog), 115);
+}
+
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
