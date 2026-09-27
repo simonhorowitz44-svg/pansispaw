@@ -385,14 +385,6 @@ export function buildInvoice(db, ownerId, opts = {}) {
       else                          baseC = cents(b.total) === cents(priced + L.fee) ? cents(b.total) - cents(L.fee) : cents(b.total);
       if (baseC < 0) baseC = 0;
 
-      /* A one-off charge Andressa adds by hand, with her reason. Kept apart
-         from the day's price so the client reads "Extended hours $40" and not
-         a night that silently costs more than the rate. */
-      if (b.extraCharge) {
-        push({ date:b.date, dog:dogName, what: b.extraNote || 'Additional charge' },
-             cents(b.extraCharge), b);
-      }
-
       /* Split the extras back out of the day's price so each one is named.
          They were added by calcTotal, so subtracting them leaves the session
          rate. If that doesn't come out positive the row is odd — show it whole
@@ -402,12 +394,31 @@ export function buildInvoice(db, ownerId, opts = {}) {
       const splittable = extras.length && baseC - extrasC > 0;
       const dayC = splittable ? baseC - extrasC : baseC;
 
+      /* A stay says when it started and ended. Without it the client reads a
+         night and an extra-hours charge with no way to check either. */
+      let stayNote = '';
+      if (b.session === 'overnight') {
+        const inT  = b.arrivalLogged   || b.arrivalTime;
+        const outT = b.departureLogged || b.departureTime;
+        if (inT && outT)  stayNote = `dropped ${friendlyTime(inT)}, collected ${friendlyTime(outT)} next day`;
+        else if (inT)     stayNote = `dropped ${friendlyTime(inT)}`;
+        else if (outT)    stayNote = `collected ${friendlyTime(outT)} next day`;
+      }
+
       if (dayC || b.session === 'meet' || b.session === 'trial') {
         push({ date:b.date, dog:dogName, what:`${label}${trip}`,
-               note: dayC ? '' : 'on us', free: !dayC }, dayC, b);
+               note: dayC ? stayNote : 'on us', free: !dayC }, dayC, b);
       }
       if (splittable) extras.forEach(x =>
         push({ date:b.date, dog:dogName, what:x.what }, cents(x.amt), b));
+
+      /* A one-off charge Andressa adds by hand, with her reason. Its own line
+         rather than folded into the price, and below the day it relates to —
+         a charge printed above the thing it is charging for reads backwards. */
+      if (b.extraCharge) {
+        push({ date:b.date, dog:dogName, what: b.extraNote || 'Additional charge' },
+             cents(b.extraCharge), b);
+      }
       addLate();
     });
 

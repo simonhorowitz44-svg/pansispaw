@@ -857,5 +857,46 @@ console.log('\nA stay is charged by one rule, not two');
 }
 
 
+
+console.log('\nA stay shows when it started and ended');
+{
+  /* Boarding is the one line a client cannot check from memory: a night and an
+     extra-hours charge, with nothing saying which night or which hours. */
+  const d = base();
+  d.dogs[0].size = 'medium';
+  d.bookings = [{ id:'s1', dogId:'d1', date:'2026-09-26', session:'overnight',
+                  total:115, customPrice:115, arrivalTime:'13:00', departureLogged:'11:30',
+                  extraCharge:40, extraNote:'Extended hours' }];
+  const inv = C.buildInvoice(d, 'own_kirsten_1', { asAt:'2026-09-27', from:'2026-09-21' });
+
+  const stay = inv.lines.find(l => l.what === 'Extended care');
+  t('the drop-off time is on it',   /dropped 1pm/.test(stay.note));
+  t('so is the collection',         /collected 11.30am/.test(stay.note));
+  t('and that it was the next day', /next day/.test(stay.note));
+
+  eq('the night comes first',       inv.lines[0].what, 'Extended care');
+  eq('then what it cost extra',     inv.lines[1].what, 'Extended hours');
+  eq('and it still adds up',        inv.total, 155);
+
+  /* One end only, which is what a middle night of a long stay looks like. */
+  const partial = base();
+  partial.bookings = [{ id:'s2', dogId:'d1', date:'2026-09-26', session:'overnight',
+                        total:115, customPrice:115, departureLogged:'11:30' }];
+  t('collection alone still reads',
+    /collected 11.30am next day/.test(C.buildInvoice(partial, 'own_kirsten_1', { asAt:'2026-09-27', from:'2026-09-21' }).lines[0].note));
+
+  const none = base();
+  none.bookings = [{ id:'s3', dogId:'d1', date:'2026-09-26', session:'overnight', total:115, customPrice:115 }];
+  eq('and no times means no note',
+     C.buildInvoice(none, 'own_kirsten_1', { asAt:'2026-09-27', from:'2026-09-21' }).lines[0].note, '');
+
+  /* Daycare keeps its own note; this must not leak across. */
+  const day = base();
+  day.bookings = [{ id:'s4', dogId:'d1', date:'2026-09-26', session:'full', total:100, departureLogged:'16:00' }];
+  eq('a daycare day says nothing about next day',
+     C.buildInvoice(day, 'own_kirsten_1', { asAt:'2026-09-27', from:'2026-09-21' }).lines[0].note, '');
+}
+
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
