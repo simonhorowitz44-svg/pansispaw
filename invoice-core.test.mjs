@@ -73,9 +73,31 @@ console.log('\nWhen a client\'s run is finished');
     !C.weekRunComplete(db, 'own_kirsten_1', '2026-09-14'));
 }
 {
+  /* Was: nothing booked this week meant "not finished". That stranded anyone
+     who stopped coming — their last visits never became an invoice, and the
+     panel claimed they still had a booking due. Nothing pending means the run
+     is done; whether there is anything to bill is buildInvoice's question. */
   const db = base();
-  t('a client with nothing booked this week is not "finished"',
-    !C.weekRunComplete(db, 'own_kirsten_1', '2026-09-16'));
+  t('a client with nothing booked this week has finished their run',
+    C.weekRunComplete(db, 'own_kirsten_1', '2026-09-16'));
+
+  /* The case that matters: they came last week, stopped, and the week rolled. */
+  const gone = base();
+  gone.bookings = [{ id:'last', dogId:'d1', date:'2026-09-11', session:'full', total:100, departureLogged:'16:00' }];
+  t('a client who stopped coming can still be invoiced',
+    C.weekRunComplete(gone, 'own_kirsten_1', '2026-09-23'));
+  const inv = C.buildInvoice(gone, 'own_kirsten_1', { asAt:'2026-09-23', from:'2026-09-01' });
+  eq('and their last visit is on it', inv.total, 100);
+  eq('with nothing blocking it',      C.blockers(gone, inv, BIZ, '2026-09-23'), []);
+
+  /* And it must not jump the gun on someone mid-week. */
+  const midweek = base();
+  midweek.bookings = [
+    { id:'m1', dogId:'d1', date:'2026-09-21', session:'full', total:100, departureLogged:'16:00' },
+    { id:'m2', dogId:'d1', date:'2026-09-24', session:'full', total:100 }
+  ];
+  t('someone with a visit still to come this week is not finished',
+    !C.weekRunComplete(midweek, 'own_kirsten_1', '2026-09-22'));
 }
 
 /* ---------- what lands on the invoice ---------- */
@@ -648,6 +670,62 @@ console.log('\nA run without a go-live date bills nothing');
   eq('with a date it runs',                   set.jobs.length, 1);
   eq('and bills only what is inside it',      set.jobs[0].total, 100);
   eq('one line, not three years',             set.jobs[0].lines.length, 1);
+}
+
+
+
+console.log('\nThe late pickup cap is a day, not a dog');
+{
+  /* terms.html and services.html both publish "capped at $40 a day". The cap
+     was applied per booking, so a household collecting three dogs late once
+     was charged $120 against a published maximum of $40. */
+  const d = base();
+  d.dogs.push({ id:'d1b', ownerId:'own_kirsten_1', name:'Juno', size:'medium' });
+  d.dogs.push({ id:'d1c', ownerId:'own_kirsten_1', name:'Pip',  size:'medium' });
+  const late = (id, dogId) => ({ id, dogId, date:'2026-09-16', session:'full',
+                                 total:100, departureLogged:'20:00' });
+  d.bookings = [late('l1','d1'), late('l2','d1b'), late('l3','d1c')];
+
+  const inv = C.buildInvoice(d, 'own_kirsten_1', { asAt:'2026-09-16', from:'2026-09-01' });
+  const lateTotal = inv.lines.filter(l => l.what === 'Late pickup')
+                             .reduce((t, l) => t + l.amt, 0);
+  eq('three dogs, one late collection, one cap', lateTotal, C.LATE_CAP);
+  eq('and the day still bills all three',        inv.lines.filter(l => l.what === 'Full day').length, 3);
+  eq('total is three days plus one cap',         inv.total, 300 + C.LATE_CAP);
+  eq('one late line for one collection, not three',
+     inv.lines.filter(l => l.what === 'Late pickup').length, 1);
+
+  /* Where a fee is only partly charged because the day is nearly capped, say
+     so — otherwise the arithmetic looks wrong to anyone checking it. */
+  const mixed = base();
+  mixed.dogs.push({ id:'d1b', ownerId:'own_kirsten_1', name:'Juno', size:'medium' });
+  mixed.bookings = [
+    { id:'p1', dogId:'d1',  date:'2026-09-16', session:'full', total:100, departureLogged:'18:30' },
+    { id:'p2', dogId:'d1b', date:'2026-09-16', session:'full', total:100, departureLogged:'20:00' }
+  ];
+  const mx = C.buildInvoice(mixed, 'own_kirsten_1', { asAt:'2026-09-16', from:'2026-09-01' });
+  eq('the day still stops at the cap',
+     mx.lines.filter(l => l.what === 'Late pickup').reduce((t,l)=>t+l.amt,0), C.LATE_CAP);
+  t('and the truncated one explains itself',
+    mx.lines.some(l => /capped at \$40 for the day/.test(l.note || '')));
+
+  /* A different day gets its own cap — this is per date, not per invoice. */
+  d.bookings.push({ id:'l4', dogId:'d1', date:'2026-09-17', session:'full', total:100, departureLogged:'20:00' });
+  const two = C.buildInvoice(d, 'own_kirsten_1', { asAt:'2026-09-17', from:'2026-09-01' });
+  eq('two late days, two caps',
+     two.lines.filter(l => l.what === 'Late pickup').reduce((t,l)=>t+l.amt,0), C.LATE_CAP * 2);
+
+  /* And one dog collected a little late is unaffected by any of this. */
+  const one = base();
+  one.bookings = [{ id:'s1', dogId:'d1', date:'2026-09-16', session:'full', total:100, departureLogged:'18:30' }];
+  const inv1 = C.buildInvoice(one, 'own_kirsten_1', { asAt:'2026-09-16', from:'2026-09-01' });
+  eq('a single hour late is still just the fee',
+     inv1.lines.find(l => l.what === 'Late pickup').amt, 20);
+  t('and says nothing about a cap',
+    !/capped/.test(inv1.lines.find(l => l.what === 'Late pickup').note || ''));
+
+  eq('lines still sum to the total',
+     inv.lines.reduce((t,l)=>t+Math.round(l.amt*100),0)/100, inv.total);
 }
 
 

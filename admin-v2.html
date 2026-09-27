@@ -3047,10 +3047,13 @@ async function saveBookingForm(e, id, isNew) {
       bk.notes = (bk.notes ? bk.notes + ' · ' : '') + `Redeemed from ${pack.size}-day pack`;
     }
   } else if (existing?.packId) {
-    // Was redeemed, now unchecking — return the day to the pack
+    // Was redeemed, now unchecking — return the day to the pack, and let go of
+    // the zero price that came with it or the day stays free at the normal rate.
     const oldPack = DB.packs.find(p => p.id === existing.packId);
     if (oldPack && oldPack.daysUsed > 0) oldPack.daysUsed -= 1;
     bk.packId = null;
+    if (bk.customPrice === 0) bk.customPrice = null;
+    bk.total = calcTotal(bk, dogById(bk.dogId));
   }
 
   // Recurring bookings
@@ -3148,11 +3151,14 @@ async function applyCancel(id, charge) {
   bk.total = charge;
   bk.arrivalLogged = null;
   bk.departureLogged = null;
-  // A cancelled day goes back to the pack.
+  // A cancelled day goes back to the pack. The zero price came with the pack,
+  // so it has to go with it — otherwise restoring the booking brings back a
+  // day that is free forever, with the pack visit already handed back.
   if (bk.packId) {
     const pk = DB.packs.find(x => x.id === bk.packId);
     if (pk && pk.daysUsed > 0) pk.daysUsed -= 1;
     bk.packId = null;
+    if (bk.customPrice === 0) bk.customPrice = null;
   }
   await save(DB); closeSheet(); render();
   toast(charge ? `Cancelled · $${charge} charged` : 'Cancelled · no charge');

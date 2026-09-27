@@ -252,7 +252,13 @@ export function weekRunComplete(db, ownerId, todayISO) {
   const { from, to } = weekOf(todayISO);
   const mine = (db.bookings || []).filter(b =>
     b.date >= from && b.date <= to && ownerOf(db, b.dogId)?.id === ownerId);
-  if (!mine.length) return false;
+  /* Nothing booked this week means nothing is pending, so the run is finished.
+     This used to return false, which meant a client who stopped coming could
+     never be invoiced again — their last week's visits stayed unbilled forever,
+     and the panel said "still has a booking to come this week", which was the
+     opposite of true. Whether there is anything to bill is buildInvoice's
+     question, not this one. */
+  if (!mine.length) return true;
   return !mine.some(b =>
     b.date >= todayISO && !b.cancelled && !b.departureLogged);
 }
@@ -267,6 +273,10 @@ export function buildInvoice(db, ownerId, opts = {}) {
   const floor = opts.from || (db.meta && db.meta.invoicing && db.meta.invoicing.goLive) || '0000-01-01';
   const lines = [], packNotes = [], warnings = [], bookingIds = [];
   let totalC = 0;
+  /* The cap is published as "$40 a day", not "$40 a dog". One collection of
+     three dogs is one late pickup, so the cap is tallied per date across the
+     whole invoice rather than per booking. */
+  const lateByDate = {};
   const push = (o, amt, b) => { lines.push({ ...o, amt: amt / 100 }); totalC += amt; if (b && !bookingIds.includes(b.id)) bookingIds.push(b.id); };
 
   (db.bookings || [])
@@ -294,9 +304,16 @@ export function buildInvoice(db, ownerId, opts = {}) {
       const L = latePickupFee(b);
       const addLate = () => {
         if (!L.fee) return;
+        const already = lateByDate[b.date] || 0;
+        const room    = cents(LATE_CAP) - already;
+        if (room <= 0) return;                       // the day is already capped
+        const feeC = Math.min(cents(L.fee), room);
+        lateByDate[b.date] = already + feeC;
+        const capped = feeC < cents(L.fee);
         push({ date:b.date, dog:dogName, what:'Late pickup',
-               note:`picked up at ${friendlyTime(b.departureLogged)}, ${friendlyMins(L.minsLate)} after ${friendlyTime(LATE_CUTOFF)}` },
-             cents(L.fee), b);
+               note:`picked up at ${friendlyTime(b.departureLogged)}, ${friendlyMins(L.minsLate)} after ${friendlyTime(LATE_CUTOFF)}` +
+                    (capped ? ` — capped at $${LATE_CAP} for the day` : '') },
+             feeC, b);
       };
 
       if (b.packId) {
