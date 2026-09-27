@@ -934,5 +934,38 @@ console.log('\nAn unexplained charge explains itself');
 }
 
 
+
+console.log('\nThe cap says when it bit');
+{
+  /* Two hours early plus ninety minutes late is $60 of half-hour blocks, billed
+     at $40. Without saying so the client reads a number that does not follow
+     from the hours above it. */
+  const elvis = { session:'overnight', arrivalTime:'13:00', departureTime:'11:30' };
+  const r = C.boardingHoursFee(elvis);
+  eq('charged at the cap',        r.fee, C.LATE_CAP);
+  eq('though the hours came to more', r.uncapped, 60);
+  t('and the line says so',       /capped at \$40/.test(r.why));
+
+  /* Under the cap, no mention — nothing was reduced, so saying "capped" would
+     be noise at best and misleading at worst. */
+  const small = C.boardingHoursFee({ session:'overnight', departureTime:'11:30' });
+  eq('a smaller overrun is charged in full', small.fee, 30);
+  t('with no talk of a cap',                !/capped/.test(small.why));
+
+  /* Exactly on the cap is not a reduction either. */
+  const exact = C.boardingHoursFee({ session:'overnight', departureTime:'12:15' });
+  eq('landing exactly on it',    exact.fee, C.LATE_CAP);
+  t('still says nothing',       !/capped/.test(exact.why));
+
+  /* And it reaches the invoice. */
+  const d = base(); d.dogs[0].size = 'medium';
+  d.bookings = [{ id:'z', dogId:'d1', date:'2026-09-26', session:'overnight', total:115,
+                  customPrice:115, arrivalTime:'13:00', departureTime:'11:30', extraCharge:40 }];
+  const line = C.buildInvoice(d, 'own_kirsten_1', { asAt:'2026-09-27', from:'2026-09-21' })
+                .lines.find(l => l.amt === 40);
+  t('the client sees the cap on the invoice', /capped at \$40/.test(line.note));
+}
+
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

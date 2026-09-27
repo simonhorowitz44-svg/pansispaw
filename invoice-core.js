@@ -119,12 +119,17 @@ export function boardingHoursFee(b) {
 
   const over = Math.max(0, earlyMin - LATE_GRACE_MIN) + Math.max(0, lateMin - LATE_GRACE_MIN);
   if (!over) return none;
-  const fee = Math.min(Math.ceil(over / 30) * LATE_PER_30, LATE_CAP);
+  const uncapped = Math.ceil(over / 30) * LATE_PER_30;
+  const fee = Math.min(uncapped, LATE_CAP);
 
   const bits = [];
   if (earlyMin > LATE_GRACE_MIN) bits.push(`arrived ${friendlyMins(earlyMin)} before ${friendlyTime(BOARD_CHECKIN)}`);
   if (lateMin  > LATE_GRACE_MIN) bits.push(`collected ${friendlyMins(lateMin)} after ${friendlyTime(BOARD_CHECKOUT)}`);
-  return { earlyMin, lateMin, fee, why: bits.join(', ') };
+  /* Say when the cap bit. The client reads a smaller number than the hours
+     imply, and it should be obvious that is the cap doing it rather than
+     arithmetic they cannot follow. */
+  const why = bits.join(', ') + (uncapped > fee ? ` — capped at $${LATE_CAP}` : '');
+  return { earlyMin, lateMin, fee, uncapped, capped: uncapped > fee, why };
 }
 
 // Cancellation. 24h+ notice is free; inside 24h is charged at this rate.
