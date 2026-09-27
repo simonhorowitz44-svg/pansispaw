@@ -60,13 +60,19 @@ async function loadPricing() {
 const SHARED_SENDER = 'Pansi\'s Paws <onboarding@resend.dev>';
 const ownSender = cfg => cfg?.mailFrom || '';
 
-async function sendMail({ to, from, replyTo, subject, html, text, apiKey }) {
+async function sendMail({ to, from, replyTo, bcc, subject, html, text, apiKey }) {
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       from: from || SHARED_SENDER,
-      to: [to], reply_to: replyTo || undefined, subject, html, text
+      to: [to], reply_to: replyTo || undefined,
+      /* Resend sends these, not Outlook, so nothing lands in Andressa's Sent
+         folder — she had the digest and no copy of what a client actually
+         received. A blind copy to herself gives her the real thing, in her own
+         mailbox, searchable, when someone says it never arrived. */
+      bcc: bcc ? [bcc] : undefined,
+      subject, html, text
     })
   });
   if (!r.ok) throw new Error(`Resend ${r.status}: ${(await r.text()).slice(0, 300)}`);
@@ -134,7 +140,8 @@ async function runInvoicing(reason, apiKey) {
   for (const inv of jobs) {
     try {
       const id = await sendMail({
-        to: inv.owner.email, from: ownSender(cfg), replyTo: cfg.replyTo || biz.email, apiKey,
+        to: inv.owner.email, from: ownSender(cfg), replyTo: cfg.replyTo || biz.email,
+        bcc: cfg.copyTo || cfg.digestTo || undefined, apiKey,
         subject: invoiceSubject(inv, biz),
         html: renderInvoiceEmail(inv, biz), text: invoiceText(inv, biz)
       });
