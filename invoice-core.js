@@ -374,7 +374,7 @@ export function renderInvoiceHTML(inv, biz, o = {}) {
       <div class="inv-biz">
         <div class="inv-biz-name">${escapeHtml(biz.name)}</div>
         <div>${escapeHtml(biz.suburb)}</div>
-        <div>${escapeHtml(biz.phone)} · ${escapeHtml(biz.email)}</div>
+        <div>${escapeHtml(biz.phone)}${biz.email ? ' · ' + escapeHtml(biz.email) : ''}</div>
         ${biz.abn ? `<div>ABN ${escapeHtml(biz.abn)}</div>` : ''}
       </div>
       <div class="inv-kind">${isInv ? 'Invoice' : 'Summary'}</div>
@@ -485,7 +485,7 @@ export function renderInvoiceEmail(inv, biz, o = {}) {
       <td style="vertical-align:middle;font-family:Helvetica,Arial,sans-serif">
         <div style="font-size:17px;color:${ink};font-weight:bold;font-family:Georgia,serif">${escapeHtml(biz.name)}</div>
         <div style="font-size:12px;color:${ink2};line-height:1.5">${escapeHtml(biz.suburb)}<br>
-        ${escapeHtml(biz.phone)} · ${escapeHtml(biz.email)}${biz.abn ? `<br>ABN ${escapeHtml(biz.abn)}` : ''}</div></td>
+        ${escapeHtml(biz.phone)}${biz.email ? ' · ' + escapeHtml(biz.email) : ''}${biz.abn ? `<br>ABN ${escapeHtml(biz.abn)}` : ''}</div></td>
       <td align="right" style="vertical-align:top;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:${ink3}">${isInv ? 'Invoice' : 'Summary'}</td>
     </tr></table></td></tr>
 

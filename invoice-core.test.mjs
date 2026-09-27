@@ -490,5 +490,33 @@ console.log('\nApprove mode knows what is waiting on a person');
 }
 
 
+
+console.log('\nThe invoice can leave the email address off');
+{
+  /* Her clients use WhatsApp, and an address on the invoice that nobody reads
+     is worse than none — it bounces and looks careless. Phone only has to
+     render cleanly, with no orphaned separator where the email used to be. */
+  const d = base();
+  d.bookings = [{ id:'p1', dogId:'d1', date:'2026-09-16', session:'full', total:100, departureLogged:'16:00' }];
+  const inv = C.buildInvoice(d, 'own_kirsten_1', { asAt:'2026-09-16' });
+
+  const noEmail = { ...BIZ, email:'', phone:'0410 151 509' };
+  const email = C.renderInvoiceEmail(inv, noEmail);
+  const print = C.renderInvoiceHTML(inv, noEmail);
+
+  t('the phone still shows in the email',      email.includes('0410 151 509'));
+  t('the phone still shows on the printout',   print.includes('0410 151 509'));
+  t('no dangling separator in the email',     !/0410 151 509\s*·\s*</.test(email));
+  t('no dangling separator on the printout',  !/0410 151 509\s*·\s*</.test(print));
+
+  const withEmail = { ...BIZ, email:'hi@x.com', phone:'0410 151 509' };
+  t('and it still appears when there is one',  C.renderInvoiceEmail(inv, withEmail).includes('hi@x.com'));
+  t('separated from the phone',                C.renderInvoiceEmail(inv, withEmail).includes('0410 151 509 · hi@x.com'));
+
+  /* Replies do not depend on it: reply-to is set on the message itself. */
+  eq('a missing contact email never blocks a send', C.blockers(d, inv, noEmail, '2026-09-16'), []);
+}
+
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
