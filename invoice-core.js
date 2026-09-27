@@ -280,7 +280,11 @@ export function buildInvoice(db, ownerId, opts = {}) {
   const push = (o, amt, b) => { lines.push({ ...o, amt: amt / 100 }); totalC += amt; if (b && !bookingIds.includes(b.id)) bookingIds.push(b.id); };
 
   (db.bookings || [])
-    .filter(b => b.date >= floor && b.date <= asAt)
+    /* The go-live date is a blanket floor so the first run cannot bill months
+       of history. billAnyway is the deliberate exception: a single old booking
+       Andressa knows is unpaid, ticked one at a time. Never a date change —
+       moving the floor back would sweep in everyone at once. */
+    .filter(b => (b.date >= floor || b.billAnyway) && b.date <= asAt)
     .filter(b => opts.includeBilled || !isBilled(db, b.id))
     .filter(b => ownerOf(db, b.dogId)?.id === ownerId)
     .sort((a,b) => a.date.localeCompare(b.date) || String(a.id).localeCompare(String(b.id)))

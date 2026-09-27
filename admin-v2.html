@@ -2800,6 +2800,11 @@ function openBookingSheet(bookingId, prefillDate) {
       </div>
       <div class="field-group" id="packOfferSlot"></div>
       <div class="field-group"><label>Custom price (blank = auto)</label><input class="field" name="customPrice" type="number" value="${b.customPrice ?? ''}" placeholder="Auto-calculated"></div>
+      ${(() => { const gl = DB.meta?.invoicing?.goLive; return b.date && gl && b.date < gl; })() ? `<div class="field-group">
+        <label class="check"><input type="checkbox" name="billAnyway" ${b.billAnyway?'checked':''}>
+          Bill this one even though it's before ${fmtDateShort(DB.meta.invoicing.goLive)}</label>
+        <span class="muted small">Older visits are left off invoices by default. Tick only if you
+          know this one hasn't been paid.</span></div>` : ''}
       <div class="field-row">
         <div class="field-group"><label>Extra charge</label><input class="field" name="extraCharge" type="number" value="${b.extraCharge ?? ''}" placeholder="e.g. 40"></div>
         <div class="field-group"><label>What for</label><input class="field" name="extraNote" value="${escapeHtml(b.extraNote || '')}" placeholder="Extended hours"></div>
@@ -3024,6 +3029,7 @@ async function saveBookingForm(e, id, isNew) {
     addOns: { senior: f.senior.checked, puppy: f.puppy.checked, med: f.med.checked, diet: f.diet.checked, taxi: f.taxi.checked },
     surcharges: { publicHoliday: f.ph.checked, xmas: false, xmasPeak: f.xmas.checked },
     customPrice: (custom != null && !isNaN(custom)) ? custom : null,
+    billAnyway: f.billAnyway ? f.billAnyway.checked : (existing?.billAnyway || false),
     extraCharge: (() => { const v = parseFloat(f.extraCharge?.value); return isNaN(v) || v === 0 ? null : v; })(),
     extraNote: (f.extraNote?.value || '').trim(),
     total: 0, paymentStatus: f.paymentStatus.value, paidAt: existing?.paidAt || null,

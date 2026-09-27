@@ -758,5 +758,39 @@ console.log('\nAn ad-hoc charge explains itself');
      C.buildInvoice(none, 'own_kirsten_1', { asAt:'2026-09-16', from:'2026-09-01' }).lines.length, 1);
 }
 
+
+console.log('\nAn old booking can be billed one at a time');
+{
+  /* The go-live date stops the first run billing months of history. But a
+     single old visit that genuinely was not paid still needs a way onto an
+     invoice — and the answer must not be moving the date, which would sweep in
+     every client's backlog at once. */
+  const d = base();
+  d.bookings = [
+    { id:'aug', dogId:'d1', date:'2026-08-13', session:'half', total:75, departureLogged:'15:00' },
+    { id:'sep', dogId:'d1', date:'2026-09-24', session:'half', total:75, departureLogged:'15:00' }
+  ];
+
+  const normal = C.buildInvoice(d, 'own_kirsten_1', { asAt:'2026-09-27', from:'2026-09-21' });
+  eq('the old visit is left off by default', normal.total, 75);
+  eq('one line only',                        normal.lines.length, 1);
+
+  d.bookings[0].billAnyway = true;
+  const opted = C.buildInvoice(d, 'own_kirsten_1', { asAt:'2026-09-27', from:'2026-09-21' });
+  eq('ticked, it joins the invoice',         opted.total, 150);
+  eq('as its own dated line',                opted.lines.length, 2);
+  eq('with its real date, not a moved one',  opted.lines[0].date, '2026-08-13');
+
+  /* The ledger still applies: billed once, never again. */
+  d.meta.billed = { aug:'PP-OLD' };
+  eq('and once billed it stays billed',
+     C.buildInvoice(d, 'own_kirsten_1', { asAt:'2026-09-27', from:'2026-09-21' }).total, 75);
+
+  /* It must not become a back door round the go-live guard. */
+  const noDate = C.planRun(d, BIZ, { mode:'auto', batchCap:8, goLive:'' }, '2026-09-27');
+  eq('a blank go-live still refuses everything', noDate.jobs.length, 0);
+}
+
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
