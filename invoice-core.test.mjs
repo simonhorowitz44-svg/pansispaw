@@ -457,5 +457,38 @@ console.log('\nAn open booking holds the whole client back, not just one dog');
 }
 
 
+
+console.log('\nApprove mode knows what is waiting on a person');
+{
+  /* The whole point of approve mode is that a person looks first. That only
+     works if she is told there is something to look at — otherwise a finished
+     invoice sits silently until someone thinks to open the panel. */
+  const d = base();
+  d.meta.invoicing = { mode:'approve', goLive:'2026-09-01', batchCap:8 };
+  d.bookings = [
+    { id:'w1', dogId:'d1', date:'2026-09-16', session:'full', total:100, departureLogged:'16:00' },
+    { id:'w2', dogId:'d2', date:'2026-09-16', session:'full', total:100, departureLogged:'16:10' }
+  ];
+
+  const ready = C.sendableInvoices(d, BIZ, { asAt:'2026-09-16', from:'2026-09-01' });
+  eq('two clients are finished and billable', ready.length, 2);
+
+  const plan = C.planRun(d, BIZ, d.meta.invoicing, '2026-09-16');
+  eq('but approve mode sends none of them unprompted', plan.jobs.length, 0);
+
+  const waiting = ready.filter(i => !(d.meta.sendQueue || []).some(q => q.ownerId === i.owner.id));
+  eq('so both are waiting on her', waiting.length, 2);
+  eq('and the nudge can total them', waiting.reduce((t,i)=>t+i.total,0), 200);
+
+  d.meta.sendQueue = [{ ownerId:'own_kirsten_1', total:100 }];
+  const after = C.planRun(d, BIZ, d.meta.invoicing, '2026-09-16');
+  eq('approving one releases exactly one', after.jobs.length, 1);
+  eq('and it is the one she approved', after.jobs[0].owner.id, 'own_kirsten_1');
+  const stillWaiting = C.sendableInvoices(d, BIZ, { asAt:'2026-09-16', from:'2026-09-01' })
+    .filter(i => !d.meta.sendQueue.some(q => q.ownerId === i.owner.id));
+  eq('the other is still waiting, not forgotten', stillWaiting.length, 1);
+}
+
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

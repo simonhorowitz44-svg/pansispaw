@@ -25,7 +25,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 
 import {
   setPricing, planRun, buildInvoice, renderInvoiceEmail, invoiceText, invoiceSubject,
-  orphanBookings, addDaysISO
+  orphanBookings, addDaysISO, sendableInvoices
 } from './invoice-core.js';
 
 const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
@@ -109,7 +109,26 @@ async function runInvoicing(reason, apiKey) {
     await fs.doc(STATE).update({ 'meta.invoicingLastRun': { at: new Date().toISOString(), reason, held: plan.held.length } });
     return { held: plan.held.length };
   }
-  if (!jobs.length && !refused.length) return { skipped: 'nothing ready' };
+  /* Approve mode only ever acts on what Andressa has already tapped. Without
+     this, an invoice that is ready but unapproved sits silently forever and the
+     only way to find out is to open the panel and look. Tell her instead. */
+  const waiting = cfg.mode === 'approve'
+    ? sendableInvoices(state, biz, { asAt: today, from: cfg.goLive || undefined })
+        .filter(inv => !(state.meta?.sendQueue || []).some(q => q.ownerId === inv.owner.id))
+    : [];
+
+  if (!jobs.length && !refused.length) {
+    if (waiting.length && reason === 'nightly sweep') {
+      await notifyAndressa(cfg, biz, apiKey,
+        `${waiting.length} invoice${waiting.length === 1 ? '' : 's'} ready to approve`,
+        `These are finished and waiting for you. Nothing goes until you tap send.\n\n` +
+        waiting.map(i => `  ${i.owner.name} — $${i.total.toFixed(2)}`).join('\n') +
+        `\n\nTotal $${waiting.reduce((t, i) => t + i.total, 0).toFixed(2)}\n\n` +
+        `Open the panel → Invoices to look them over.`);
+      return { waiting: waiting.length };
+    }
+    return { skipped: 'nothing ready' };
+  }
 
   const sent = [], failed = [];
   for (const inv of jobs) {
@@ -154,8 +173,8 @@ async function runInvoicing(reason, apiKey) {
     });
   }
 
-  await digest(cfg, biz, apiKey, state, today, sent, failed, refused);
-  return { sent: sent.length, failed: failed.length, refused: refused.length };
+  await digest(cfg, biz, apiKey, state, today, sent, failed, refused, waiting);
+  return { sent: sent.length, failed: failed.length, refused: refused.length, waiting: waiting.length };
 }
 
 /* ---------- telling Andressa ---------- */
@@ -170,8 +189,8 @@ async function notifyAndressa(cfg, biz, apiKey, subject, body) {
   } catch (e) { logger.error('could not reach Andressa', e); }
 }
 
-async function digest(cfg, biz, apiKey, state, today, sent, failed, refused) {
-  if (!sent.length && !failed.length && !refused.length) return;
+async function digest(cfg, biz, apiKey, state, today, sent, failed, refused, waiting = []) {
+  if (!sent.length && !failed.length && !refused.length && !waiting.length) return;
   const L = [];
   if (sent.length) {
     L.push(`Sent (${sent.length}) — $${sent.reduce((s,x) => s + x.inv.total, 0).toFixed(2)}`);
@@ -184,6 +203,10 @@ async function digest(cfg, biz, apiKey, state, today, sent, failed, refused) {
   if (refused.length) {
     L.push('', `Needs you (${refused.length})`);
     refused.forEach(f => L.push(`  ${f.who} — ${f.why}`));
+  }
+  if (waiting.length) {
+    L.push('', `Ready to approve (${waiting.length}) — $${waiting.reduce((t,i)=>t+i.total,0).toFixed(2)}`);
+    waiting.forEach(i => L.push(`  ${i.owner.name} — $${i.total.toFixed(2)}`));
   }
   const orphans = orphanBookings(state, cfg.goLive || '0000-01-01', today);
   if (orphans.length) L.push('', `${orphans.length} booking${orphans.length===1?'':'s'} can't be billed — no dog or owner on file.`);
