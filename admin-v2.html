@@ -672,7 +672,7 @@ import {
   CANCEL_NOTICE_HOURS, CANCEL_CHARGE_RATE, INVOICE_TERMS_DAYS,
   localISO, escapeHtml, cents, addDaysISO, friendlyTime, friendlyMins,
   weekEndingFriday, invoiceWeek, weekOf,
-  calcTotal, latePickupFee,
+  calcTotal, latePickupFee, boardingHoursFee,
   buildInvoice, invoicesDue, sendableInvoices, blockers, orphanBookings,
   weekRunComplete, renderInvoiceHTML, invoiceText, payRef, invoiceNumber
 } from './invoice-core.js';
@@ -1561,6 +1561,15 @@ function weekDogRow(b, opts = {}) {
   </div>`;
 }
 
+
+/* Fill the extra-charge fields from the calculated outside-hours amount. It is
+   a suggestion, not automatic: Andressa waives these often enough that charging
+   one without her deciding would be worse than not offering it. */
+function fillBoardingFee(amount) {
+  const f = document.querySelector('#modalHost form'); if (!f) return;
+  if (f.extraCharge) f.extraCharge.value = amount;
+  if (f.extraNote && !f.extraNote.value.trim()) f.extraNote.value = 'Outside check-in hours';
+}
 
 /* ---------- BANK RECONCILIATION ---------------------------------------- */
 /* Upload a bank CSV, match credits against unpaid bookings by name + amount. */
@@ -2812,6 +2821,13 @@ function openBookingSheet(bookingId, prefillDate) {
       <span class="muted small">Its own line on the invoice, in your words. Use this rather than
         raising the price — a night that costs more than the rate, with no reason given, is what
         gets queried.</span>
+      ${(() => {
+        const bh = boardingHoursFee(b);
+        if (!bh.fee) return '';
+        return `<div class="mn-line" style="background:#fdf6e6">
+          <span>Outside check-in/check-out: <b>$${bh.fee}</b> — ${escapeHtml(bh.why)}</span>
+          <button type="button" class="btn tiny ghost" onclick="fillBoardingFee(${bh.fee})">Use it</button></div>`;
+      })()}
       <div class="field-group"><label>Notes</label><textarea class="field" name="notes" rows="2">${escapeHtml(b.notes||'')}</textarea></div>
 
       <div class="field-row">
@@ -4115,6 +4131,7 @@ function photoOrGlyph(dog) {
 }
 
 Object.assign(window, {
+  fillBoardingFee,
   doSignIn, signOutAdmin, switchTab,
   openAddMenuSheet, openBookingSheet, saveBookingForm, deleteBooking,
   openStaySheet,

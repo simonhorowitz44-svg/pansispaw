@@ -792,5 +792,43 @@ console.log('\nAn old booking can be billed one at a time');
 }
 
 
+
+console.log('\nBoarding has check-in and check-out hours');
+{
+  /* Never written down anywhere, so it lived in Andressa's head and got priced
+     from memory — one large dog charged $95, $130 and $155 in a fortnight. The
+     window is 3pm to 10am; outside it uses the daycare rule clients already
+     know: 15 minutes' grace, $10 a half hour, $40 a day. */
+  const f = b => C.boardingHoursFee(b).fee;
+
+  eq('on time costs nothing',        f({ session:'overnight', arrivalTime:'15:00', departureLogged:'10:00' }), 0);
+  eq('ten minutes either side is grace',
+                                     f({ session:'overnight', arrivalTime:'14:50', departureLogged:'10:10' }), 0);
+  eq('ninety minutes late out',      f({ session:'overnight', departureLogged:'11:30' }), 30);
+  eq('three hours early in caps',    f({ session:'overnight', arrivalTime:'12:00' }), C.LATE_CAP);
+  eq('both ends share one daily cap',
+                                     f({ session:'overnight', arrivalTime:'12:00', departureLogged:'11:30' }), C.LATE_CAP);
+
+  t('and it says which end',         /before 3pm/.test(C.boardingHoursFee({ session:'overnight', arrivalTime:'12:00' }).why));
+  t('and the other end',             /after 10am/.test(C.boardingHoursFee({ session:'overnight', departureLogged:'11:30' }).why));
+
+  /* It must not reach across into daycare, which has its own 5.30pm rule. */
+  eq('a daycare booking is untouched',
+     f({ session:'full', departureLogged:'19:00' }), 0);
+  eq('a cancelled stay owes nothing',
+     f({ session:'overnight', cancelled:true, arrivalTime:'12:00', departureLogged:'11:30' }), 0);
+  eq('and a waiver clears it',
+     f({ session:'overnight', lateFeeWaived:true, arrivalTime:'12:00' }), 0);
+
+  /* Nothing is charged automatically — it is offered, and lands as an extra
+     charge only if Andressa accepts it. */
+  const d = base();
+  d.bookings = [{ id:'st', dogId:'d1', date:'2026-09-26', session:'overnight',
+                  total:130, customPrice:130, arrivalTime:'12:00', departureLogged:'11:30' }];
+  const inv = C.buildInvoice(d, 'own_kirsten_1', { asAt:'2026-09-27', from:'2026-09-21' });
+  eq('an un-accepted suggestion changes no money', inv.total, 130);
+}
+
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -94,6 +94,39 @@ export const LATE_GRACE_MIN = 15;
 export const LATE_PER_30    = 10;
 export const LATE_CAP       = 40;
 
+/* Boarding's own window. Never published, so it was carried in Andressa's head
+   and priced by memory — which is how one large dog was charged $95, $130 and
+   $155 for the same thing inside a fortnight. Same grace, rate and daily cap as
+   daycare, because that is the rule clients already know. */
+export const BOARD_CHECKIN  = '15:00';
+export const BOARD_CHECKOUT = '10:00';
+
+const hhmm = x => { const p = String(x || '').split(':'); return (+p[0]) * 60 + (+p[1] || 0); };
+
+/* What a stay owes for arriving before check-in or leaving after check-out.
+   Charged per day, not per end: three hours early and ninety minutes late is
+   one day's cap, not two. */
+export function boardingHoursFee(b) {
+  const none = { earlyMin: 0, lateMin: 0, fee: 0, why: '' };
+  if (!b || b.session !== 'overnight' || b.cancelled || b.lateFeeWaived) return none;
+
+  const inT  = b.arrivalLogged   || b.arrivalTime;
+  const outT = b.departureLogged || b.departureTime;
+  let earlyMin = 0, lateMin = 0;
+  if (inT  && String(inT).length  >= 4) earlyMin = Math.max(0, hhmm(BOARD_CHECKIN)  - hhmm(inT));
+  if (outT && String(outT).length >= 4) lateMin  = Math.max(0, hhmm(outT) - hhmm(BOARD_CHECKOUT));
+  if (!earlyMin && !lateMin) return none;
+
+  const over = Math.max(0, earlyMin - LATE_GRACE_MIN) + Math.max(0, lateMin - LATE_GRACE_MIN);
+  if (!over) return none;
+  const fee = Math.min(Math.ceil(over / 30) * LATE_PER_30, LATE_CAP);
+
+  const bits = [];
+  if (earlyMin > LATE_GRACE_MIN) bits.push(`arrived ${friendlyMins(earlyMin)} before ${friendlyTime(BOARD_CHECKIN)}`);
+  if (lateMin  > LATE_GRACE_MIN) bits.push(`collected ${friendlyMins(lateMin)} after ${friendlyTime(BOARD_CHECKOUT)}`);
+  return { earlyMin, lateMin, fee, why: bits.join(', ') };
+}
+
 // Cancellation. 24h+ notice is free; inside 24h is charged at this rate.
 // Mirrored in terms.html §7 — change both together.
 export const CANCEL_NOTICE_HOURS = 24;
