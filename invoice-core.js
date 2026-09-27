@@ -260,8 +260,25 @@ export function ownerTag(db, owner) {
   const shared = (db.owners || []).some(o => o.id !== owner.id && surnameTag(o) === tag);
   return shared ? `${tag}${String(owner.id).replace(/[^A-Za-z0-9]/g, '').slice(-3).toUpperCase()}` : tag;
 }
+/* Andressa thinks in dogs, and so do clients — a reference reading ELVIS-0927
+   is recognised on a bank statement in a way BURKE-0927 is not. The catch is
+   that dog names are not unique: Loki and Simba each belong to three different
+   households here. Where a name is shared, the surname goes back in to keep the
+   reconciliation able to tell them apart. */
+export function dogTag(db, owner) {
+  const mine = (db.dogs || []).filter(d => d.ownerId === owner.id);
+  if (!mine.length) return ownerTag(db, owner);
+  const name = mine.map(d => String(d.name || '').trim()).filter(Boolean).sort()[0] || '';
+  const tag = name.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+  if (!tag) return ownerTag(db, owner);
+  const shared = (db.dogs || []).some(d =>
+    d.ownerId !== owner.id &&
+    String(d.name || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10) === tag);
+  return shared ? `${tag}-${surnameTag(owner)}` : tag;
+}
+
 export function payRef(db, owner, asAtISO) {
-  return `${ownerTag(db, owner)}-${asAtISO.slice(5,7)}${asAtISO.slice(8,10)}`;
+  return `${dogTag(db, owner)}-${asAtISO.slice(5,7)}${asAtISO.slice(8,10)}`;
 }
 export function invoiceNumber(owner, asAtISO, seq) {
   const base = `PP-${asAtISO.replace(/-/g, '')}-${String(owner.id).replace(/[^A-Za-z0-9]/g, '').slice(-4).toUpperCase()}`;

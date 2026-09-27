@@ -162,9 +162,33 @@ eq('a booking whose dog is gone belongs to nobody',
 t('two clients called Lowe get different references',
   C.buildInvoice(db, 'own_bruna_3', { asAt:'2026-09-18' }).ref !== inv.ref);
 {
+  /* References are the dog's name now, at Andressa's request — she and the
+     client both think in dogs, and ELVIS-0927 is recognised on a statement in
+     a way BURKE-0927 is not. */
   const solo = base(); solo.bookings = [{ id:'x', dogId:'d4', date:'2026-09-15', session:'full', total:100, departureLogged:'16:00' }];
-  eq('a client with no namesake keeps a clean reference',
-     C.buildInvoice(solo, 'own_noemail_4', { asAt:'2026-09-18' }).ref, 'EDWARDS-0918');
+  eq('the reference is the dog, not the surname',
+     C.buildInvoice(solo, 'own_noemail_4', { asAt:'2026-09-18' }).ref, 'ENZO-0918');
+
+  /* Dog names are not unique: Loki and Simba each belong to three households
+     in the real data. A shared name would make two clients' payments
+     indistinguishable on the bank statement, so the surname goes back in. */
+  const twins = base();
+  twins.dogs.push({ id:'d5', ownerId:'own_zoe_2', name:'Enzo', size:'medium' });
+  twins.bookings = [{ id:'y', dogId:'d4', date:'2026-09-15', session:'full', total:100, departureLogged:'16:00' }];
+  eq('a shared dog name keeps the households apart',
+     C.buildInvoice(twins, 'own_noemail_4', { asAt:'2026-09-18' }).ref, 'ENZO-EDWARDS-0918');
+
+  /* A household with several dogs settles on one name rather than listing them. */
+  const many = base();
+  many.dogs.push({ id:'d6', ownerId:'own_kirsten_1', name:'Aggie', size:'medium' });
+  many.bookings = [{ id:'z', dogId:'d1', date:'2026-09-15', session:'full', total:100, departureLogged:'16:00' }];
+  eq('one reference per household',
+     C.buildInvoice(many, 'own_kirsten_1', { asAt:'2026-09-18' }).ref, 'AGGIE-0918');
+
+  /* And a client with no dog on file still gets something typeable. */
+  const nodog = base();
+  nodog.owners.push({ id:'own_nodog', name:'Sam Reilly', email:'s@x.com' });
+  eq('no dog falls back to the surname', C.payRef(nodog, nodog.owners.find(o=>o.id==='own_nodog'), '2026-09-18'), 'REILLY-0918');
 }
 
 console.log('\nThe ledger stops double billing');
