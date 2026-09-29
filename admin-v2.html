@@ -781,7 +781,7 @@ function packSummary(p) {
 }
 function calcPackPrice(dogSize, packSize) {
   const base = PRICES[dogSize]?.full || 90;
-  const discount = packSize === 5 ? 0.10 : packSize === 10 ? 0.15 : 0;
+  const discount = packSize === 5 ? 0.05 : packSize === 10 ? 0.10 : 0;
   return Math.round(base * packSize * (1 - discount));
 }
 function loadFromStorage() {

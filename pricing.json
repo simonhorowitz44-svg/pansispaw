@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-09-21",
+  "updated": "2026-09-30",
   "prices": {
     "small": {
       "half": 55,
@@ -83,11 +83,11 @@
   },
   "discounts": {
     "pack5": {
-      "pct": 10,
+      "pct": 5,
       "label": "5-day pack"
     },
     "pack10": {
-      "pct": 15,
+      "pct": 10,
       "label": "10-day pack"
     },
     "sibling": {
