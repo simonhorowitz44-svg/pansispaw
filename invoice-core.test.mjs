@@ -128,7 +128,7 @@ t('the late fee is its own line', inv.lines.some(l => l.what === 'Late pickup' &
 t('the day it happened on is billed whole, not net of the fee',
   inv.lines.some(l => l.date === '2026-09-17' && l.what === 'Full day' && l.amt === 100));
 t('the late fee note is in plain English',
-  inv.lines.some(l => /picked up at 6.30pm, 1 hour after 5.30pm/.test(l.note || '')));
+  inv.lines.some(l => /picked up at 6.30pm, 1 hour 30 minutes after 5pm/.test(l.note || '')));
 t('a pack day is shown, numbered, and charged nothing',
   inv.lines.some(l => l.amt === 0 && /visit 2 of 10 on your pack/.test(l.note || '')));
 eq('pack balance counts redemptions, not the running daysUsed', inv.packNotes[0].left, 8);

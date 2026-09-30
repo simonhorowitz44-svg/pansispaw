@@ -74,7 +74,7 @@
     },
     "latePickupPer30": {
       "amount": 10,
-      "label": "Late pickup per 30 min after 5:30 PM"
+      "label": "Late pickup per 30 min after 5:00 PM"
     },
     "latePickupCapDay": {
       "amount": 40,

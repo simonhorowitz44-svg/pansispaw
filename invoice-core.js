@@ -87,19 +87,33 @@ export const SESSION_LABELS = { meet:"Meet & greet", trial:"Trial day", half:"Ha
 export const SCOUTS_TRIPS = { am:{ label:"Morning · from 7:30", start:"07:30" },
                               pm:{ label:"Afternoon · from 1:30", start:"13:30" } };
 
-// Late pickup. Published on services.html: after 5:30pm, $10 per 30 minutes,
-// 15-minute grace, capped at $40 a day. Change here and on the site together.
-export const LATE_CUTOFF    = '17:30';
-export const LATE_GRACE_MIN = 15;
+/* Late pickup. Published on services.html: we close at 5pm, there is half an
+   hour of grace, then $10 per 30 minutes capped at $40 a day. Change here and
+   on the site together.
+
+   The close moved 5.30pm -> 5pm with the grace 15 -> 30 minutes, which leaves
+   the point where money starts changing hands exactly where it was (5.30pm) —
+   a 6.30pm collection is $20 before and after. The change is what Andressa
+   can say out loud: 5pm is the time she asks for, and a parent stuck in
+   traffic has a real buffer rather than a fifteen-minute one. */
+export const LATE_CUTOFF    = '17:00';
+export const LATE_GRACE_MIN = 30;
 export const LATE_PER_30    = 10;
 export const LATE_CAP       = 40;
 
 /* Boarding's own window. Never published, so it was carried in Andressa's head
    and priced by memory — which is how one large dog was charged $95, $130 and
-   $155 for the same thing inside a fortnight. Same grace, rate and daily cap as
-   daycare, because that is the rule clients already know. */
+   $155 for the same thing inside a fortnight. Same rate and daily cap as
+   daycare.
+
+   Grace is its own constant rather than daycare's. Boarding check-in and
+   check-out are appointments made with one client, not a school-gate rush, so
+   widening daycare's grace to half an hour has no reason to widen this too —
+   and quietly doing so would have handed back $10 a stay on every early
+   arrival. */
 export const BOARD_CHECKIN  = '15:00';
 export const BOARD_CHECKOUT = '10:00';
+export const BOARD_GRACE_MIN = 15;
 
 const hhmm = x => { const p = String(x || '').split(':'); return (+p[0]) * 60 + (+p[1] || 0); };
 
@@ -117,14 +131,14 @@ export function boardingHoursFee(b) {
   if (outT && String(outT).length >= 4) lateMin  = Math.max(0, hhmm(outT) - hhmm(BOARD_CHECKOUT));
   if (!earlyMin && !lateMin) return none;
 
-  const over = Math.max(0, earlyMin - LATE_GRACE_MIN) + Math.max(0, lateMin - LATE_GRACE_MIN);
+  const over = Math.max(0, earlyMin - BOARD_GRACE_MIN) + Math.max(0, lateMin - BOARD_GRACE_MIN);
   if (!over) return none;
   const uncapped = Math.ceil(over / 30) * LATE_PER_30;
   const fee = Math.min(uncapped, LATE_CAP);
 
   const bits = [];
-  if (earlyMin > LATE_GRACE_MIN) bits.push(`arrived ${friendlyMins(earlyMin)} before ${friendlyTime(BOARD_CHECKIN)}`);
-  if (lateMin  > LATE_GRACE_MIN) bits.push(`collected ${friendlyMins(lateMin)} after ${friendlyTime(BOARD_CHECKOUT)}`);
+  if (earlyMin > BOARD_GRACE_MIN) bits.push(`arrived ${friendlyMins(earlyMin)} before ${friendlyTime(BOARD_CHECKIN)}`);
+  if (lateMin  > BOARD_GRACE_MIN) bits.push(`collected ${friendlyMins(lateMin)} after ${friendlyTime(BOARD_CHECKOUT)}`);
   /* Say when the cap bit. The client reads a smaller number than the hours
      imply, and it should be obvious that is the cap doing it rather than
      arithmetic they cannot follow. */
@@ -163,7 +177,7 @@ export function invoiceWeek(fridayISO) {
 export function weekOf(isoDate) {
   return invoiceWeek(localISO(weekEndingFriday(new Date(isoDate + 'T00:00:00'))));
 }
-/* 5.30pm reads better than 17:30 on a document a dog owner reads. */
+/* 5pm reads better than 17:00 on a document a dog owner reads. */
 export function friendlyTime(hhmm) {
   const [h, m] = String(hhmm || '').split(':').map(Number);
   if (isNaN(h)) return hhmm || '';
@@ -195,7 +209,7 @@ export function latePickupFee(b) {
   const none = { minsLate: 0, fee: 0, blocks: 0 };
   if (!b || b.lateFeeWaived || b.cancelled) return none;
   /* Boarding has its own window — 3pm in, 10am out — and boardingHoursFee
-     charges against it. Leaving overnight stays subject to the daycare 5.30pm
+     charges against it. Leaving overnight stays subject to the daycare close
      cutoff as well billed the same lateness twice: a dog collected at 6pm the
      day after cost $10 here and $40 there. */
   if (b.session === 'meet' || b.session === 'trial' || b.session === 'scouts'
