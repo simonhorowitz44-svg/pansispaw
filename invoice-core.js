@@ -462,7 +462,7 @@ export function buildInvoice(db, ownerId, opts = {}) {
                what: b.extraNote || (bh.why ? 'Outside check-in hours' : 'Additional charge'),
                note: bh.why || '' },
              cents(b.extraCharge), b);
-      } else if (bh.fee) {
+      } else if (bh.fee && b.customPrice == null) {
         /* Nobody typed a charge, so bill the stay's own hours. The times are
            already recorded against the booking, the rule is published, and the
            arithmetic is the same every time — there is nothing here for a human
@@ -470,7 +470,13 @@ export function buildInvoice(db, ownerId, opts = {}) {
 
            A hand-typed extraCharge still wins. That is the override for the
            stay that was genuinely agreed differently, and it has to beat the
-           automatic line rather than add to it. */
+           automatic line rather than add to it.
+
+           A customPrice is left alone for the same reason bookingExtras leaves
+           it alone: it is a negotiated all-in number, usually for a long stay,
+           and the hours are the thing being negotiated. Charging them on top
+           would re-bill a deal that was already struck. Andressa can still add
+           an extraCharge by hand if a custom stay genuinely ran over. */
         push({ date:b.date, dog:dogName, what:'Outside check-in hours', note: bh.why },
              cents(bh.fee), b);
       }

@@ -846,10 +846,12 @@ console.log('\nBoarding has check-in and check-out hours');
 
   /* This used to be offered and charged only if Andressa accepted it, which
      meant in practice it was never charged. The hours are recorded, the rule is
-     published and the arithmetic is fixed, so it bills itself now. */
+     published and the arithmetic is fixed, so it bills itself now. No
+     customPrice here on purpose — a negotiated all-in stay is exempt, and that
+     is covered by its own test further down. */
   const d = base();
   d.bookings = [{ id:'st', dogId:'d1', date:'2026-09-26', session:'overnight',
-                  total:130, customPrice:130, arrivalTime:'12:00', departureLogged:'11:30' }];
+                  total:130, arrivalTime:'12:00', departureLogged:'11:30' }];
   const inv = C.buildInvoice(d, 'own_kirsten_1', { asAt:'2026-09-27', from:'2026-09-21' });
   eq('the hours bill themselves on top of the night', inv.total, 170);
   t('as a line that explains itself',
@@ -1035,6 +1037,19 @@ console.log('\nA stay outside its window charges itself');
   db.bookings = [{ ...base, arrivalLogged:'13:00', departureLogged:'11:30', lateFeeWaived:true }];
   inv = C.buildInvoice(db, 'o1', { asAt:'2026-09-27' });
   t('a waived stay charges nothing', !inv.lines.some(l => l.what === 'Outside check-in hours'));
+
+  /* A negotiated all-in price is not re-opened by the clock. */
+  db.bookings = [{ ...base, arrivalLogged:'13:00', departureLogged:'11:30', customPrice:600 }];
+  inv = C.buildInvoice(db, 'o1', { asAt:'2026-09-27' });
+  t('a custom-priced stay is left alone',
+    !inv.lines.some(l => l.what === 'Outside check-in hours'));
+  eq('and bills only what was agreed', inv.total, 600);
+
+  /* But she can still add to one by hand. */
+  db.bookings = [{ ...base, arrivalLogged:'13:00', departureLogged:'11:30',
+                   customPrice:600, extraCharge:40, extraNote:'Extra night hours' }];
+  inv = C.buildInvoice(db, 'o1', { asAt:'2026-09-27' });
+  eq('a hand-typed charge still lands on a custom stay', inv.total, 640);
 
   /* On time is on time. */
   db.bookings = [{ ...base, arrivalLogged:'15:10', departureLogged:'10:10' }];
