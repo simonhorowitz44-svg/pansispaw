@@ -2044,11 +2044,21 @@ function renderInvoices() {
   const dayNames = inv => [...new Set((inv.lines || []).map(l => l.date).filter(Boolean))].sort()
     .map(d => new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short' }));
 
+  /* Andressa knows the dogs, not the surnames — she can tell you Celine's week
+     without hesitating and has to think about who Emma Ferguson is. Households
+     with two dogs get both names, so a total that looks high explains itself
+     before she has to open it. */
+  const dogsOn = inv => {
+    const names = [...new Set((inv.lines || []).map(l => l.dog).filter(Boolean))];
+    return names.length <= 2 ? names.join(' & ')
+         : names.slice(0, -1).join(', ') + ' & ' + names[names.length - 1];
+  };
+
   const card = (inv, why) => {
     const days = dayNames(inv);
-    const when = days.length
-      ? `${days.join(', ')} · ${fmtDateShort(inv.periodFrom)}${inv.periodFrom !== inv.periodTo ? ' – ' + fmtDateShort(inv.periodTo) : ''}`
-      : `${fmtDateShort(inv.periodFrom)}${inv.periodFrom !== inv.periodTo ? ' – ' + fmtDateShort(inv.periodTo) : ''}`;
+    const dogs = dogsOn(inv);
+    const span = `${fmtDateShort(inv.periodFrom)}${inv.periodFrom !== inv.periodTo ? ' – ' + fmtDateShort(inv.periodTo) : ''}`;
+    const when = [dogs, days.join(', '), span].filter(Boolean).join(' · ');
     return `<div class="mn-row ${why ? '' : 'owing'}" onclick="openOneInvoice('${escapeHtml(inv.owner.id)}')">
     <div><div class="mn-name">${escapeHtml(inv.owner.name)}</div>
       <div class="mn-sub">${escapeHtml(when)}${why ? ' · ' + escapeHtml(why[0]) : ''}</div></div>
@@ -2086,7 +2096,7 @@ function renderInvoices() {
     ${b.sending.length ? `<h3 class="grp-title">On its way</h3>
       ${b.sending.map(i => `<div class="mn-row sending">
         <div><div class="mn-name">${escapeHtml(i.owner.name)}</div>
-          <div class="mn-sub">Sending now — it'll move to Recently sent in a moment</div></div>
+          <div class="mn-sub">${escapeHtml(dogsOn(i))}${dogsOn(i) ? ' · ' : ''}Sending now — it'll move to Recently sent in a moment</div></div>
         <div class="mn-bal">$${i.total.toFixed(2)}</div></div>`).join('')}
       <p class="sub muted small">Already handed to the mail service. No need to tap anything again —
         they go out once, even if this page is closed.</p>` : ''}
