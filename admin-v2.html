@@ -218,6 +218,8 @@ body.modal-open { overflow: hidden; }
 .week-mode-btn.on { background: var(--ink); color: var(--paper); }
 .week-dog-row { display: flex; align-items: center; gap: var(--s3); padding: 8px; margin: 0 -8px; border-top: 1px dashed var(--edge-2); cursor: pointer; transition: background var(--dur); border-radius: 6px; }
 .week-dog-row:first-of-type { border-top: 0; }
+.billed-tag { color: var(--pine); font-weight: 600; }
+.billed-tag.sending { color: var(--honey); }
 .week-dog-row:hover { background: var(--paper-3); }
 /* Colour by session type. Inset shadow rather than a border so the stripe
    costs no layout and the desktop column view keeps its alignment. */
@@ -1561,20 +1563,28 @@ function weekDogRow(b, opts = {}) {
   const owner = ownerOf(b.dogId);
   const unpaidTag = (SHOW_PAYMENTS && b.paymentStatus !== 'paid') ? ' · <span class="text-owe">unpaid</span>' : '';
   const context = opts.context ? ` · ${opts.context}` : '';
+
+  /* Whether this day has been billed. The invoice sheet knows, but this is
+     where Andressa actually looks, and "have I invoiced that week yet" was only
+     answerable by opening another screen. Nothing is shown for a day that
+     simply has not been billed yet — that is the normal state and a badge on
+     every row would say nothing. */
+  const invNo = (DB.meta && DB.meta.billed) ? DB.meta.billed[b.id] : null;
+  const queued = !invNo && owner &&
+    ((DB.meta && DB.meta.sendQueue) || []).some(q => q.ownerId === owner.id);
+  const billTag = invNo  ? ` · <span class="billed-tag" title="${escapeHtml(invNo)}">✓ invoiced</span>`
+                : queued ? ' · <span class="billed-tag sending">sending</span>'
+                : '';
   return `<div class="week-dog-row k-${kind} ${b.cancelled ? 'cancelled' : ''}" data-openbk="${b.id}">
     <div class="week-dog-face ${isNight?'night':''}">${photoOrGlyph(dog)}</div>
     <div class="week-dog-body">
       <div class="week-dog-name">${escapeHtml(dog.name)} <span class="muted small">· ${escapeHtml(owner?.name || '—')}</span></div>
-      <div class="week-dog-meta">${b.cancelled ? 'Cancelled' + (b.cancelCharge ? ' · $' + b.cancelCharge + ' charged' : ' · no charge') : SESSION_LABELS[b.session] + context + unpaidTag}</div>
+      <div class="week-dog-meta">${b.cancelled ? 'Cancelled' + (b.cancelCharge ? ' · $' + b.cancelCharge + ' charged' : ' · no charge') : SESSION_LABELS[b.session] + context + unpaidTag + billTag}</div>
     </div>
     <div class="week-dog-price">$${amt}</div>
   </div>`;
 }
 
-
-/* Fill the extra-charge fields from the calculated outside-hours amount. It is
-   a suggestion, not automatic: Andressa waives these often enough that charging
-   one without her deciding would be worse than not offering it. */
 
 /* ---------- BANK RECONCILIATION ---------------------------------------- */
 /* Upload a bank CSV, match credits against unpaid bookings by name + amount. */
