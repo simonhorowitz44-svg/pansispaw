@@ -1565,11 +1565,6 @@ function weekDogRow(b, opts = {}) {
 /* Fill the extra-charge fields from the calculated outside-hours amount. It is
    a suggestion, not automatic: Andressa waives these often enough that charging
    one without her deciding would be worse than not offering it. */
-function fillBoardingFee(amount) {
-  const f = document.querySelector('#modalHost form'); if (!f) return;
-  if (f.extraCharge) f.extraCharge.value = amount;
-  if (f.extraNote && !f.extraNote.value.trim()) f.extraNote.value = 'Outside check-in hours';
-}
 
 /* ---------- BANK RECONCILIATION ---------------------------------------- */
 /* Upload a bank CSV, match credits against unpaid bookings by name + amount. */
@@ -2801,24 +2796,19 @@ function openBookingSheet(bookingId, prefillDate) {
         <p class="sub small" id="scoutsCap" style="margin:6px 0 0"></p>
       </div>
 
-      ${(() => { const L = latePickupFee(b);
-        const raw = { ...b, lateFeeWaived: false };
-        const would = latePickupFee(raw);
-        if (!would.fee) return '';
-        return `<div class="extras-box">
-          <div class="extras-head">Extras — worked out from the pickup time</div>
-          <div class="extras-row">
-            <span>Late pickup · collected ${escapeHtml(b.departureLogged)}, ${would.minsLate} min after ${LATE_CUTOFF}</span>
-            <b>${L.fee ? '+$' + L.fee : '<s>+$' + would.fee + '</s> waived'}</b>
-          </div>
-          <label class="chip" style="margin-top:8px"><input type="checkbox" name="lateFeeWaived" ${b.lateFeeWaived ? 'checked' : ''} style="margin-right:6px">Waive this fee</label>
-          <div class="extras-note">$${LATE_PER_30} per 30 min after ${LATE_CUTOFF}, ${LATE_GRACE_MIN} min grace, capped at $${LATE_CAP}.</div>
-        </div>`; })()}
+      <div id="extrasSlot"></div>
 
       <div class="field-row">
-        <div class="field-group"><label>Arrival time</label><input class="field" name="arrivalTime" type="time" value="${b.arrivalTime||''}"></div>
-        <div class="field-group"><label>Departure time</label><input class="field" name="departureTime" type="time" value="${b.departureTime||''}"></div>
+        <div class="field-group"><label>Booked arrival</label><input class="field" name="arrivalTime" type="time" value="${b.arrivalTime||''}"></div>
+        <div class="field-group"><label>Booked departure</label><input class="field" name="departureTime" type="time" value="${b.departureTime||''}"></div>
       </div>
+      <div class="field-row">
+        <div class="field-group"><label>Actually arrived</label><input class="field" name="arrivalLogged" type="time" value="${b.arrivalLogged||''}"></div>
+        <div class="field-group"><label>Actually left</label><input class="field" name="departureLogged" type="time" value="${b.departureLogged||''}"></div>
+      </div>
+      <span class="muted small">The booked times are the plan; the actual times are what bill. Tapping
+        Arrived and Picked up on the day fills these in — type them here if you are catching up after
+        the fact.</span>
       <div class="field-group">
         <label>Add-ons</label>
         <div style="display:flex; gap:6px; flex-wrap:wrap;">
@@ -2850,13 +2840,6 @@ function openBookingSheet(bookingId, prefillDate) {
       <span class="muted small">Its own line on the invoice, in your words. Use this rather than
         raising the price — a night that costs more than the rate, with no reason given, is what
         gets queried.</span>
-      ${(() => {
-        const bh = boardingHoursFee(b);
-        if (!bh.fee) return '';
-        return `<div class="mn-line" style="background:#fdf6e6">
-          <span>Outside check-in/check-out: <b>$${bh.fee}</b> — ${escapeHtml(bh.why)}</span>
-          <button type="button" class="btn tiny ghost" onclick="fillBoardingFee(${bh.fee})">Use it</button></div>`;
-      })()}
       <div class="field-group"><label>Notes</label><textarea class="field" name="notes" rows="2">${escapeHtml(b.notes||'')}</textarea></div>
 
       <div class="field-row">
@@ -2926,6 +2909,53 @@ function updateBookingPrice() {
   if (f.ph.checked)     { total += SURCHARGES.publicHoliday; parts.push(`+ Public hol $${SURCHARGES.publicHoliday}`); }
   if (f.xmas.checked)   { const s = session==='overnight' ? SURCHARGES.xmasPeakNight : SURCHARGES.xmasPeakDay; total += s; parts.push(`+ Xmas $${s}`); }
   const customVal = f.customPrice.value;
+
+  /* Extras worked out from the times on the form, recomputed on every keystroke
+     so the fee is visible while she is typing the pickup time rather than after
+     she saves. Daycare reads the late-pickup rule, a stay reads its own
+     check-in window — never both, they exclude each other. */
+  const extrasSlot = document.getElementById('extrasSlot');
+  if (extrasSlot) {
+    const probe = { session,
+      date: f.date.value,
+      arrivalTime:  f.arrivalTime.value  || null,
+      departureTime:f.departureTime.value|| null,
+      arrivalLogged:   f.arrivalLogged   ? (f.arrivalLogged.value   || null) : null,
+      departureLogged: f.departureLogged ? (f.departureLogged.value || null) : null,
+      cancelled: false, lateFeeWaived: false };
+    const waived = f.lateFeeWaived ? f.lateFeeWaived.checked : false;
+    const typed  = parseFloat(f.extraCharge?.value);
+    const hasTyped = !isNaN(typed) && typed !== 0;
+
+    const L  = latePickupFee(probe);
+    const bh = boardingHoursFee(probe);
+    let html = '';
+
+    if (L.fee) {
+      html = `<div class="extras-box">
+        <div class="extras-head">Worked out from the pickup time</div>
+        <div class="extras-row">
+          <span>Late pickup · left ${escapeHtml(probe.departureLogged)}, ${L.minsLate} min after ${LATE_CUTOFF}</span>
+          <b>${waived ? '<s>+$' + L.fee + '</s> waived' : '+$' + L.fee}</b>
+        </div>
+        <label class="chip" style="margin-top:8px"><input type="checkbox" name="lateFeeWaived" ${waived?'checked':''} style="margin-right:6px">Waive this fee</label>
+        <div class="extras-note">$${LATE_PER_30} per 30 min after ${LATE_CUTOFF}, ${LATE_GRACE_MIN} min grace, capped at $${LATE_CAP}. This goes on the invoice on its own.</div>
+      </div>`;
+    } else if (bh.fee) {
+      html = `<div class="extras-box">
+        <div class="extras-head">Worked out from the check-in times</div>
+        <div class="extras-row">
+          <span>${escapeHtml(bh.why)}</span>
+          <b>${waived ? '<s>+$' + bh.fee + '</s> waived' : '+$' + bh.fee}</b>
+        </div>
+        <label class="chip" style="margin-top:8px"><input type="checkbox" name="lateFeeWaived" ${waived?'checked':''} style="margin-right:6px">Waive this fee</label>
+        <div class="extras-note">${hasTyped
+          ? 'An extra charge is typed below, so that one bills instead of this.'
+          : 'This goes on the invoice on its own — nothing to accept. Type an extra charge below only to override it.'}</div>
+      </div>`;
+    }
+    extrasSlot.innerHTML = html;
+  }
 
   // Pack offer — show if the selected dog has active pack days AND session is a daycare session
   const packSlot = document.getElementById('packOfferSlot');
@@ -3070,7 +3100,10 @@ async function saveBookingForm(e, id, isNew) {
     scoutsTrip: f.session.value === 'scouts' ? (f.scoutsTrip ? f.scoutsTrip.value : 'am') : null,
     arrivalTime: f.arrivalTime.value, departureTime: f.departureTime.value,
     lateFeeWaived: f.lateFeeWaived ? f.lateFeeWaived.checked : (existing?.lateFeeWaived || false),
-    arrivalLogged: existing?.arrivalLogged || null, departureLogged: existing?.departureLogged || null,
+    /* Typed here, or stamped by the Arrived / Picked up buttons — same field
+       either way, because it is the one the fees read. Blank clears it. */
+    arrivalLogged:   (f.arrivalLogged   ? f.arrivalLogged.value   : '') || null,
+    departureLogged: (f.departureLogged ? f.departureLogged.value : '') || null,
     addOns: { senior: f.senior.checked, puppy: f.puppy.checked, med: f.med.checked, diet: f.diet.checked, taxi: f.taxi.checked },
     surcharges: { publicHoliday: f.ph.checked, xmas: false, xmasPeak: f.xmas.checked },
     customPrice: (custom != null && !isNaN(custom)) ? custom : null,
@@ -4160,7 +4193,6 @@ function photoOrGlyph(dog) {
 }
 
 Object.assign(window, {
-  fillBoardingFee,
   doSignIn, signOutAdmin, switchTab,
   openAddMenuSheet, openBookingSheet, saveBookingForm, deleteBooking,
   openStaySheet,

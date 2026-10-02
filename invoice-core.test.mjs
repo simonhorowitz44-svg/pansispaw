@@ -844,13 +844,16 @@ console.log('\nBoarding has check-in and check-out hours');
   eq('and a waiver clears it',
      f({ session:'overnight', lateFeeWaived:true, arrivalTime:'12:00' }), 0);
 
-  /* Nothing is charged automatically — it is offered, and lands as an extra
-     charge only if Andressa accepts it. */
+  /* This used to be offered and charged only if Andressa accepted it, which
+     meant in practice it was never charged. The hours are recorded, the rule is
+     published and the arithmetic is fixed, so it bills itself now. */
   const d = base();
   d.bookings = [{ id:'st', dogId:'d1', date:'2026-09-26', session:'overnight',
                   total:130, customPrice:130, arrivalTime:'12:00', departureLogged:'11:30' }];
   const inv = C.buildInvoice(d, 'own_kirsten_1', { asAt:'2026-09-27', from:'2026-09-21' });
-  eq('an un-accepted suggestion changes no money', inv.total, 130);
+  eq('the hours bill themselves on top of the night', inv.total, 170);
+  t('as a line that explains itself',
+    inv.lines.some(l => l.what === 'Outside check-in hours' && /before 3pm/.test(l.note || '')));
 }
 
 
@@ -990,6 +993,60 @@ console.log('\nThe cap says when it bit');
   t('the client sees the cap on the invoice', /capped at \$40/.test(line.note));
 }
 
+
+
+/* ------------------------------------------------------------------ *
+ * Boarding hours bill themselves                                      *
+ * ------------------------------------------------------------------ */
+console.log('\nA stay outside its window charges itself');
+{
+  const db = {
+    owners:[{ id:'o1', name:'Mike O’Shea', email:'m@x.com' }],
+    dogs:[{ id:'d1', ownerId:'o1', name:'Greg', size:'medium' }],
+    bookings:[], packs:[], meta:{ invoicing:{ goLive:'2026-01-01' } }
+  };
+  const base = { id:'b1', dogId:'d1', date:'2026-09-26', session:'overnight' };
+
+  db.bookings = [{ ...base, arrivalLogged:'13:00', departureLogged:'11:30' }];
+  let inv = C.buildInvoice(db, 'o1', { asAt:'2026-09-27' });
+  const line = inv.lines.find(l => l.what === 'Outside check-in hours');
+  t('the charge appears with nobody typing it', !!line);
+  eq('and it is the capped amount', line.amt, 40);
+  t('the note says what happened',
+    /arrived 2 hours before 3pm/.test(line.note || '') && /collected 1 hour 30 minutes after 10am/.test(line.note || ''));
+  t('and that the cap bit', /capped at \$40/.test(line.note || ''));
+
+  /* Times typed into the booking rather than tapped on the day bill the same. */
+  db.bookings = [{ ...base, arrivalTime:'13:00', departureTime:'11:30' }];
+  inv = C.buildInvoice(db, 'o1', { asAt:'2026-09-27' });
+  t('typed times charge the same as tapped ones',
+    inv.lines.some(l => l.what === 'Outside check-in hours' && l.amt === 40));
+
+  /* A hand-typed charge is an override, not an addition. */
+  db.bookings = [{ ...base, arrivalLogged:'13:00', departureLogged:'11:30',
+                   extraCharge:25, extraNote:'Agreed early drop' }];
+  inv = C.buildInvoice(db, 'o1', { asAt:'2026-09-27' });
+  const manual = inv.lines.filter(l => /Outside check-in hours|Agreed early drop/.test(l.what));
+  eq('a typed charge replaces the automatic one, never doubles it', manual.length, 1);
+  eq('and it is the typed amount that bills', manual[0].amt, 25);
+  eq('under her own wording', manual[0].what, 'Agreed early drop');
+
+  /* Waiving still waives. */
+  db.bookings = [{ ...base, arrivalLogged:'13:00', departureLogged:'11:30', lateFeeWaived:true }];
+  inv = C.buildInvoice(db, 'o1', { asAt:'2026-09-27' });
+  t('a waived stay charges nothing', !inv.lines.some(l => l.what === 'Outside check-in hours'));
+
+  /* On time is on time. */
+  db.bookings = [{ ...base, arrivalLogged:'15:10', departureLogged:'10:10' }];
+  inv = C.buildInvoice(db, 'o1', { asAt:'2026-09-27' });
+  t('inside the grace charges nothing', !inv.lines.some(l => l.what === 'Outside check-in hours'));
+
+  /* Daycare is not boarding. */
+  db.bookings = [{ ...base, session:'full', arrivalTime:'07:30', departureTime:'09:00' }];
+  inv = C.buildInvoice(db, 'o1', { asAt:'2026-09-27' });
+  t('a daycare day never gets a check-in charge',
+    !inv.lines.some(l => l.what === 'Outside check-in hours'));
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

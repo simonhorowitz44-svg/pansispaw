@@ -456,12 +456,23 @@ export function buildInvoice(db, ownerId, opts = {}) {
          "Additional charge" and nothing else: on a stay the times are already
          recorded, so the invoice can say what they were. That line is the one
          most likely to be queried, so it is the worst one to leave bare. */
+      const bh = boardingHoursFee(b);
       if (b.extraCharge) {
-        const bh = boardingHoursFee(b);
         push({ date:b.date, dog:dogName,
                what: b.extraNote || (bh.why ? 'Outside check-in hours' : 'Additional charge'),
                note: bh.why || '' },
              cents(b.extraCharge), b);
+      } else if (bh.fee) {
+        /* Nobody typed a charge, so bill the stay's own hours. The times are
+           already recorded against the booking, the rule is published, and the
+           arithmetic is the same every time — there is nothing here for a human
+           to decide, and leaving it to one meant it was simply never charged.
+
+           A hand-typed extraCharge still wins. That is the override for the
+           stay that was genuinely agreed differently, and it has to beat the
+           automatic line rather than add to it. */
+        push({ date:b.date, dog:dogName, what:'Outside check-in hours', note: bh.why },
+             cents(bh.fee), b);
       }
       addLate();
     });
