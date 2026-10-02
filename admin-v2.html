@@ -2026,11 +2026,25 @@ function renderInvoices() {
   const queued = ((DB.meta && DB.meta.sendQueue) || []).length;
   const orphans = orphanBookings(DB, S.goLive || '0000-01-01', todayISO());
 
-  const card = (inv, why) => `<div class="mn-row ${why ? '' : 'owing'}" onclick="openOneInvoice('${escapeHtml(inv.owner.id)}')">
+  /* Which days of the week the dog was actually here, rather than a line count.
+     Lines are not days — a late fee and an add-on both sit on the same date —
+     so this counts distinct dates, and Andressa reads "Tue, Wed, Thu" far
+     faster than "3 lines, 29 Sept - 1 Oct" when she is checking an invoice
+     against what she remembers of the week. */
+  const dayNames = inv => [...new Set((inv.lines || []).map(l => l.date).filter(Boolean))].sort()
+    .map(d => new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short' }));
+
+  const card = (inv, why) => {
+    const days = dayNames(inv);
+    const when = days.length
+      ? `${days.join(', ')} · ${fmtDateShort(inv.periodFrom)}${inv.periodFrom !== inv.periodTo ? ' – ' + fmtDateShort(inv.periodTo) : ''}`
+      : `${fmtDateShort(inv.periodFrom)}${inv.periodFrom !== inv.periodTo ? ' – ' + fmtDateShort(inv.periodTo) : ''}`;
+    return `<div class="mn-row ${why ? '' : 'owing'}" onclick="openOneInvoice('${escapeHtml(inv.owner.id)}')">
     <div><div class="mn-name">${escapeHtml(inv.owner.name)}</div>
-      <div class="mn-sub">${inv.lines.length} line${inv.lines.length===1?'':'s'} · ${fmtDateShort(inv.periodFrom)}${inv.periodFrom!==inv.periodTo ? ' – ' + fmtDateShort(inv.periodTo) : ''}${why ? ' · ' + escapeHtml(why[0]) : ''}</div></div>
+      <div class="mn-sub">${escapeHtml(when)}${why ? ' · ' + escapeHtml(why[0]) : ''}</div></div>
     <div class="mn-bal">${inv.nothingDue ? 'summary' : '$' + inv.total.toFixed(2)}</div>
   </div>`;
+  };
 
   openSheet(`
     <h2 class="sheet-title">Invoices</h2>
