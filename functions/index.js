@@ -284,13 +284,29 @@ export const sendTestInvoice = onCall(
     if (!request?.auth) throw new HttpsError('unauthenticated',
       'Sign in to the panel first. This sends a real email with real bank details on it.');
 
-    const to = request?.data?.to || request?.to;
-    if (!to || !/.+@.+\..+/.test(to)) throw new HttpsError('invalid-argument',
-      'Pass a "to" address, e.g. sendTestInvoice({data: {to: "you@example.com"}}).');
-
     const snap = await fs.doc(STATE).get();
+    const cfgEarly = snap.exists ? snap.data().meta?.invoicing || {} : {};
+
+    /* A test send can only reach us. The fixture is invented and nothing is
+       marked billed, but the email carries the real business name, the real BSB
+       and the real account number, and it is indistinguishable from a genuine
+       invoice in an inbox. One slip of a finger onto a client address and they
+       are looking at a bill for a dog called Biscuit. So the address is not
+       free text: it defaults to Simon and refuses anything not on this list. */
+    const SAFE_TEST_RECIPIENTS = [
+      'simon.horowitz44@gmail.com',
+      'andressa.ubf@hotmail.com',
+      cfgEarly.digestTo, cfgEarly.copyTo
+    ].filter(Boolean).map(x => String(x).trim().toLowerCase());
+
+    const to = String(request?.data?.to || request?.to || SAFE_TEST_RECIPIENTS[0]).trim();
+    if (!/.+@.+\..+/.test(to)) throw new HttpsError('invalid-argument',
+      'That is not an email address. Leave "to" out entirely and it goes to Simon.');
+    if (!SAFE_TEST_RECIPIENTS.includes(to.toLowerCase())) throw new HttpsError('permission-denied',
+      `Test invoices only go to us, never to a client address. Allowed: ${SAFE_TEST_RECIPIENTS.join(', ')}.`);
+
     const biz = { ...DEFAULT_BIZ, ...(snap.exists ? snap.data().meta?.biz || {} : {}) };
-    const cfg = snap.exists ? snap.data().meta?.invoicing || {} : {};
+    const cfg = cfgEarly;
     if (!biz.bsb || !biz.acct) throw new HttpsError('failed-precondition',
       'No BSB or account number set. Add them in the panel first — otherwise the test invoice has no way to pay it.');
     await loadPricing();
@@ -312,7 +328,11 @@ export const sendTestInvoice = onCall(
         { id:'t2', dogId:'test_dog', date: day(3), session:'full', departureLogged:'16:20' },
         { id:'t3', dogId:'test_dog', date: day(2), session:'full', packId:'test_pack', departureLogged:'16:05' },
         { id:'t4', dogId:'test_dog', date: day(1), session:'full', departureLogged:'18:40' },
-        { id:'t5', dogId:'test_dog', date: day(1), session:'full', cancelled:true, cancelCharge:45 }
+        { id:'t5', dogId:'test_dog', date: day(1), session:'full', cancelled:true, cancelCharge:45 },
+        /* A stay collected outside its window, so the sample also shows the
+           check-in charge explaining itself. */
+        { id:'t6', dogId:'test_dog', date: day(5), session:'overnight',
+          arrivalLogged:'13:00', departureLogged:'11:30' }
       ]
     };
 
