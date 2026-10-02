@@ -315,6 +315,9 @@ body.modal-open { overflow: hidden; }
 .mn-tx { cursor:default; }
 .mn-row.owing { background:linear-gradient(90deg,#fdf3f1 0%,transparent 55%); }
 .mn-row.clear { opacity:.65; }
+/* On its way: visibly not actionable, so nobody taps it again. */
+.mn-row.sending { background:linear-gradient(90deg,#eef4e8 0%,transparent 55%); cursor:default; }
+.mn-row.sending .mn-sub { color:var(--pine); }
 .mn-name { font-family:var(--font-serif); font-size:15px; color:var(--ink); }
 .mn-sub  { font-size:11.5px; color:var(--ink-2); margin-top:2px; }
 .mn-bal  { font-family:var(--font-serif); font-size:17px; color:var(--ink); white-space:nowrap; }
@@ -560,6 +563,7 @@ body.modal-open { overflow: hidden; }
 #toast-host { position: fixed; bottom: calc(90px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); z-index: 80; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
 .toast { background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 999px; font-size: 14px; font-weight: 500; animation: slideUp var(--dur) var(--ease-spring), fadeOut 300ms 2.4s forwards; box-shadow: var(--shadow-md); }
 .toast.warn { background: var(--owe); color: white; font-weight: 600; }
+.toast.ok { background: var(--pine); color: #fff; font-weight: 600; animation: slideUp var(--dur) var(--ease-spring), fadeOut 300ms 3.6s forwards; }
 @keyframes fadeOut { to { opacity: 0; transform: translateY(-10px); } }
 
 /* Persistent sync-failure banner — impossible to miss */
@@ -1005,13 +1009,19 @@ async function downscalePhoto(file, maxSide=800, quality=0.72) {
   return canvas.toDataURL('image/jpeg', quality);
 }
 
+/* kind: 'ok' for anything that worked, 'warn' for anything that didn't.
+   A plain dark pill reads as "something happened" and not as "that succeeded" —
+   which is how one invoice got sent to a client four times, because tapping
+   send produced a message that looked identical to every other message in the
+   app and nothing on screen changed. A success says so, with a tick, and stays
+   long enough to be read. */
 function toast(msg, kind) {
   const host = document.getElementById('toast-host');
   const t = document.createElement('div');
-  t.className = 'toast' + (kind === 'warn' ? ' warn' : '');
-  t.textContent = msg;
+  t.className = 'toast' + (kind === 'warn' ? ' warn' : kind === 'ok' ? ' ok' : '');
+  t.textContent = (kind === 'ok' ? '✓  ' : '') + msg;
   host.appendChild(t);
-  setTimeout(() => t.remove(), kind === 'warn' ? 5000 : 3000);
+  setTimeout(() => t.remove(), kind === 'warn' ? 5000 : kind === 'ok' ? 4200 : 3000);
 }
 
 // Persistent banner for cloud-sync failures — doesn't fade
@@ -2001,8 +2011,13 @@ function invSettings() {
 function invBuckets() {
   const today = todayISO();
   const all = invoicesDue(DB, { asAt: today });
-  const out = { ready: [], waiting: [], blocked: [] };
+  /* Anything already queued is on its way and must leave Ready, or the row
+     keeps its Send button and tapping it again queues a second copy. That is
+     exactly what happened: four taps, four runs, one client billed four times. */
+  const queuedFor = new Set(((DB.meta && DB.meta.sendQueue) || []).map(q => q.ownerId));
+  const out = { ready: [], waiting: [], blocked: [], sending: [] };
   all.forEach(inv => {
+    if (queuedFor.has(inv.owner.id)) { out.sending.push(inv); return; }
     const why = blockers(DB, inv, BIZ, today);
     if (!why.length) out.ready.push(inv);
     else if (why.length === 1 && why[0].startsWith('Still has')) out.waiting.push(inv);
@@ -2068,6 +2083,14 @@ function renderInvoices() {
     ${orphans.length ? `<div class="mn-line" style="background:#fdf3e7">
       <span>${orphans.length} booking${orphans.length===1?'':'s'} ${orphans.length===1?'has':'have'} no dog or owner on file, so ${orphans.length===1?"it can't":"they can't"} be billed.</span></div>` : ''}
 
+    ${b.sending.length ? `<h3 class="grp-title">On its way</h3>
+      ${b.sending.map(i => `<div class="mn-row sending">
+        <div><div class="mn-name">${escapeHtml(i.owner.name)}</div>
+          <div class="mn-sub">Sending now — it'll move to Recently sent in a moment</div></div>
+        <div class="mn-bal">$${i.total.toFixed(2)}</div></div>`).join('')}
+      <p class="sub muted small">Already handed to the mail service. No need to tap anything again —
+        they go out once, even if this page is closed.</p>` : ''}
+
     ${b.ready.length ? `<h3 class="grp-title">Ready to send</h3>
       ${b.ready.map(i => card(i)).join('')}
       ${S.mode !== 'auto' ? `<button class="btn primary block mt-2" onclick="queueAllReady()">
@@ -2124,8 +2147,8 @@ async function queueInvoice(ownerId) {
   DB.meta.sendQueue.push({ ownerId, asAt: today, number: inv.number,
                            bookingIds: inv.bookingIds, total: inv.total, queuedAt: new Date().toISOString() });
   await save(DB);
-  toast(`Queued for ${inv.owner.name}`);
   renderInvoices();
+  toast(`Sending ${inv.owner.name}'s invoice — $${inv.total.toFixed(2)}`, 'ok');
 }
 
 async function queueAllReady() {
@@ -2141,8 +2164,8 @@ async function queueAllReady() {
   ready.forEach(inv => DB.meta.sendQueue.push({ ownerId: inv.owner.id, asAt: today, number: inv.number,
     bookingIds: inv.bookingIds, total: inv.total, queuedAt: new Date().toISOString() }));
   await save(DB);
-  toast(`${ready.length} queued`);
   renderInvoices();
+  toast(`Sending ${ready.length} invoice${ready.length===1?'':'s'} — $${ready.reduce((s,i)=>s+i.total,0).toFixed(2)}`, 'ok');
 }
 
 /* Paid in cash, or sent by hand. Closes the lines off without emailing. */
@@ -2157,7 +2180,7 @@ async function markInvoiceSent(ownerId) {
   DB.meta.invoicesSent.push({ number: inv.number, ownerId, ownerName: inv.owner.name, asAt: today,
     total: inv.total, bookingIds: inv.bookingIds, sentAt: new Date().toISOString(), mode: 'by hand' });
   await save(DB);
-  toast('Closed off');
+  toast('Closed off — no email sent', 'ok');
   renderInvoices();
 }
 
@@ -2225,7 +2248,7 @@ async function saveInvoiceSettings() {
     digestTo: document.getElementById('invDigestTo').value.trim(),
     batchCap: Math.max(1, parseInt(document.getElementById('invBatchCap').value, 10) || 8)
   };
-  await save(DB); renderInvoices(); toast('Saved');
+  await save(DB); renderInvoices(); toast('Saved', 'ok');
 }
 
 /* Business + bank details, needed before anything goes out. */
@@ -2267,7 +2290,7 @@ async function saveBizSettings() {
   // Her clients use WhatsApp; an address nobody writes to just bounces.
   BIZ.email = document.getElementById('bizEmail').value.trim();
   DB.meta.biz = { acctName: BIZ.acctName, bsb: BIZ.bsb, acct: BIZ.acct, abn: BIZ.abn, stripeLink: BIZ.stripeLink, email: BIZ.email };
-  await save(DB); renderInvoices(); toast('Saved');
+  await save(DB); renderInvoices(); toast('Saved', 'ok');
 }
 
 /* ---------- PACK ---------- */
@@ -3254,7 +3277,7 @@ async function applyCancel(id, charge) {
     if (bk.customPrice === 0) bk.customPrice = null;
   }
   await save(DB); closeSheet(); render();
-  toast(charge ? `Cancelled · $${charge} charged` : 'Cancelled · no charge');
+  toast(charge ? `Cancelled · $${charge} charged` : 'Cancelled · no charge', 'ok');
 }
 
 async function uncancelBooking(id) {
@@ -3263,7 +3286,7 @@ async function uncancelBooking(id) {
   bk.total = calcTotal(bk, dogById(bk.dogId));
   bk.lateFee = latePickupFee(bk).fee;
   await save(DB); closeSheet(); render();
-  toast('Booking restored');
+  toast('Booking restored', 'ok');
 }
 
 async function deleteBooking(id) {
