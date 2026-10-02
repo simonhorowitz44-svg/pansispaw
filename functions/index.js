@@ -204,6 +204,23 @@ async function notifyAndressa(cfg, biz, apiKey, subject, body) {
 
 async function digest(cfg, biz, apiKey, state, today, sent, failed, refused, waiting = []) {
   if (!sent.length && !failed.length && !refused.length && !waiting.length) return;
+  const orphans = orphanBookings(state, cfg.goLive || '0000-01-01', today);
+
+  /* Every invoice is blind-copied to Andressa, so after a quiet run of one the
+     digest is a second email telling her about an email she already has. She
+     got two notifications a minute apart for a single $102 invoice and
+     reasonably read it as a double-send.
+
+     So the digest only goes when it carries something the copies do not: more
+     than one invoice to total up, a failure, something refused, something
+     waiting on her, or a booking that cannot be billed at all. A single clean
+     send speaks for itself. */
+  const bccAddr    = (cfg.copyTo || cfg.digestTo || '').trim().toLowerCase();
+  const digestAddr = (cfg.digestTo || biz.email || '').trim().toLowerCase();
+  const alreadyTold = bccAddr && bccAddr === digestAddr;
+  if (alreadyTold && sent.length === 1
+      && !failed.length && !refused.length && !waiting.length && !orphans.length) return;
+
   const L = [];
   if (sent.length) {
     L.push(`Sent (${sent.length}) — $${sent.reduce((s,x) => s + x.inv.total, 0).toFixed(2)}`);
@@ -221,7 +238,6 @@ async function digest(cfg, biz, apiKey, state, today, sent, failed, refused, wai
     L.push('', `Ready to approve (${waiting.length}) — $${waiting.reduce((t,i)=>t+i.total,0).toFixed(2)}`);
     waiting.forEach(i => L.push(`  ${i.owner.name} — $${i.total.toFixed(2)}`));
   }
-  const orphans = orphanBookings(state, cfg.goLive || '0000-01-01', today);
   if (orphans.length) L.push('', `${orphans.length} booking${orphans.length===1?'':'s'} can't be billed — no dog or owner on file.`);
   await notifyAndressa(cfg, biz, apiKey,
     sent.length ? `${sent.length} invoice${sent.length===1?'':'s'} sent` : 'invoices need a look',
