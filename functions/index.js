@@ -60,10 +60,17 @@ async function loadPricing() {
 const SHARED_SENDER = 'Pansi\'s Paws <onboarding@resend.dev>';
 const ownSender = cfg => cfg?.mailFrom || '';
 
-async function sendMail({ to, from, replyTo, bcc, subject, html, text, apiKey }) {
+async function sendMail({ to, from, replyTo, bcc, subject, html, text, apiKey, idempotencyKey }) {
+  /* Resend keeps an idempotency key for 24 hours and returns the original
+     response instead of sending again. Siena Edwards received the same invoice
+     four times because four overlapping runs each read the ledger before any of
+     them had written to it; the Firestore claim below is the real fix, but this
+     is the one that holds even if the claim logic is wrong, because it does not
+     depend on our own state being consistent. */
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json',
+               ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey.slice(0, 256) } : {}) },
     body: JSON.stringify({
       from: from || SHARED_SENDER,
       to: [to], reply_to: replyTo || undefined,
@@ -111,7 +118,8 @@ async function runInvoicing(reason, apiKey) {
     await notifyAndressa(cfg, biz, apiKey, `Held ${plan.held.length} invoices`,
       `${plan.held.length} invoices came up at once, more than the ${plan.cap} you'd expect in a normal run, so none were sent.\n\n` +
       plan.held.map(i => `  ${i.owner.name} — $${i.total.toFixed(2)} (${i.lines.length} lines)`).join('\n') +
-      `\n\nOpen the panel and send them by hand if that's right, or raise the limit in Invoices → Change.`);
+      `\n\nOpen the panel and send them by hand if that's right, or raise the limit in Invoices → Change.`,
+      `held/${today}/${plan.held.length}`);
     await fs.doc(STATE).update({ 'meta.invoicingLastRun': { at: new Date().toISOString(), reason, held: plan.held.length } });
     return { held: plan.held.length };
   }
@@ -130,25 +138,63 @@ async function runInvoicing(reason, apiKey) {
         `These are finished and waiting for you. Nothing goes until you tap send.\n\n` +
         waiting.map(i => `  ${i.owner.name} — $${i.total.toFixed(2)}`).join('\n') +
         `\n\nTotal $${waiting.reduce((t, i) => t + i.total, 0).toFixed(2)}\n\n` +
-        `Open the panel → Invoices to look them over.`);
+        `Open the panel → Invoices to look them over.`,
+        `waiting/${today}/${waiting.map(i => i.owner.id).sort().join('-')}`);
       return { waiting: waiting.length };
     }
     return { skipped: 'nothing ready' };
   }
 
+  /* Claim each invoice in a transaction before a single email goes out.
+
+     The trigger fires on any write that touches bookings, the queue or the
+     settings, so four saves in quick succession start four runs. Each one read
+     the state, saw nothing billed, and sent — and the ledger write that would
+     have stopped the next one had not landed yet. That is how one $102 invoice
+     reached a client four times.
+
+     A claim is a write, so Firestore serialises it: whichever run gets there
+     first owns that invoice number and the others skip it. Stale claims expire
+     so a crashed run cannot wedge an invoice forever. */
+  const CLAIM_TTL_MS = 10 * 60 * 1000;
+  const claimed = [];
+  if (jobs.length) {
+    await fs.runTransaction(async tx => {
+      const cur  = (await tx.get(fs.doc(STATE))).data() || {};
+      const meta = cur.meta || {};
+      const billed = meta.billed || {};
+      const already = new Set((meta.invoicesSent || []).map(x => x.number));
+      const inFlight = meta.sending || {};
+      const now = Date.now();
+      claimed.length = 0;
+      for (const inv of jobs) {
+        if (already.has(inv.number)) continue;                       // already gone out
+        if (inv.bookingIds.some(id => billed[id])) continue;         // its days are billed
+        const held = inFlight[inv.number];
+        if (held && now - held < CLAIM_TTL_MS) continue;             // another run has it
+        inFlight[inv.number] = now;
+        claimed.push(inv);
+      }
+      meta.sending = inFlight;
+      tx.update(fs.doc(STATE), { meta });
+    });
+  }
+  if (jobs.length && !claimed.length) return { skipped: 'already in flight' };
+
   const sent = [], failed = [];
-  for (const inv of jobs) {
+  for (const inv of claimed) {
     try {
       const id = await sendMail({
         to: inv.owner.email, from: ownSender(cfg), replyTo: cfg.replyTo || biz.email,
         bcc: cfg.copyTo || cfg.digestTo || undefined, apiKey,
+        idempotencyKey: `invoice/${inv.number}`,
         subject: invoiceSubject(inv, biz),
         html: renderInvoiceEmail(inv, biz), text: invoiceText(inv, biz)
       });
       sent.push({ inv, id });
     } catch (e) {
       logger.error('send failed', inv.owner.name, e);
-      failed.push({ who: inv.owner.name, why: String(e.message || e) });
+      failed.push({ who: inv.owner.name, number: inv.number, why: String(e.message || e) });
     }
   }
 
@@ -181,6 +227,11 @@ async function runInvoicing(reason, apiKey) {
       // Clear the queue entries we dealt with, either way — a refusal that stays
       // queued would be retried on every single write.
       meta.sendQueue = (meta.sendQueue || []).filter(q => !dealtWith.has(q.ownerId));
+      /* Let go of the claims. A send that went is protected by invoicesSent
+         from here on; one that threw should be free to try again next run. */
+      meta.sending = meta.sending || {};
+      [...sent.map(x => x.inv.number), ...failed.map(f => f.number).filter(Boolean)]
+        .forEach(n => { delete meta.sending[n]; });
       meta.invoicingLastRun = { at: new Date().toISOString(), reason, sent: sent.length, failed: failed.length };
       tx.update(fs.doc(STATE), { meta });
     });
@@ -192,11 +243,12 @@ async function runInvoicing(reason, apiKey) {
 
 /* ---------- telling Andressa ---------- */
 
-async function notifyAndressa(cfg, biz, apiKey, subject, body) {
+async function notifyAndressa(cfg, biz, apiKey, subject, body, idempotencyKey) {
   const to = cfg.digestTo || biz.email;
   if (!to) return;
   try {
-    await sendMail({ to, from: ownSender(cfg) || undefined, apiKey, subject: `Pansi's Paws — ${subject}`,
+    await sendMail({ to, from: ownSender(cfg) || undefined, apiKey, idempotencyKey,
+      subject: `Pansi's Paws — ${subject}`,
       html: `<pre style="font:14px/1.6 -apple-system,Helvetica,Arial,sans-serif;white-space:pre-wrap">${body
         .replace(/&/g,'&amp;').replace(/</g,'&lt;')}</pre>`, text: body });
   } catch (e) { logger.error('could not reach Andressa', e); }
@@ -239,9 +291,14 @@ async function digest(cfg, biz, apiKey, state, today, sent, failed, refused, wai
     waiting.forEach(i => L.push(`  ${i.owner.name} — $${i.total.toFixed(2)}`));
   }
   if (orphans.length) L.push('', `${orphans.length} booking${orphans.length===1?'':'s'} can't be billed — no dog or owner on file.`);
+  /* Keyed on exactly what it says, so four runs reporting the same thing send
+     one email rather than four. A genuinely different run says something
+     different and gets a different key. */
   await notifyAndressa(cfg, biz, apiKey,
     sent.length ? `${sent.length} invoice${sent.length===1?'':'s'} sent` : 'invoices need a look',
-    L.join('\n'));
+    L.join('\n'),
+    `digest/${today}/${[...sent.map(x => x.inv.number), ...failed.map(f => f.number || f.who),
+                        ...refused.map(r => r.ownerId), ...waiting.map(i => i.owner.id)].sort().join('-')}`);
 }
 
 /* ---------- triggers ---------- */
