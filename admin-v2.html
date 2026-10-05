@@ -2061,7 +2061,19 @@ function renderMoney() {
   const sent = (DB.meta && DB.meta.invoicesSent) || [];
   const owedOn = x => Number(x.total || 0) - Number(x.paidAmount || 0);
 
-  const notYetInvoiced = all.filter(e => e.balance > 0).reduce((t, e) => t + e.balance, 0);
+  /* What could actually be invoiced right now — not "all work since the start
+     date". Invoicing only ever covers bookings on or after the go-live date;
+     everything before that was settled between Andressa and the client long
+     ago and no button here will ever bill it. Counting it produced $10,726 of
+     alarm that nothing could act on. This is the figure the Invoices screen
+     would actually produce if she pressed send. */
+  const goLive = (DB.meta?.invoicing?.goLive) || '9999-12-31';
+  const billedMap = (DB.meta && DB.meta.billed) || {};
+  const billable = (DB.bookings || []).filter(b =>
+    !b.cancelled && b.date >= goLive && b.date <= today && !billedMap[b.id]);
+  const notYetInvoiced = billable.reduce((t, b) =>
+    t + (b.total != null ? b.total : calcTotal(b, dogById(b.dogId))), 0);
+  const billableClients = new Set(billable.map(b => (dogById(b.dogId) || {}).ownerId).filter(Boolean)).size;
   const unpaid  = sent.filter(x => !x.paidAt)
                       .sort((a2,b2) => String(a2.sentAt||'').localeCompare(String(b2.sentAt||'')));
   const owedSum = unpaid.reduce((t, x) => t + owedOn(x), 0);
@@ -2100,7 +2112,7 @@ function renderMoney() {
 
     ${notYetInvoiced > 0 ? `<div class="mn-hero">
       <div class="mn-hero-num">${money(notYetInvoiced)}</div>
-      <div class="mn-hero-cap">of work finished and never invoiced</div>
+      <div class="mn-hero-cap">ready to invoice · ${billable.length} day${billable.length===1?'':'s'} across ${billableClients} client${billableClients===1?'':'s'}</div>
     </div>
     <button class="btn primary block mt-2" onclick="openInvoicesSheet()">Bill what's finished →</button>`
     : `<div class="mn-hero clear">
