@@ -1099,5 +1099,90 @@ console.log('\nThe things that used to bill zero in silence');
     inv && inv.warnings.some(w => /no size on file/.test(w)));
 }
 
+
+console.log('\nOne cap a day, however the hours were used');
+{
+  const db = {
+    owners:[{ id:'o1', name:'One Household', email:'h@x.com' }],
+    dogs:[{ id:'d1', ownerId:'o1', name:'Greg',  size:'medium' },
+          { id:'d2', ownerId:'o1', name:'Pookster', size:'large' }],
+    bookings:[], packs:[], meta:{ invoicing:{ goLive:'2026-01-01' } }
+  };
+
+  /* Two dogs of one household, both dropped three hours early on the same day.
+     Each used to carry its own $40 cap. */
+  db.bookings = [
+    { id:'s1', dogId:'d1', date:'2026-09-26', session:'overnight', arrivalLogged:'12:00' },
+    { id:'s2', dogId:'d2', date:'2026-09-26', session:'overnight', arrivalLogged:'12:00' }
+  ];
+  let inv = C.buildInvoice(db, 'o1', { asAt:'2026-09-27' });
+  let hours = inv.lines.filter(l => l.what === 'Outside check-in hours');
+  eq('the day caps at $40 across both dogs', hours.reduce((t,l) => t + l.amt, 0), C.LATE_CAP);
+  eq('the first stay takes the whole cap, so the second adds no line', hours.length, 1);
+
+  /* When the first stay only uses part of the cap, the second is trimmed to
+     what is left and says so. */
+  db.bookings = [
+    { id:'s1', dogId:'d1', date:'2026-09-26', session:'overnight', arrivalLogged:'14:00' },
+    { id:'s2', dogId:'d2', date:'2026-09-26', session:'overnight', arrivalLogged:'12:00' }
+  ];
+  inv = C.buildInvoice(db, 'o1', { asAt:'2026-09-27' });
+  hours = inv.lines.filter(l => l.what === 'Outside check-in hours');
+  eq('a partly-used cap leaves room for the second', hours.length, 2);
+  eq('and the two together still stop at $40', hours.reduce((t,l) => t + l.amt, 0), C.LATE_CAP);
+  t('with the trimmed one saying the cap bit',
+    hours.some(l => /capped at \$40 for the day/.test(l.note || '')));
+
+  /* A late pickup and a check-in charge on one date share the same ceiling. */
+  db.bookings = [
+    { id:'s3', dogId:'d1', date:'2026-09-26', session:'overnight', arrivalLogged:'12:00' },
+    { id:'s4', dogId:'d2', date:'2026-09-26', session:'full', departureLogged:'19:30' }
+  ];
+  inv = C.buildInvoice(db, 'o1', { asAt:'2026-09-27' });
+  eq('a late pickup and a check-in charge share one cap',
+     inv.lines.filter(l => /Outside check-in hours|Late pickup/.test(l.what))
+              .reduce((t,l) => t + l.amt, 0), C.LATE_CAP);
+}
+
+console.log('\nA pack stops working when it runs out of time');
+{
+  const db = {
+    owners:[{ id:'o1', name:'Shy Virk', email:'s@x.com' }],
+    dogs:[{ id:'d1', ownerId:'o1', name:'Lola', size:'small' }],
+    packs:[{ id:'p1', dogId:'d1', size:10, daysUsed:2, purchaseDate:'2026-03-01', expiryDate:'2026-09-01' }],
+    bookings:[{ id:'b1', dogId:'d1', date:'2026-09-29', session:'full', packId:'p1', total:0, customPrice:0 }],
+    meta:{ invoicing:{ goLive:'2026-01-01' } }
+  };
+  const inv = C.buildInvoice(db, 'o1', { asAt:'2026-09-30' });
+  eq('a day taken off an expired pack is charged', inv.total, 80);
+  t('and says which pack and when it ran out',
+    inv.warnings.some(w => /expired 2026-09-01/.test(w)));
+  eq('and the pack shows nothing left after the expiry',
+     C.packLeftAsAt(db, db.packs[0], '2026-09-30'), 0);
+  eq('though it still showed its days before it', C.packLeftAsAt(db, db.packs[0], '2026-08-01'), 10);
+}
+
+
+console.log('\nThe check-in charge explains itself to the client');
+{
+  const db = {
+    owners:[{ id:'o1', name:'Mike', email:'m@x.com' }],
+    dogs:[{ id:'d1', ownerId:'o1', name:'Greg', size:'medium' }],
+    packs:[], meta:{ invoicing:{ goLive:'2026-01-01' } },
+    bookings:[{ id:'s1', dogId:'d1', date:'2026-09-26', session:'overnight',
+                arrivalLogged:'13:00', departureLogged:'11:30' }]
+  };
+  const inv = C.buildInvoice(db, 'o1', { asAt:'2026-09-27' });
+  const biz = { person:'Andressa', site:'pansispaws.com.au', bsb:'1', acct:'2' };
+  const html = C.renderInvoiceEmail(inv, biz);
+  const text = C.invoiceText(inv, biz);
+  t('the email says what the charge is for',
+    /Arrival before 3pm or collection after 10am is \$10 per 30 minutes/.test(html));
+  t('and names the grace and the cap', /15 minute grace period/.test(html) && /capped at \$40 a day/.test(html));
+  t('the plain text version says it too',
+    /Arrival before 3pm or collection after 10am/.test(text));
+  t('and it never calls it boarding', !/boarding/i.test(html));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

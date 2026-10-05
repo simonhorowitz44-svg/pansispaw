@@ -259,9 +259,17 @@ export function packVisitNumber(db, pack, booking) {
   const i = packRedemptions(db, pack).findIndex(x => x.id === booking.id);
   return i < 0 ? 0 : Math.min(i + 1, pack.size);
 }
-/* Visits left as at a date — so a reprinted invoice says what it said then. */
+/* Visits left as at a date — so a reprinted invoice says what it said then.
+   A pack past its expiry has nothing left whatever the count says; the days
+   were sold with a use-by and the site publishes it. */
 export function packLeftAsAt(db, pack, isoDate) {
+  if (pack.expiryDate && isoDate > pack.expiryDate) return 0;
   return Math.max(0, pack.size - packRedemptions(db, pack).filter(x => x.date <= isoDate).length);
+}
+
+/* Whether a day may be taken off this pack at all. */
+export function packCoversDate(pack, isoDate) {
+  return !pack.expiryDate || isoDate <= pack.expiryDate;
 }
 
 /* ---------- identity ---------- */
@@ -410,6 +418,12 @@ export function buildInvoice(db, ownerId, opts = {}) {
              puts the invoice in "Needs a look" so nobody pays it blind. */
           warnings.push(`${dogName}'s visit on ${b.date} points at a pack that no longer exists — priced at the normal rate, check it before sending.`);
           b = { ...b, packId: null, total: null, customPrice: b.customPrice === 0 ? null : b.customPrice };
+        } else if (!packCoversDate(pk, b.date)) {
+          /* Redeemed against a pack that had already expired. The day is not
+             free, but it is not something to quietly bill either — she may
+             have meant to extend it. */
+          warnings.push(`${dogName}'s visit on ${b.date} came off a pack that expired ${pk.expiryDate} — priced at the normal rate, check it before sending.`);
+          b = { ...b, packId: null, total: null, customPrice: b.customPrice === 0 ? null : b.customPrice };
         } else {
           const n = packVisitNumber(db, pk, b);
           push({ date:b.date, dog:dogName, what:`${label}${trip}`,
@@ -438,7 +452,18 @@ export function buildInvoice(db, ownerId, opts = {}) {
       let baseC;
       if (b.total == null)          baseC = cents(priced);
       else if (b.lateFee != null)   baseC = cents(b.total) - cents(b.lateFee);
-      else                          baseC = cents(b.total) === cents(priced + L.fee) ? cents(b.total) - cents(L.fee) : cents(b.total);
+      else if (cents(b.total) === cents(priced + L.fee)) baseC = cents(b.total) - cents(L.fee);
+      else if (L.fee) {
+        /* A stored total, a late fee, and no record of whether the fee is
+           already inside it. The old guess kept the stored total and then
+           addLate() put the fee on again — a double charge whenever the price
+           had moved since the row was saved. Price it fresh instead, and say
+           so, because billing today's rate for an old day is a decision a
+           person should see rather than a silent correction. */
+        warnings.push(`${dogName}'s ${b.date} was saved before the late fee was recorded separately, so it has been re-priced at today's rate — check it.`);
+        baseC = cents(priced);
+      }
+      else                          baseC = cents(b.total);
       if (baseC < 0) baseC = 0;
 
       /* Split the extras back out of the day's price so each one is named.
@@ -488,7 +513,19 @@ export function buildInvoice(db, ownerId, opts = {}) {
                what: b.extraNote || (bh.why ? 'Outside check-in hours' : 'Additional charge'),
                note: bh.why || '' },
              cents(b.extraCharge), b);
-      } else if (bh.fee && b.customPrice == null) {
+      } else if (bh.fee && b.customPrice == null && (() => {
+        /* Share the daily cap with late pickups rather than keeping a separate
+           one per booking. Two dogs from one household dropped early on the
+           same day used to be $40 + $40, against a published cap of $40 a day.
+           Same accumulator, same ceiling. */
+        const already = lateByDate[b.date] || 0;
+        const room    = cents(LATE_CAP) - already;
+        if (room <= 0) return false;
+        bh.capC = Math.min(cents(bh.fee), room);
+        lateByDate[b.date] = already + bh.capC;
+        bh.cappedHere = bh.capC < cents(bh.fee);
+        return true;
+      })()) {
         /* Nobody typed a charge, so bill the stay's own hours. The times are
            already recorded against the booking, the rule is published, and the
            arithmetic is the same every time — there is nothing here for a human
@@ -503,8 +540,9 @@ export function buildInvoice(db, ownerId, opts = {}) {
            and the hours are the thing being negotiated. Charging them on top
            would re-bill a deal that was already struck. Andressa can still add
            an extraCharge by hand if a custom stay genuinely ran over. */
-        push({ date:b.date, dog:dogName, what:'Outside check-in hours', note: bh.why },
-             cents(bh.fee), b);
+        push({ date:b.date, dog:dogName, what:'Outside check-in hours',
+               note: bh.why + (bh.cappedHere ? ` — capped at $${LATE_CAP} for the day` : '') },
+             bh.capC, b);
       }
       addLate();
     });
@@ -623,7 +661,13 @@ export function renderInvoiceHTML(inv, biz, o = {}) {
       <span>${isInv ? `Payment within ${INVOICE_TERMS_DAYS} days. ` : ''}
       Cancellations are free with more than 24 hours' notice, and half the day's rate inside 24 hours.${
         inv.lines.some(l => l.what === 'Late pickup')
-          ? ` Pickup after ${friendlyTime(LATE_CUTOFF)} is $${LATE_PER_30} per 30 minutes once a ${LATE_GRACE_MIN} minute grace period has passed, capped at $${LATE_CAP} a day.` : ''}</span>
+          ? ` Pickup after ${friendlyTime(LATE_CUTOFF)} is $${LATE_PER_30} per 30 minutes once a ${LATE_GRACE_MIN} minute grace period has passed, capped at $${LATE_CAP} a day.` : ''}${
+        /* The check-in line used to arrive with no rate, no grace and no cap
+           stated anywhere — the one charge most likely to be queried was the
+           only one that explained nothing. Worded as hours rather than
+           boarding, to match how the session itself is labelled. */
+        inv.lines.some(l => l.what === 'Outside check-in hours')
+          ? ` Arrival before ${friendlyTime(BOARD_CHECKIN)} or collection after ${friendlyTime(BOARD_CHECKOUT)} is $${LATE_PER_30} per 30 minutes once a ${BOARD_GRACE_MIN} minute grace period has passed, capped at $${LATE_CAP} a day.` : ''}</span>
     </div>
   </div>`;
 }
@@ -649,6 +693,15 @@ export function invoiceText(inv, biz) {
     L.push(`BSB ${biz.bsb}, Account ${biz.acct}`, `Reference: ${inv.ref}`);
     if (biz.stripeLink) L.push(`Or by card: ${biz.stripeLink}`);
   }
+  /* The plain-text invoice carried no terms at all — not the cancellation
+     rule, not the late fee, nothing. Some clients only ever read this version,
+     and a charge they cannot find an explanation for is the one they query. */
+  L.push('', "Cancellations are free with more than 24 hours' notice, and half the day's rate inside 24 hours.");
+  if (inv.lines.some(l => l.what === 'Late pickup'))
+    L.push(`Pickup after ${friendlyTime(LATE_CUTOFF)} is $${LATE_PER_30} per 30 minutes once a ${LATE_GRACE_MIN} minute grace period has passed, capped at $${LATE_CAP} a day.`);
+  if (inv.lines.some(l => l.what === 'Outside check-in hours'))
+    L.push(`Arrival before ${friendlyTime(BOARD_CHECKIN)} or collection after ${friendlyTime(BOARD_CHECKOUT)} is $${LATE_PER_30} per 30 minutes once a ${BOARD_GRACE_MIN} minute grace period has passed, capped at $${LATE_CAP} a day.`);
+
   L.push('', `Thank you — ${biz.person} 🐾`, biz.name + (biz.abn ? ` · ABN ${biz.abn}` : ''));
   return L.join('\n');
 }
@@ -730,7 +783,9 @@ export function renderInvoiceEmail(inv, biz, o = {}) {
     <span style="font-size:11px;color:${ink3}">${escapeHtml(biz.site)}<br>
     Cancellations are free with more than 24 hours' notice, and half the day's rate inside 24 hours.${
       inv.lines.some(l => l.what === 'Late pickup')
-        ? ` Pickup after ${friendlyTime(LATE_CUTOFF)} is $${LATE_PER_30} per 30 minutes after a ${LATE_GRACE_MIN} minute grace period, capped at $${LATE_CAP} a day.` : ''}
+        ? ` Pickup after ${friendlyTime(LATE_CUTOFF)} is $${LATE_PER_30} per 30 minutes after a ${LATE_GRACE_MIN} minute grace period, capped at $${LATE_CAP} a day.` : ''}${
+      inv.lines.some(l => l.what === 'Outside check-in hours')
+        ? ` Arrival before ${friendlyTime(BOARD_CHECKIN)} or collection after ${friendlyTime(BOARD_CHECKOUT)} is $${LATE_PER_30} per 30 minutes after a ${BOARD_GRACE_MIN} minute grace period, capped at $${LATE_CAP} a day.` : ''}
     </span></td></tr>
 
 </table></td></tr></table></body></html>`;
