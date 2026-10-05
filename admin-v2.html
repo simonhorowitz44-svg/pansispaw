@@ -4096,14 +4096,19 @@ async function sendRitualCard() {
   try { await save(DB); } catch (e) { console.warn(e); toast('Save failed — continuing'); }
 
   if (dog) {
-    try { generateInvoicePDF(fresh, dog, owner); } catch (e) { console.warn('PDF failed', e); }
+    /* This used to also download a one-day "INVOICE" PDF built right here, with
+       its own numbering, its own total due, and a hardcoded BSB 062-000 /
+       account 12345678 that belongs to nobody. A client could receive it, pay
+       into an account that does not exist, and then receive the real weekly
+       invoice for the same day. The end-of-day story is about the dog; money
+       goes out through invoice-core and nothing else. */
     if (owner?.email) {
       const body = buildRitualEmail(d, dog, owner, fresh);
       const subject = `${dog.name}'s day at Pansi's Paws`;
       window.location.href = `mailto:${owner.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-      toast('PDF downloaded — attach it before sending', 'info');
+      toast(`${dog.name}'s report ready to send`, 'ok');
     } else {
-      toast(`${dog.name}: no email on file — PDF in Downloads`);
+      toast(`${dog.name}: no email on file — nothing sent`, 'warn');
     }
   }
 
@@ -4172,79 +4177,6 @@ Annandale`;
 }
 
 /* ---------- INVOICE PDF ---------- */
-function generateInvoicePDF(booking, dog, owner) {
-  const { jsPDF } = window.jspdf || {};
-  if (!jsPDF) { toast('PDF library not loaded'); return; }
-  const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
-
-  pdf.setFontSize(28); pdf.setTextColor(43, 26, 16);
-  pdf.text("Pansi's Paws", 20, 26);
-  pdf.setFontSize(10); pdf.setTextColor(120, 100, 80);
-  pdf.text('Home Dog Daycare · Annandale · pansispaws.com.au', 20, 32);
-
-  pdf.setFontSize(20); pdf.setTextColor(43, 26, 16);
-  pdf.text('INVOICE', 150, 26);
-  pdf.setFontSize(10); pdf.setTextColor(80, 80, 80);
-  const invNum = 'INV-' + booking.date.replace(/-/g,'') + '-' + booking.id.slice(0,4).toUpperCase();
-  pdf.text(`Invoice #: ${invNum}`, 150, 33);
-  pdf.text(`Date: ${new Date().toLocaleDateString('en-AU')}`, 150, 39);
-
-  pdf.setDrawColor(220, 200, 170); pdf.line(20, 45, 190, 45);
-  pdf.setFontSize(10); pdf.setTextColor(120, 100, 80);
-  pdf.text('BILL TO', 20, 53);
-  pdf.setTextColor(30, 30, 30); pdf.setFontSize(11);
-  pdf.text(owner?.name || 'Client', 20, 60);
-  if (owner?.email) pdf.text(owner.email, 20, 66);
-  if (owner?.phone) pdf.text(owner.phone, 20, 72);
-
-  const startY = 90;
-  pdf.setFillColor(43, 26, 16); pdf.rect(20, startY, 170, 8, 'F');
-  pdf.setTextColor(255, 255, 255); pdf.setFontSize(10);
-  pdf.text('Description', 24, startY + 5.5);
-  pdf.text('Amount', 175, startY + 5.5, { align: 'right' });
-
-  pdf.setTextColor(30, 30, 30);
-  let y = startY + 15;
-  const desc = `${dog?.name || '?'} — ${SESSION_LABELS[booking.session]} · ${fmtDateShort(booking.date)}`;
-  pdf.setFontSize(10);
-  pdf.text(desc, 24, y);
-  pdf.text('$' + (booking.total||0).toFixed(2), 186, y, { align: 'right' });
-  y += 6;
-
-  const addOns = [];
-  if (booking.addOns?.senior) addOns.push('Senior +$'+ADDONS.senior);
-  if (booking.addOns?.puppy)  addOns.push('Puppy +$'+ADDONS.puppy);
-  if (booking.addOns?.med)    addOns.push('Medication +$'+ADDONS.med);
-  if (booking.addOns?.diet)   addOns.push('Diet prep +$'+ADDONS.diet);
-  if (booking.addOns?.taxi)   addOns.push('Pickup/dropoff +$'+ADDONS.taxi);
-  if (booking.surcharges?.publicHoliday) addOns.push('Public holiday +$'+SURCHARGES.publicHoliday);
-  if (booking.surcharges?.xmasPeak) addOns.push('Xmas peak +$' + (booking.session === 'overnight' ? SURCHARGES.xmasPeakNight : SURCHARGES.xmasPeakDay));
-  if (addOns.length) {
-    pdf.setTextColor(100, 100, 100); pdf.setFontSize(9);
-    pdf.text('   inc: ' + addOns.join(' · '), 24, y); y += 6;
-  }
-  y += 8;
-  pdf.line(20, y - 4, 190, y - 4);
-  pdf.setFontSize(12); pdf.setTextColor(43, 26, 16);
-  pdf.text('TOTAL DUE', 130, y);
-  pdf.setFontSize(14);
-  pdf.text('$' + (booking.total||0).toFixed(2), 186, y, { align: 'right' });
-
-  y += 20;
-  pdf.setFontSize(10); pdf.setTextColor(120, 100, 80);
-  pdf.text('PAYMENT DETAILS', 20, y); pdf.setTextColor(30,30,30);
-  y += 6; pdf.setFontSize(9);
-  pdf.text('Bank transfer:', 20, y); y += 5;
-  pdf.text("Account name:  Pansi's Paws", 25, y); y += 4;
-  pdf.text('BSB:           062-000', 25, y); y += 4;
-  pdf.text('Account:       12345678', 25, y); y += 4;
-  pdf.text(`Reference:     ${invNum}`, 25, y);
-
-  pdf.setFontSize(8); pdf.setTextColor(150, 130, 100);
-  pdf.text('Thank you for choosing Pansi\'s Paws · andressa.ubf@hotmail.com', 105, 285, { align: 'center' });
-
-  pdf.save(`invoice-${(dog?.name || 'dog').replace(/\W+/g,'')}-${booking.date}.pdf`);
-}
 
 function photoOrGlyph(dog) {
   if (dog?.photoUrl) return `<img alt="${escapeHtml(dog.name||'')}" src="${escapeHtml(dog.photoUrl)}">`;
