@@ -220,21 +220,16 @@ body.modal-open { overflow: hidden; }
 .week-dog-row:first-of-type { border-top: 0; }
 .billed-tag { color: var(--pine); font-weight: 600; }
 .billed-tag.sending { color: var(--honey); }
-/* On a day that has already happened the only question is whether the money
-   has been asked for, so the row says it with colour and size rather than a
-   word. Anything still to invoice keeps its full detail and takes a warm red
-   across the whole row. Anything already invoiced is finished business: it
-   shrinks to a single muted line — name and amount — because once it is billed
-   the session, the times and the warnings have stopped mattering. The week then
-   reads as "these need doing, those are done" at arm's length. */
-.week-dog-row.is-owing {
-  background:linear-gradient(90deg,#f7cfc8 0%,#fbe2dd 55%,#fdefec 100%) !important;
-  box-shadow:inset 5px 0 0 #b4472f !important;
-}
-.week-dog-row.is-owing:hover { background:linear-gradient(90deg,#f3bdb3 0%,#f7cfc8 55%,#fbe2dd 100%) !important; }
-.week-dog-row.is-owing .week-dog-price { color:#9c3a24; font-weight:800; }
-.week-dog-row.is-owing .week-dog-name  { color:var(--ink); }
+/* Closed, not outstanding.
 
+   Flagging every unbilled day in red turned a normal week into a wall of
+   alarm — most days are unbilled most of the time, because billing happens at
+   the end of the week. Shouting about the normal state is noise.
+
+   So only the finished state is marked. An invoiced day goes quiet: small,
+   grey, a tick, out of the way. Everything else looks like an ordinary day,
+   because it is one. What is left in full colour is simply what has not been
+   closed off yet, which reads as work rather than as a debt. */
 .week-dog-row.is-done {
   background:none !important; box-shadow:none !important;
   padding:3px 8px; opacity:.4; filter:grayscale(1);
@@ -244,14 +239,15 @@ body.modal-open { overflow: hidden; }
 .week-dog-row.is-done .week-dog-face { width:16px; height:16px; font-size:9px; border-width:1px; }
 .week-dog-row.is-done .week-dog-name { font-size:11.5px; font-weight:500; }
 .week-dog-row.is-done .week-dog-price { font-size:11.5px; font-weight:500; }
+.week-dog-row.is-done .week-dog-price::after { content:' ✓'; color:var(--sage); }
 
 .week-dog-row.is-sending {
   background:linear-gradient(90deg,#fbe6c2 0%,#fdf2de 60%,transparent 100%) !important;
   box-shadow:inset 5px 0 0 var(--honey) !important;
 }
 
-.dt-amt.owing   { color:#9c3a24; font-weight:800; }
 .dt-amt.settled { color:var(--ink-3); font-weight:500; }
+.dt-amt.settled::after { content:' ✓'; color:var(--sage); font-weight:700; }
 .week-dog-row:hover { background: var(--paper-3); }
 /* Colour by session type. Inset shadow rather than a border so the stripe
    costs no layout and the desktop column view keeps its alignment. */
@@ -1556,7 +1552,9 @@ function renderWeek() {
              still to bill, grey once it is all out. No second line, no words. */
           const billed = (DB.meta && DB.meta.billed) || {};
           const owing = bks.filter(b => !b.cancelled && b.date < todayISO() && !billed[b.id]);
-          const cls = owing.length ? 'owing' : (bks.some(b => billed[b.id]) ? 'settled' : '');
+          /* A tick when the whole day is closed off, and nothing at all
+             otherwise — an unbilled day is the ordinary case. */
+          const cls = !owing.length && bks.some(b => billed[b.id]) ? 'settled' : '';
           return `<span class="dt-amt ${cls}">$${dayTotal}</span>`;
         })()}
       </div>
@@ -1685,9 +1683,7 @@ function weekDogRow(b, opts = {}) {
      the day has not happened yet rather than nothing to say. */
   const billState = invNo ? { cls:'done', text:'invoiced', title:invNo }
     : queued ? { cls:'sending', text:'sending', title:'handed to the mail service' }
-    : (b.date < todayISO() && !b.cancelled)
-      ? { cls:'owing', text:'to invoice', title:'this day has not been billed' }
-      : null;
+    : null;
 
   /* A day that came and went without anyone tapping Arrived looks identical to
      a day the dog never turned up — and both bill in full, which is right for
