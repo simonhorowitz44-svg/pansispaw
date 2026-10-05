@@ -351,6 +351,10 @@ body.modal-open { overflow: hidden; }
 .mn-row.clear { opacity:.65; }
 /* On its way: visibly not actionable, so nobody taps it again. */
 .mn-row.sending { background:linear-gradient(90deg,#eef4e8 0%,transparent 55%); cursor:default; }
+.mn-tx.tx-certain { background:linear-gradient(90deg,#eef4e8 0%,transparent 60%); box-shadow:inset 3px 0 0 var(--sage); }
+.mn-tx.tx-likely  { box-shadow:inset 3px 0 0 var(--honey); }
+.tx-flag { font-size:10px; font-weight:800; letter-spacing:.05em; color:#fff;
+  background:var(--sage); padding:2px 7px; border-radius:999px; vertical-align:middle; }
 .mn-row.sending .mn-sub { color:var(--pine); }
 .mn-name { font-family:var(--font-serif); font-size:15px; color:var(--ink); }
 .mn-sub  { font-size:11.5px; color:var(--ink-2); margin-top:2px; }
@@ -1877,6 +1881,13 @@ function suggestOwner(tx, balances) {
    to actually work through. */
 const NOT_A_PAYMENT = /credit interest|^interest\b|\binterest paid\b|dividend|refund|reversal|rebate|cashback|atm|bpay bill|fee|charge|rtn|dishonour/i;
 
+/* This is a personal account. Salary, rent, gambling and everything else runs
+   through the same file, and none of it belongs on a screen about who has paid
+   for their dog. Matching on the company names that actually appear beats a
+   clever rule: a false positive here hides a real client payment, which is the
+   one mistake that costs money. */
+const NOT_A_CLIENT = /betchoice|sportsbet|tab ?corp|bet365|pointsbet|neds|ladbrokes|\bpayroll\b|salary|centrelink|\bato\b|tax office|insurance|telstra|optus|vodafone|origin energy|agl |ausgrid|sydney water|council rates|woolworths|coles|aldi|uber|didi|netflix|spotify|apple\.com|google ?\*|amazon|paypal \*/i;
+
 function isOwnTransfer(desc) {
   // "Transfer from xx7698 CommBank app" — an account of yours, no payer name.
   return /transfer (from|to) xx?\d+/i.test(desc) || /own account|savings|netbank/i.test(desc);
@@ -1890,13 +1901,29 @@ function txDateISO(raw) {
 }
 
 /* Split the file into the ones worth looking at and the rest. */
+/* Statements are uploaded weekly and they overlap: last Monday's file and this
+   Monday's file share six days. A transaction already assigned must not come
+   back asking to be assigned again. There is no id in a bank CSV, so the key is
+   date + amount + the first part of the description, which is stable across
+   exports of the same account. */
+const txKey = t => `${txDateISO(t.date)}|${Number(t.amount).toFixed(2)}|${String(t.desc).slice(0,34).toUpperCase().replace(/\s+/g,' ').trim()}`;
+const seenTx = t => !!((DB.meta && DB.meta.reconciled) || {})[txKey(t)];
+function rememberTx(t, how) {
+  DB.meta = DB.meta || {};
+  DB.meta.reconciled = DB.meta.reconciled || {};
+  DB.meta.reconciled[txKey(t)] = { at: new Date().toISOString(), how };
+}
+
 function sortCredits(txs) {
   const line = settledBefore(), today = todayISO();
   const keep = [], noise = [];
   txs.forEach(t => {
     const iso = txDateISO(t.date);
     t.iso = iso;
+    if (!t.amount || t.amount <= 0) { noise.push(t); return; }   // a $0 row is not a payment
     if (NOT_A_PAYMENT.test(t.desc)) { noise.push(t); return; }
+    if (NOT_A_CLIENT.test(t.desc))  { noise.push(t); return; }
+    if (seenTx(t)) { t.done = true; t.alreadySeen = true; noise.push(t); return; }
     if (iso && line && iso < line) { noise.push(t); return; }
     if (iso && iso > today) { noise.push(t); return; }
     if (isOwnTransfer(t.desc)) { noise.push(t); return; }
@@ -1949,41 +1976,84 @@ function renderMoney() {
     </div>`;
   };
 
+  /* A credit carrying an invoice reference is the client telling you which
+     invoice they just paid. A credit matching a name is a guess. Showing both
+     as the same small chip with a first name on it was why thirty-six rows all
+     looked like thirty-six decisions — and why "E LAW & M OSULLIVAN" offering
+     "→ Simon" sat next to a perfect reference match looking identical. */
   const txRow = (t, i) => {
-    const s = suggestOwner(t, all);
-    return `<div class="mn-tx">
-      <div>
-        <div class="mn-name">${money(t.amount)}</div>
-        <div class="mn-sub">${escapeHtml(t.date)} · ${escapeHtml(t.desc.slice(0, 46))}</div>
+    const g = suggestOwner(t, all);
+    const certain = g && g.byRef;
+    const likely  = g && !g.byRef && g.exact;
+    const who = g ? escapeHtml(g.owner.name) : '';
+    return `<div class="mn-tx ${certain ? 'tx-certain' : likely ? 'tx-likely' : ''}">
+      <div style="min-width:0">
+        <div class="mn-name">${money(t.amount)}${certain ? ` <span class="tx-flag">${escapeHtml(g.byRef)}</span>` : ''}</div>
+        <div class="mn-sub">${escapeHtml(fmtDateShort(t.iso || todayISO()))} · ${escapeHtml(t.desc.slice(0, 44))}</div>
+        ${certain ? `<div class="mn-sub" style="color:var(--pine)">${who} · ${escapeHtml(g.invoice || '')}${g.exact ? ' · amount matches' : ' · amount differs'}</div>`
+          : likely ? `<div class="mn-sub">looks like ${who} — they owe exactly this</div>` : ''}
       </div>
-      <div>${s
-        ? `<button class="btn tiny" onclick="assignTx(${i}, '${s.owner.id}')">→ ${escapeHtml(s.owner.name.split(' ')[0])}</button>`
-        : ''}
-        <button class="btn tiny ghost" onclick="assignTxPick(${i})">Assign…</button>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+        ${g ? `<button class="btn tiny ${certain ? 'primary' : ''}" onclick="PAY_TXS[${i}].matchedRef=${certain ? `'${escapeHtml(g.byRef)}'` : 'null'};assignTx(${i}, '${g.owner.id}')">${certain ? 'Confirm' : '→ ' + escapeHtml(g.owner.name.split(' ')[0])}</button>` : ''}
+        <button class="btn tiny ghost" onclick="assignTxPick(${i})">${g ? 'Someone else' : 'Assign…'}</button>
       </div>
     </div>`;
   };
 
+  /* Split what is left to do by how sure we are, so the certain ones can be
+     cleared in one pass and the guesses get the attention. */
+  const graded = open.map(t => ({ t, g: suggestOwner(t, all) }));
+  const certain = graded.filter(x => x.g && x.g.byRef);
+  const likely  = graded.filter(x => x.g && !x.g.byRef && x.g.exact);
+  const unknown = graded.filter(x => !x.g || (!x.g.byRef && !x.g.exact));
+
   openSheet(`
     <h2 class="sheet-title">Money</h2>
 
-    <div class="mn-hero ${outstanding > 0 ? '' : 'clear'}">
-      <div class="mn-hero-num">${outstanding > 0 ? money(outstanding) : 'All square'}</div>
-      <div class="mn-hero-cap">${outstanding > 0
-        ? `outstanding across ${owing.length} client${owing.length===1?'':'s'}`
-        : 'nobody owes anything'}</div>
-    </div>
+    ${(() => {
+      /* "$10,726 outstanding across 29 clients" counted every visit since the
+         start date whether or not anyone had ever been asked to pay for it —
+         a number nobody can act on, attached to a feeling of being owed a
+         fortune. What is actually actionable is what has been invoiced and not
+         paid; everything else is work not yet billed, which is a different
+         problem with a different screen. */
+      const sent = (DB.meta && DB.meta.invoicesSent) || [];
+      const unpaid = sent.filter(x => !x.paidAt);
+      const due = unpaid.reduce((t, x) => t + Number(x.total || 0), 0);
+      const overdue = unpaid.filter(x => x.dueISO && x.dueISO < todayISO());
+      const overdueSum = overdue.reduce((t, x) => t + Number(x.total || 0), 0);
+      return `<div class="mn-hero ${due > 0 ? '' : 'clear'}">
+        <div class="mn-hero-num">${due > 0 ? money(due) : 'All square'}</div>
+        <div class="mn-hero-cap">${due > 0
+          ? `invoiced and unpaid · ${unpaid.length} invoice${unpaid.length===1?'':'s'}${
+              overdue.length ? ` · <b style="color:var(--owe)">${money(overdueSum)} overdue</b>` : ''}`
+          : sent.length ? 'every invoice sent has been paid' : 'nothing invoiced yet'}</div>
+      </div>
+      ${outstanding > 0 ? `<div class="mn-line">
+        <span>${money(outstanding)} of visits haven't been invoiced yet.</span>
+        <button class="btn tiny ghost" onclick="openInvoicesSheet()">Invoices</button>
+      </div>` : ''}`;
+    })()}
 
     <div class="mn-line">
       <span>Visits up to today${line ? `, from ${fmtDateShort(line)}` : ''}. Future bookings aren't counted.</span>
       <button class="btn tiny ghost" onclick="openSettleLine()">${line ? 'Change start date' : 'Set a start date'}</button>
     </div>
 
-    ${open.length ? `<div class="section-title">Payments to assign (${open.length})</div>
-      ${open.map(t => txRow(t, PAY_TXS.indexOf(t))).join('')}` : ''}
+    ${certain.length ? `<div class="section-title">They told us which invoice (${certain.length})</div>
+      <p class="sub muted small" style="margin:-4px 0 8px">Paid with the reference we asked for. Confirm and the invoice is settled.</p>
+      ${certain.map(x => txRow(x.t, PAY_TXS.indexOf(x.t))).join('')}
+      ${certain.length > 1 ? `<button class="btn primary block mt-2" onclick="confirmAllCertain()">Confirm all ${certain.length}</button>` : ''}` : ''}
 
-    ${noise.length ? `<p class="sub small" style="margin:10px 0 0">
-        ${noise.length} other credit${noise.length===1?'':'s'} skipped — your own transfers, interest, or outside the dates.
+    ${likely.length ? `<div class="section-title" style="margin-top:18px">Probably these (${likely.length})</div>
+      <p class="sub muted small" style="margin:-4px 0 8px">Name matches and the amount is exactly what they owe.</p>
+      ${likely.map(x => txRow(x.t, PAY_TXS.indexOf(x.t))).join('')}` : ''}
+
+    ${unknown.length ? `<div class="section-title" style="margin-top:18px">Not sure (${unknown.length})</div>
+      ${unknown.map(x => txRow(x.t, PAY_TXS.indexOf(x.t))).join('')}` : ''}
+
+    ${noise.length ? `<p class="sub small" style="margin:14px 0 0">
+        ${noise.length} other line${noise.length===1?'':'s'} skipped — already dealt with, your own transfers, shops and bills, or outside the dates.
         <button class="btn tiny ghost" onclick="toggleNoise()">${PAY_SHOW_NOISE ? 'Hide' : 'Show'}</button></p>
       ${PAY_SHOW_NOISE ? noise.map(t => txRow(t, PAY_TXS.indexOf(t))).join('') : ''}` : ''}
 
@@ -2062,14 +2132,56 @@ async function removePayment(id) {
 }
 
 /* ---- assigning a bank credit ---- */
-async function assignTx(i, ownerId) {
+/* Settle the invoice this credit is for, not just the client. invoicesSent has
+   carried paidAt and paidAmount since the first invoice went out and nothing
+   has ever written to them, so "who is overdue" was unanswerable even though
+   the data was sitting right there. Prefers the invoice whose reference the
+   client quoted, then the oldest unpaid one the amount fits. */
+function settleInvoiceFor(ownerId, amount, ref) {
+  const sent = (DB.meta && DB.meta.invoicesSent) || [];
+  const mine = sent.filter(x => x.ownerId === ownerId && !x.paidAt);
+  if (!mine.length) return null;
+  const squash = v => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const byRef = ref && mine.find(x => squash(x.ref) === squash(ref));
+  const exact = mine.find(x => Math.abs(Number(x.total) - amount) < 0.01);
+  const pick  = byRef || exact || mine.sort((a,b) => String(a.sentAt).localeCompare(String(b.sentAt)))[0];
+  if (!pick) return null;
+  pick.paidAt = new Date().toISOString();
+  pick.paidAmount = amount;
+  return pick;
+}
+
+async function assignTx(i, ownerId, opts = {}) {
   const t = PAY_TXS[i]; if (!t || t.done) return;
   const o = ownerById(ownerId); if (!o) return;
-  DB.payments.push({ id: uid(), ownerId, amount: t.amount, date: t.iso || txDateISO(t.date) || todayISO(),
+  const when = t.iso || txDateISO(t.date) || todayISO();
+  DB.payments.push({ id: uid(), ownerId, amount: t.amount, date: when,
                      method: 'bank', note: t.desc.slice(0, 60), createdAt: new Date().toISOString() });
+  const inv = settleInvoiceFor(ownerId, t.amount, t.matchedRef);
   t.done = true;
+  rememberTx(t, 'assigned');           // so next week's statement does not ask again
+  if (!opts.quiet) {
+    await save(DB); renderMoney();
+    const short = Math.abs((inv ? Number(inv.total) : t.amount) - t.amount);
+    toast(inv
+      ? (short > 0.01 ? `${money(t.amount)} → ${o.name} · ${inv.number} was ${money(inv.total)}`
+                      : `${money(t.amount)} → ${o.name} · ${inv.number} paid`)
+      : `${money(t.amount)} → ${o.name}`, 'ok');
+  }
+}
+
+/* The whole point of asking clients to quote a reference is that those ones
+   need no thought. Clearing them one at a time was the thought. */
+async function confirmAllCertain() {
+  const all = clientBalances();
+  const todo = PAY_TXS.map((t, i) => ({ t, i, g: suggestOwner(t, all) }))
+                      .filter(x => !x.t.done && x.g && x.g.byRef);
+  if (!todo.length) return;
+  const total = todo.reduce((s, x) => s + x.t.amount, 0);
+  if (!confirm(`Confirm ${todo.length} payment${todo.length===1?'':'s'} totalling ${money(total)}?\n\nEach one quoted the reference from its invoice.`)) return;
+  for (const x of todo) { x.t.matchedRef = x.g.byRef; await assignTx(x.i, x.g.owner.id, { quiet: true }); }
   await save(DB); renderMoney();
-  toast(`${money(t.amount)} → ${o.name}`);
+  toast(`${todo.length} payments matched · ${money(total)}`, 'ok');
 }
 
 function assignTxPick(i) {
@@ -4533,6 +4645,7 @@ Object.assign(window, {
   openCapacitySheet, saveCapacityForm,
   openImportSheet, importDataFile, exportBackup,
   openMoneySheet, onReconFile, renderMoney, togglePaidUp, toggleNoise,
+  confirmAllCertain,
   openInvoicesSheet, renderInvoices, openOneInvoice, printInvoice,
   markInvoicePaid, reopenInvoice,
   recordDeposit, markDepositPaid, clearDeposit,

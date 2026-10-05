@@ -320,6 +320,44 @@ export function depositDue(bookings, dog, rate = DEPOSIT_RATE) {
   return Math.round(full * rate);
 }
 
+/* A deposit request, shaped exactly like an invoice so it goes through the same
+   renderers, the same email and the same bank details. It is not an invoice and
+   must never be mistaken for one — it bills none of the nights, stamps nothing
+   as billed, and says plainly that the rest follows after the stay. */
+export function buildDepositRequest(db, depositId, opts = {}) {
+  const dep = (db.deposits || []).find(d => d.id === depositId);
+  if (!dep) return null;
+  const dog   = (db.dogs || []).find(x => x.id === dep.dogId);
+  const owner = dog && (db.owners || []).find(o => o.id === dog.ownerId);
+  if (!owner) return null;
+
+  const nights = (db.bookings || []).filter(b => (dep.bookingIds || []).includes(b.id))
+                                    .sort((a, b) => a.date.localeCompare(b.date));
+  if (!nights.length) return null;
+  const asAt  = opts.asAt || dep.requestedAt.slice(0, 10);
+  const full  = nights.reduce((t, b) => t + calcTotal(b, dog), 0);
+  const from  = nights[0].date, to = nights[nights.length - 1].date;
+
+  /* One line for the stay and one for the deposit. Listing fourteen nights at
+     full price on a document asking for half is how a client reads the wrong
+     number and pays it. */
+  const lines = [
+    { date: from, dog: dog.name, what: `${nights.length} night${nights.length === 1 ? '' : 's'}`,
+      note: `${fmtDay(from)} to ${fmtDay(to)} · $${full.toFixed(2)} in total`, amt: 0, free: true },
+    { date: from, dog: dog.name, what: 'Deposit to hold the stay',
+      note: `${Math.round((dep.rate || DEPOSIT_RATE) * 100)}% now, the rest invoiced after they go home`,
+      amt: dep.amount }
+  ];
+
+  return {
+    kind: 'deposit', owner, asAt, lines, bookingIds: [], packNotes: [], warnings: [],
+    periodFrom: from, periodTo: to, total: dep.amount, nothingDue: false,
+    ref: payRef(db, owner, asAt),
+    number: invoiceNumber(owner, asAt, opts.seq || 1).replace(/^PP-/, 'PPD-'),
+    dueISO: addDaysISO(asAt, INVOICE_TERMS_DAYS)
+  };
+}
+
 /* ---------- identity ---------- */
 
 export function surnameTag(owner) {
@@ -694,6 +732,7 @@ export function renderInvoiceHTML(inv, biz, o = {}) {
   const bank = biz.bsb && biz.acct;
   const bankOff = bank && biz.bankDiscount > 0 ? biz.bankDiscount : 0;
   const isInv = !inv.nothingDue;
+  const isDep = inv.kind === 'deposit';
   const period = inv.periodFrom === inv.periodTo
     ? fmtDayY(inv.periodTo)
     : `${fmtDay(inv.periodFrom)} – ${fmtDayY(inv.periodTo)}`;
@@ -708,11 +747,11 @@ export function renderInvoiceHTML(inv, biz, o = {}) {
         <div>${escapeHtml(biz.phone)}${biz.email ? ' · ' + escapeHtml(biz.email) : ''}</div>
         ${biz.abn ? `<div>ABN ${escapeHtml(biz.abn)}</div>` : ''}
       </div>
-      <div class="inv-kind">${isInv ? 'Invoice' : 'Summary'}</div>
+      <div class="inv-kind">${isDep ? 'Deposit' : isInv ? 'Invoice' : 'Summary'}</div>
     </div>
 
     <div class="inv-meta">
-      <div><span>${isInv ? 'Invoice for' : 'Summary for'}</span><b>${escapeHtml(inv.owner.name)}</b></div>
+      <div><span>${isDep ? 'Deposit for' : isInv ? 'Invoice for' : 'Summary for'}</span><b>${escapeHtml(inv.owner.name)}</b></div>
       <div><span>Covering</span><b>${period}</b></div>
       ${isInv ? `<div><span>Invoice no.</span><b>${escapeHtml(inv.number)}</b></div>
       <div><span>Due</span><b>${fmtDayY(inv.dueISO)}</b></div>` : ''}
@@ -728,7 +767,7 @@ export function renderInvoiceHTML(inv, biz, o = {}) {
           <td class="r">${l.amt ? m(l.amt) : '—'}</td>
         </tr>`).join('')}
       </tbody>
-      <tfoot><tr><td colspan="3">${isInv ? 'Total due' : 'Nothing to pay'}</td>
+      <tfoot><tr><td colspan="3">${isDep ? 'Deposit due' : isInv ? 'Total due' : 'Nothing to pay'}</td>
         <td class="r">${m(inv.total)}</td></tr></tfoot>
     </table>
 
@@ -737,7 +776,7 @@ export function renderInvoiceHTML(inv, biz, o = {}) {
     </div>`).join('')}
 
     ${isInv && bank ? `<div class="inv-pay">
-      <div class="inv-pay-title">How to pay · within ${INVOICE_TERMS_DAYS} days</div>
+      <div class="inv-pay-title">How to pay · ${isDep ? 'to hold the dates' : `within ${INVOICE_TERMS_DAYS} days`}</div>
       <div class="inv-pay-row"><b>Bank transfer</b>${biz.acctName ? ` — ${escapeHtml(biz.acctName)}` : ''}<br>
         BSB ${escapeHtml(biz.bsb)} · Account ${escapeHtml(biz.acct)}<br>
         Please use the reference <b>${escapeHtml(inv.ref)}</b> so we can match your payment.${
@@ -769,13 +808,16 @@ export function invoiceText(inv, biz) {
   const L = [`Hi ${first},`, ''];
   L.push(inv.nothingDue
     ? `Here's a summary of your time with us, ${period}.`
+    : inv.kind === 'deposit' ? `Here's the deposit to hold ${inv.lines[0].dog}'s stay, ${period}.`
     : `Here's your invoice for ${period}.`);
   L.push('');
   inv.lines.forEach(l => L.push(
     `${fmtDay(l.date)}  ${l.dog ? l.dog + ' · ' : ''}${l.what}${l.note ? ' (' + l.note + ')' : ''}  ${
        l.amt ? (l.amt < 0 ? '-$' + Math.abs(l.amt).toFixed(2) : '$' + l.amt.toFixed(2)) : '—'}`));
   L.push('');
-  L.push(inv.nothingDue ? 'Nothing to pay.' : `Total due: $${inv.total.toFixed(2)} by ${fmtDayY(inv.dueISO)}`);
+  L.push(inv.nothingDue ? 'Nothing to pay.'
+    : inv.kind === 'deposit' ? `Deposit due: $${inv.total.toFixed(2)} to hold the dates`
+    : `Total due: $${inv.total.toFixed(2)} by ${fmtDayY(inv.dueISO)}`);
   inv.packNotes.forEach(p => L.push(`${p.dog}'s pack — ${p.left} of ${p.size} still to use${p.expires ? ', up to ' + fmtDayWk(p.expires) : ''}.`));
   if (!inv.nothingDue && biz.bsb && biz.acct) {
     L.push('', 'How to pay', 'Bank transfer');
@@ -810,6 +852,7 @@ export function renderInvoiceEmail(inv, biz, o = {}) {
   const edge = '#e6dcc8', kraft = '#f6efdd', paper = '#faf6ed';
   const bank = biz.bsb && biz.acct;
   const isInv = !inv.nothingDue;
+  const isDep = inv.kind === 'deposit';
   const first = String(inv.owner.name || '').trim().split(/\s+/)[0] || 'there';
   const period = inv.periodFrom === inv.periodTo
     ? fmtDayY(inv.periodTo) : `${fmtDay(inv.periodFrom)} – ${fmtDayY(inv.periodTo)}`;
@@ -835,12 +878,12 @@ export function renderInvoiceEmail(inv, biz, o = {}) {
         <div style="font-size:17px;color:${ink};font-weight:bold;font-family:Georgia,serif">${escapeHtml(biz.name)}</div>
         <div style="font-size:12px;color:${ink2};line-height:1.5">${escapeHtml(biz.suburb)}<br>
         ${escapeHtml(biz.phone)}${biz.email ? ' · ' + escapeHtml(biz.email) : ''}${biz.abn ? `<br>ABN ${escapeHtml(biz.abn)}` : ''}</div></td>
-      <td align="right" style="vertical-align:top;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:${ink3}">${isInv ? 'Invoice' : 'Summary'}</td>
+      <td align="right" style="vertical-align:top;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:${ink3}">${isDep ? 'Deposit' : isInv ? 'Invoice' : 'Summary'}</td>
     </tr></table></td></tr>
 
   <tr><td style="padding:18px 0 4px;font-family:Helvetica,Arial,sans-serif;font-size:15px;color:${ink2};line-height:1.6">
     Hi ${escapeHtml(first)},<br>
-    ${isInv ? `Here's your invoice for ${period}.` : `Here's a summary of your time with us, ${period}.`}
+    ${isDep ? `Here's the deposit to hold ${escapeHtml(inv.lines[0].dog)}'s stay, ${period}.` : isInv ? `Here's your invoice for ${period}.` : `Here's a summary of your time with us, ${period}.`}
   </td></tr>
 
   ${isInv ? `<tr><td style="padding:12px 0 4px;font-family:Helvetica,Arial,sans-serif;font-size:12px;color:${ink3}">
