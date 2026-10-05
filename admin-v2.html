@@ -3471,6 +3471,38 @@ async function applyCancel(id, charge) {
     bk.packId = null;
     if (bk.customPrice === 0) bk.customPrice = null;
   }
+  /* A repeating booking is twelve separate records, so a client who stops
+     coming meant twelve cancellations — and missing one bills them for a day
+     nobody expected. Offer the rest of the series in the same breath, from
+     this date forward only: days already past are history and days already
+     invoiced are the client's bill. */
+  if (bk.seriesId) {
+    const rest = DB.bookings.filter(b =>
+      b.seriesId === bk.seriesId && b.id !== id && !b.cancelled &&
+      b.date > bk.date && !(DB.meta?.billed || {})[b.id]);
+    if (rest.length && confirm(
+        `Cancel the rest of this series too?\n\n${rest.length} more booking${rest.length===1?'':'s'}, ` +
+        `${fmtDateShort(rest[0].date)} to ${fmtDateShort(rest[rest.length-1].date)}.\n\n` +
+        `These are all more than 24 hours away, so nothing is charged for them.`)) {
+      rest.forEach(b => {
+        b.cancelled = true;
+        b.cancelledAt = new Date().toISOString();
+        b.cancelCharge = 0;
+        b.total = 0;
+        b.arrivalLogged = null;
+        b.departureLogged = null;
+        if (b.packId) {
+          const pk = DB.packs.find(x => x.id === b.packId);
+          if (pk && pk.daysUsed > 0) pk.daysUsed -= 1;
+          b.packId = null;
+          if (b.customPrice === 0) b.customPrice = null;
+        }
+      });
+      await save(DB); closeSheet(); render();
+      return toast(`Cancelled this one and ${rest.length} more`, 'ok');
+    }
+  }
+
   await save(DB); closeSheet(); render();
   toast(charge ? `Cancelled · $${charge} charged` : 'Cancelled · no charge', 'ok');
 }
@@ -3485,14 +3517,29 @@ async function uncancelBooking(id) {
 }
 
 async function deleteBooking(id) {
-  if (!confirm('Delete this booking?')) return;
   const bk = DB.bookings.find(b => b.id === id);
-  if (bk?.packId) {
+  if (!bk) return;
+  /* "Delete this booking?" told her nothing about what she was deleting. A day
+     already on an invoice is the one that matters: removing it leaves the
+     client holding a bill for a day that no longer exists anywhere. */
+  const invNo = (DB.meta && DB.meta.billed) ? DB.meta.billed[id] : null;
+  const dog = dogById(bk.dogId);
+  const bits = [`${dog ? dog.name : 'This dog'} · ${fmtDateShort(bk.date)} · ${SESSION_LABELS[bk.session] || bk.session}`];
+  if (invNo) bits.push(`\n⚠ Already invoiced on ${invNo}. The client has been billed for this day.`);
+  if (bk.packId) bits.push('A pack day will be given back.');
+  if (bk.seriesId) {
+    const rest = DB.bookings.filter(b => b.seriesId === bk.seriesId && b.id !== id).length;
+    if (rest) bits.push(`${rest} other booking${rest===1?'':'s'} in this series stay put.`);
+  }
+  if (!confirm(`Delete this booking?\n\n${bits.join('\n')}`)) return;
+  if (bk.packId) {
     const p = DB.packs.find(p => p.id === bk.packId);
     if (p && p.daysUsed > 0) p.daysUsed -= 1;
   }
+  if (invNo && DB.meta?.billed) delete DB.meta.billed[id];
   DB.bookings = DB.bookings.filter(b => b.id !== id);
   await save(DB); closeSheet(); render();
+  toast('Booking deleted', 'ok');
 }
 
 function openStaySheet(bookingIdInStay) {
@@ -3975,7 +4022,7 @@ async function applyMergeOwner(fromId, toId) {
   });
 
   DB.owners = DB.owners.filter(o => o.id !== fromId);
-  dedupeById();
+  dedupeById(DB);   // was called with no argument, so it returned 0 and did nothing
   await save(DB); closeSheet(); render();
   toast(`Merged into ${s.to.name}`);
 }
