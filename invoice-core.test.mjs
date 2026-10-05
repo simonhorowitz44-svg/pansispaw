@@ -1063,5 +1063,41 @@ console.log('\nA stay outside its window charges itself');
     !inv.lines.some(l => l.what === 'Outside check-in hours'));
 }
 
+
+console.log('\nThe things that used to bill zero in silence');
+{
+  const db = {
+    owners:[{ id:'o1', name:'Shy Virk', email:'s@x.com' }],
+    dogs:[{ id:'d1', ownerId:'o1', name:'Lola', size:'small' },
+          { id:'d2', ownerId:'o1', name:'Sizeless' }],
+    bookings:[], packs:[], meta:{ invoicing:{ goLive:'2026-01-01' } }
+  };
+
+  /* A hand-typed price arriving as a string used to concatenate: '85' + 10
+     invoiced as 8510. */
+  eq('a string custom price is a number', C.calcTotal({ session:'full', customPrice:'85' }, db.dogs[0]), 85);
+  eq('and still takes the late fee on top',
+     C.calcTotal({ session:'full', customPrice:'85', departureLogged:'18:30' }, db.dogs[0]), 105);
+
+  /* A redeemed day is stored total:0. When its pack vanished, the stored zero
+     won and the day produced no line at all — never charged, never billed,
+     warning every run forever. */
+  db.bookings = [{ id:'b1', dogId:'d1', date:'2026-09-29', session:'full', packId:'GONE',
+                   total:0, customPrice:0 }];
+  let inv = C.buildInvoice(db, 'o1', { asAt:'2026-09-30' });
+  t('a day on a vanished pack still produces an invoice', !!inv);
+  eq('priced at the normal rate, not zero', inv && inv.total, 80);
+  t('and says so', inv && inv.warnings.some(w => /pack that no longer exists/.test(w)));
+  t('and is marked billed so it stops coming back', inv && inv.bookingIds.includes('b1'));
+  t('which puts it in front of a human first',
+    C.blockers(db, inv, { bsb:'1', acct:'2' }, '2026-09-30').length > 0);
+
+  /* No size, no rate, no noise — three dogs on file have none. */
+  db.bookings = [{ id:'b2', dogId:'d2', date:'2026-09-29', session:'full' }];
+  inv = C.buildInvoice(db, 'o1', { asAt:'2026-09-30' });
+  t('a dog with no size warns rather than billing nothing quietly',
+    inv && inv.warnings.some(w => /no size on file/.test(w)));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -227,7 +227,11 @@ export function calcTotal(booking, dog) {
   if (booking.cancelled) return booking.cancelCharge || 0;
   if (booking.session === 'meet' || booking.session === 'trial') return 0;
   const late = latePickupFee(booking).fee;
-  if (booking.customPrice != null) return booking.customPrice + late;
+  /* Number(), because customPrice is typed by hand and has reached this
+     function as a string before. '85' + 10 is '8510' — a $95 day invoiced at
+     $8,510, silently, to a real client. The panel parses it today; this is the
+     guard for when something else writes it. */
+  if (booking.customPrice != null) return Number(booking.customPrice) + late;
   if (!dog) return late;
   let t = PRICES[dog.size]?.[booking.session] || 0;
   // Scouts is a flat rate with transport included — daycare add-ons don't apply.
@@ -397,7 +401,15 @@ export function buildInvoice(db, ownerId, opts = {}) {
       if (b.packId) {
         const pk = (db.packs || []).find(p => p.id === b.packId);
         if (!pk) {
-          warnings.push(`${dogName}'s visit on ${b.date} points at a pack that no longer exists — billed at the normal rate.`);
+          /* The warning said "billed at the normal rate" and that was a lie: a
+             redeemed day is stored with total 0, the branch below trusts the
+             stored total, and a zero produces no line at all. So the day was
+             never charged, never landed in meta.billed, and the warning fired
+             again on every future run — which blocks that client's sending
+             for good. Price it properly and let it through; the warning still
+             puts the invoice in "Needs a look" so nobody pays it blind. */
+          warnings.push(`${dogName}'s visit on ${b.date} points at a pack that no longer exists — priced at the normal rate, check it before sending.`);
+          b = { ...b, packId: null, total: null, customPrice: b.customPrice === 0 ? null : b.customPrice };
         } else {
           const n = packVisitNumber(db, pk, b);
           push({ date:b.date, dog:dogName, what:`${label}${trip}`,
@@ -414,6 +426,14 @@ export function buildInvoice(db, ownerId, opts = {}) {
       // alongside it, so we know exactly how much of it is the fee. Older rows
       // have no lateFee — for those, a stored total equal to the current price
       // plus the fee is the only case where the fee is already baked in.
+      /* PRICES[undefined] is undefined and the `|| 0` under it turns that into a
+         free day with nothing said. Three dogs on file have no size. */
+      let unpriced = false;
+      if (dog && !PRICES[dog.size] && b.session !== 'meet' && b.session !== 'trial'
+          && b.customPrice == null && b.total == null) {
+        warnings.push(`${dogName} has no size on file, so ${b.date} has no rate — it would bill $0.`);
+        unpriced = true;
+      }
       const priced = calcTotal({ ...b, departureLogged:null }, dog);
       let baseC;
       if (b.total == null)          baseC = cents(priced);
@@ -441,9 +461,15 @@ export function buildInvoice(db, ownerId, opts = {}) {
         else if (outT)    stayNote = `collected ${friendlyTime(outT)} next day`;
       }
 
-      if (dayC || b.session === 'meet' || b.session === 'trial') {
+      /* A zero that is meant to be zero prints "on us". A zero caused by a
+         missing rate has to print too, or the line vanishes, the invoice comes
+         back empty, buildInvoice returns null, and the warning explaining it
+         is thrown away with it — which is how a day could be worth nothing and
+         say nothing. */
+      if (dayC || unpriced || b.session === 'meet' || b.session === 'trial') {
         push({ date:b.date, dog:dogName, what:`${label}${trip}`,
-               note: dayC ? stayNote : 'on us', free: !dayC }, dayC, b);
+               note: dayC ? stayNote : unpriced ? 'no rate on file — needs a price' : 'on us',
+               free: !dayC }, dayC, b);
       }
       if (splittable) extras.forEach(x =>
         push({ date:b.date, dog:dogName, what:x.what }, cents(x.amt), b));
