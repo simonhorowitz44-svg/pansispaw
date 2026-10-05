@@ -2178,6 +2178,23 @@ function renderInvoices() {
     ${orphans.length ? `<div class="mn-line" style="background:#fdf3e7">
       <span>${orphans.length} booking${orphans.length===1?'':'s'} ${orphans.length===1?'has':'have'} no dog or owner on file, so ${orphans.length===1?"it can't":"they can't"} be billed.</span></div>` : ''}
 
+    ${(() => {
+      /* The function records why it would not send something; nothing ever
+         showed it. A refused invoice left the queue and reappeared under
+         Ready to send with a different total and its button back, with no
+         hint it had already been tried and rejected. */
+      const back = (DB.meta && DB.meta.invoicingRefused) || [];
+      if (!back.length) return '';
+      return `<h3 class="grp-title">Came back</h3>
+        ${back.map(r => `<div class="mn-row" style="background:#fdf3f1">
+          <div><div class="mn-name">${escapeHtml(r.who || '—')}</div>
+            <div class="mn-sub">${r.kind === 'failed' ? "Couldn't send" : 'Not sent'} · ${escapeHtml(r.why || '')}</div></div>
+          <div class="mn-bal"></div></div>`).join('')}
+        <p class="sub muted small">${back.some(r => r.kind === 'failed')
+          ? 'Anything that failed is still queued and will be tried again.'
+          : 'These were refused before sending — look them over, then send again.'}</p>`;
+    })()}
+
     ${b.sending.length ? `<h3 class="grp-title">On its way</h3>
       ${b.sending.map(i => `<div class="mn-row sending">
         <div><div class="mn-name">${escapeHtml(i.owner.name)}</div>
@@ -2199,10 +2216,24 @@ function renderInvoices() {
       ${b.waiting.map(i => card(i, ['waiting on their next booking'])).join('')}` : ''}
 
     ${sent.length ? `<h3 class="grp-title">Recently sent</h3>
-      ${sent.map(x => `<div class="mn-row clear">
+      ${sent.map((x, i) => {
+        /* dueISO and paidAt have been recorded since the first invoice and read
+           by nothing, so nobody has ever been chased. */
+        const overdue = !x.paidAt && x.dueISO && x.dueISO < todayISO();
+        const state = x.paidAt ? `paid ${fmtDateShort(x.paidAt.slice(0,10))}`
+                    : x.dueISO ? `${overdue ? 'overdue — was due' : 'due'} ${fmtDateShort(x.dueISO)}`
+                    : 'sent';
+        return `<div class="mn-row ${x.paidAt ? 'clear' : overdue ? 'owing' : ''}">
         <div><div class="mn-name">${escapeHtml(x.ownerName || '—')}</div>
-          <div class="mn-sub">${escapeHtml(x.number)} · ${x.sentAt ? fmtDateShort(x.sentAt.slice(0,10)) : ''}${x.mode ? ' · ' + escapeHtml(x.mode) : ''}</div></div>
-        <div class="mn-bal">$${Number(x.total||0).toFixed(2)}</div></div>`).join('')}` : ''}
+          <div class="mn-sub">${escapeHtml(x.number)} · ${escapeHtml(state)}${x.mode === 'by hand' ? ' · not emailed' : ''}</div></div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="mn-bal">$${Number(x.total||0).toFixed(2)}</div>
+          ${!x.paidAt ? `<button class="btn tiny ghost" onclick="markInvoicePaid('${escapeHtml(x.number)}')">Paid</button>` : ''}
+          ${x.mode === 'by hand' ? `<button class="btn tiny ghost" onclick="reopenInvoice('${escapeHtml(x.number)}')">Undo</button>` : ''}
+        </div></div>`;
+      }).join('')}
+      ${(() => { const r = DB.meta && DB.meta.invoicingLastRun; return r
+        ? `<p class="sub muted small">Last run ${fmtDateShort(r.at.slice(0,10))} · ${r.sent||0} sent${r.failed ? ' · ' + r.failed + ' failed' : ''}${r.refused ? ' · ' + r.refused + ' refused' : ''}</p>` : ''; })()}` : ''}
 
     ${!b.ready.length && !b.blocked.length && !b.waiting.length
       ? '<p class="sub muted small">Nothing to bill — everything up to today has been invoiced.</p>' : ''}
@@ -2225,7 +2256,7 @@ function openOneInvoice(ownerId) {
       <button class="btn ghost" onclick="printInvoice('${escapeHtml(ownerId)}')">Print / save PDF</button>
       <button class="btn ghost" onclick="copyInvoiceText('${escapeHtml(ownerId)}')">Copy as text</button>
       ${inv.owner.email ? `<button class="btn ghost" onclick="emailInvoice('${escapeHtml(ownerId)}')">Open in mail</button>` : ''}
-      <button class="btn ghost" onclick="markInvoiceSent('${escapeHtml(ownerId)}')">Already paid / sent</button>
+      <button class="btn ghost" onclick="markInvoiceSent('${escapeHtml(ownerId)}')">Close off without emailing</button>
     </div>
     <button class="btn ghost block mt-2" onclick="renderInvoices()">← All invoices</button>`);
 }
@@ -2264,6 +2295,43 @@ async function queueAllReady() {
 }
 
 /* Paid in cash, or sent by hand. Closes the lines off without emailing. */
+/* Record that an invoice was paid. The field has existed since the first
+   invoice went out and nothing has ever written to it, so "who still owes me"
+   has never been answerable from the panel. */
+async function markInvoicePaid(number) {
+  const list = (DB.meta && DB.meta.invoicesSent) || [];
+  const inv = list.find(x => x.number === number);
+  if (!inv) return;
+  if (!confirm(`Mark ${number} — ${inv.ownerName} — $${Number(inv.total||0).toFixed(2)} as paid?`)) return;
+  inv.paidAt = new Date().toISOString();
+  inv.paidAmount = inv.total;
+  await save(DB);
+  renderInvoices();
+  toast(`${inv.ownerName} marked paid`, 'ok');
+}
+
+/* Undo a close-off. "Already paid / sent" sits next to "Send it", writes the
+   bookings into meta.billed and sends nothing — three clients were recorded as
+   invoiced and never told, and there was no way back through the UI. This is
+   the way back: unstamp the days so the invoice rebuilds and can be sent
+   properly. Only offered for by-hand entries, because unstamping something a
+   client has actually received would invite a second copy. */
+async function reopenInvoice(number) {
+  const list = (DB.meta && DB.meta.invoicesSent) || [];
+  const i = list.findIndex(x => x.number === number);
+  if (i < 0) return;
+  const inv = list[i];
+  if (inv.mode !== 'by hand') return toast('That one was emailed — reopening it would send a second copy', 'warn');
+  const ids = inv.bookingIds || [];
+  if (!confirm(`Reopen ${number} for ${inv.ownerName}?\n\n${ids.length} day${ids.length===1?'':'s'} go back to Ready to send. Nothing has been emailed for this one.`)) return;
+  DB.meta.billed = DB.meta.billed || {};
+  ids.forEach(id => { if (DB.meta.billed[id] === number) delete DB.meta.billed[id]; });
+  list.splice(i, 1);
+  await save(DB);
+  renderInvoices();
+  toast(`${inv.ownerName} back in Ready to send`, 'ok');
+}
+
 async function markInvoiceSent(ownerId) {
   const today = todayISO();
   const inv = buildInvoice(DB, ownerId, { asAt: today });
@@ -4287,6 +4355,7 @@ Object.assign(window, {
   openImportSheet, importDataFile, exportBackup,
   openMoneySheet, onReconFile, renderMoney, togglePaidUp, toggleNoise,
   openInvoicesSheet, renderInvoices, openOneInvoice, printInvoice,
+  markInvoicePaid, reopenInvoice,
   copyInvoiceText, emailInvoice, openBizSettings, saveBizSettings,
   openInvoiceSettings, saveInvoiceSettings, queueInvoice, queueAllReady, markInvoiceSent,
   openClientMoney, addPayment, removePayment,

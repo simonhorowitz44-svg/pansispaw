@@ -232,7 +232,19 @@ async function runInvoicing(reason, apiKey) {
       meta.sending = meta.sending || {};
       [...sent.map(x => x.inv.number), ...failed.map(f => f.number).filter(Boolean)]
         .forEach(n => { delete meta.sending[n]; });
-      meta.invoicingLastRun = { at: new Date().toISOString(), reason, sent: sent.length, failed: failed.length };
+      meta.invoicingLastRun = { at: new Date().toISOString(), reason,
+                                sent: sent.length, failed: failed.length, refused: refused.length };
+      /* A refused invoice used to vanish from the queue and silently reappear
+         under "Ready to send" with a different amount and its button back —
+         the same shape as the bug that sent one client four copies. Write the
+         reasons down so the panel can say what happened. A failure goes here
+         too: it stays queued and will be retried, but she should know. */
+      meta.invoicingRefused = [
+        ...refused.map(r => ({ ownerId: r.ownerId, who: r.who, why: r.why,
+                               at: new Date().toISOString(), kind: 'refused' })),
+        ...failed.map(f => ({ who: f.who, number: f.number, why: f.why,
+                              at: new Date().toISOString(), kind: 'failed' }))
+      ];
       tx.update(fs.doc(STATE), { meta });
     });
   }
