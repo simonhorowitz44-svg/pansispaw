@@ -220,6 +220,12 @@ body.modal-open { overflow: hidden; }
 .week-dog-row:first-of-type { border-top: 0; }
 .billed-tag { color: var(--pine); font-weight: 600; }
 .billed-tag.sending { color: var(--honey); }
+.bill-state { display:block; font-size:10px; font-weight:700; letter-spacing:.04em;
+  text-transform:uppercase; margin-top:2px; }
+.bill-state.done    { color: var(--sage); }
+.bill-state.sending { color: var(--honey); }
+.bill-state.owing   { color: var(--owe); }
+.day-total .bill-state { display:inline; font-size:10px; margin:0; }
 .week-dog-row:hover { background: var(--paper-3); }
 /* Colour by session type. Inset shadow rather than a border so the stripe
    costs no layout and the desktop column view keeps its alignment. */
@@ -1511,7 +1517,15 @@ function renderWeek() {
       </div>
       ${rows}
       <div class="day-total">
-        <span class="dt-label">${bks.length} ${bks.length === 1 ? 'booking' : 'bookings'}</span>
+        <span class="dt-label">${bks.length} ${bks.length === 1 ? 'booking' : 'bookings'}${(() => {
+          /* How much of this day is still waiting to be billed. The column
+             total alone never said whether the money had been asked for. */
+          const billed = (DB.meta && DB.meta.billed) || {};
+          const owing = bks.filter(b => !b.cancelled && b.date < todayISO() && !billed[b.id]);
+          if (!owing.length) return bks.some(b => billed[b.id]) ? ' · <span class="bill-state done">all invoiced</span>' : '';
+          const amt = owing.reduce((t,b) => t + (b.total != null ? b.total : calcTotal(b, dogById(b.dogId))), 0);
+          return ` · <span class="bill-state owing">$${amt} to invoice</span>`;
+        })()}</span>
         <span class="dt-amt">$${dayTotal}</span>
       </div>
     </div>`;
@@ -1631,9 +1645,17 @@ function weekDogRow(b, opts = {}) {
   const invNo = (DB.meta && DB.meta.billed) ? DB.meta.billed[b.id] : null;
   const queued = !invNo && owner &&
     ((DB.meta && DB.meta.sendQueue) || []).some(q => q.ownerId === owner.id);
-  const billTag = invNo  ? ` · <span class="billed-tag" title="${escapeHtml(invNo)}">✓ invoiced</span>`
-                : queued ? ' · <span class="billed-tag sending">sending</span>'
-                : '';
+  /* Billing state is a state, not a sentence. Buried in a run of text — "Full
+     day · custom ⚠ · ✓ invoiced · never marked arrived" — there was no way to
+     scan a column and see what still owed money, and an uninvoiced day showed
+     nothing at all, so "not billed yet" was indistinguishable from "no tag".
+     It now sits under the price, where the eye already goes, and silence means
+     the day has not happened yet rather than nothing to say. */
+  const billState = invNo ? { cls:'done', text:'invoiced', title:invNo }
+    : queued ? { cls:'sending', text:'sending', title:'handed to the mail service' }
+    : (b.date < todayISO() && !b.cancelled)
+      ? { cls:'owing', text:'to invoice', title:'this day has not been billed' }
+      : null;
 
   /* A day that came and went without anyone tapping Arrived looks identical to
      a day the dog never turned up — and both bill in full, which is right for
@@ -1644,7 +1666,7 @@ function weekDogRow(b, opts = {}) {
   const past = b.date < todayISO();
   const unlogged = past && !b.cancelled && !b.arrivalLogged
                 && ['full','half','extended'].includes(b.session)
-    ? ' · <span class="text-owe">never marked arrived</span>' : '';
+    ? ' · <span class="text-owe" title="nobody tapped Arrived on this day">not logged</span>' : '';
 
   /* Sixty-two bookings carry a hand-typed price. Showing it here is how a
      wrong one gets noticed before it reaches an invoice. */
@@ -1654,9 +1676,10 @@ function weekDogRow(b, opts = {}) {
     <div class="week-dog-face ${isNight?'night':''}">${photoOrGlyph(dog)}</div>
     <div class="week-dog-body">
       <div class="week-dog-name">${escapeHtml(dog.name)} <span class="muted small">· ${escapeHtml(owner?.name || '—')}</span></div>
-      <div class="week-dog-meta">${b.cancelled ? 'Cancelled' + (b.cancelCharge ? ' · $' + b.cancelCharge + ' charged' : ' · no charge') : SESSION_LABELS[b.session] + context + unpaidTag + customTag + billTag + unlogged}</div>
+      <div class="week-dog-meta">${b.cancelled ? 'Cancelled' + (b.cancelCharge ? ' · $' + b.cancelCharge + ' charged' : ' · no charge') : SESSION_LABELS[b.session] + context + unpaidTag + customTag + unlogged}</div>
     </div>
-    <div class="week-dog-price">$${amt}</div>
+    <div class="week-dog-price">$${amt}${billState
+      ? `<span class="bill-state ${billState.cls}" title="${escapeHtml(billState.title)}">${billState.text}</span>` : ''}</div>
   </div>`;
 }
 
