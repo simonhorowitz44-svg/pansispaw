@@ -1947,7 +1947,24 @@ function sortCredits(txs) {
   return { keep, noise };
 }
 
-function openMoneySheet() { PAY_TXS = []; renderMoney(); }
+/* The money week matches the invoicing week — Saturday to Friday — so a week
+   on this screen holds exactly the days that get billed together. */
+let MONEY_WEEK = 0;        // 0 = this week, -1 = last, and so on
+function moneyWeek() {
+  const d = new Date(todayISO() + 'T00:00:00');
+  d.setDate(d.getDate() + MONEY_WEEK * 7);
+  const back = (d.getDay() + 1) % 7;                 // Saturday starts the week
+  const from = new Date(d); from.setDate(d.getDate() - back);
+  const to   = new Date(from); to.setDate(from.getDate() + 6);
+  const iso = x => `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`;
+  const label = MONEY_WEEK === 0 ? 'This week'
+    : MONEY_WEEK === -1 ? 'Last week'
+    : `${from.getDate()} ${from.toLocaleDateString('en-AU',{month:'short'})} – ${to.getDate()} ${to.toLocaleDateString('en-AU',{month:'short'})}`;
+  return { from: iso(from), to: iso(to), label, offset: MONEY_WEEK };
+}
+function moneyWeekStep(n) { MONEY_WEEK = Math.min(0, MONEY_WEEK + n); renderMoney(); }
+
+function openMoneySheet() { PAY_TXS = []; MONEY_WEEK = 0; renderMoney(); }
 
 function onReconFile(e) {
   const f = e.target.files[0]; if (!f) return;
@@ -1970,31 +1987,48 @@ function hydrateBiz() {
 }
 
 function renderMoney() {
+  /* This screen used to open on a cumulative list of 29 clients and $10,726,
+     almost all of it work that had never been invoiced. True, and useless: it
+     is not a list anybody can act on, and the one number that matters — what
+     has been asked for and not paid — was buried beneath it.
+
+     The job is weekly. Download a statement, match what came in, chase what
+     has not. So the screen is a week at a time, and everything on it is either
+     a payment to place or an invoice to chase. The cumulative picture is one
+     line at the bottom that links to where it can be dealt with. */
   const all = clientBalances();
-  const owing   = all.filter(e => e.balance > 0);
-  const settled = all.filter(e => e.balance <= 0);
-  const outstanding = owing.reduce((s, e) => s + e.balance, 0);
-  const line = settledBefore();
+  const notYetInvoiced = all.filter(e => e.balance > 0).reduce((s2, e) => s2 + e.balance, 0);
   const split = sortCredits(PAY_TXS);
   const open  = split.keep.filter(t => !t.done);
   const noise = split.noise.filter(t => !t.done);
+  const today = todayISO();
 
-  const row = e => {
-    const n = e.visits;
-    return `<div class="mn-row ${e.balance > 0 ? 'owing' : 'clear'}" onclick="openClientMoney('${e.owner.id}')">
-      <div>
-        <div class="mn-name">${escapeHtml(e.owner.name)}</div>
-        <div class="mn-sub">${escapeHtml([...e.dogs].join(', '))} · ${n} visit${n===1?'':'s'} · paid ${money(e.paid)} of ${money(e.billed)}</div>
-      </div>
-      <div class="mn-bal">${e.balance > 0 ? money(e.balance) : '✓'}</div>
-    </div>`;
-  };
+  const wk = moneyWeek();                       // {from, to, label, offset}
+  const sent = (DB.meta && DB.meta.invoicesSent) || [];
+  const inWeek = x => x.sentAt && x.sentAt.slice(0,10) >= wk.from && x.sentAt.slice(0,10) <= wk.to;
+  const owedOn = x => Number(x.total || 0) - Number(x.paidAmount || 0);
 
-  /* A credit carrying an invoice reference is the client telling you which
-     invoice they just paid. A credit matching a name is a guess. Showing both
-     as the same small chip with a first name on it was why thirty-six rows all
-     looked like thirty-six decisions — and why "E LAW & M OSULLIVAN" offering
-     "→ Simon" sat next to a perfect reference match looking identical. */
+  const sentThisWeek = sent.filter(inWeek);
+  const paidThisWeek = sent.filter(x => x.paidAt && x.paidAt.slice(0,10) >= wk.from && x.paidAt.slice(0,10) <= wk.to);
+  const takings = paidThisWeek.reduce((t, x) => t + Number(x.paidAmount || x.total || 0), 0);
+
+  /* Chasing is never weekly — an invoice from three weeks ago is the one that
+     needs a nudge. So these two lists ignore the week being viewed. */
+  const unpaid  = sent.filter(x => !x.paidAt);
+  const overdue = unpaid.filter(x => x.dueISO && x.dueISO < today)
+                        .sort((a2,b2) => String(a2.dueISO).localeCompare(String(b2.dueISO)));
+  const waiting = unpaid.filter(x => !x.dueISO || x.dueISO >= today);
+  const daysLate = x => Math.round((new Date(today) - new Date(x.dueISO)) / 86400000);
+
+  const invRow = (x, late) => `<div class="mn-row ${late ? 'owing' : ''}">
+    <div><div class="mn-name">${escapeHtml(x.ownerName || '—')}</div>
+      <div class="mn-sub">${escapeHtml(x.number)} · ${late ? `<b style="color:var(--owe)">${daysLate(x)} day${daysLate(x)===1?'':'s'} late</b>` : `due ${fmtDateShort(x.dueISO)}`}${
+        Number(x.paidAmount||0) > 0 ? ` · ${money(x.paidAmount)} of ${money(x.total)} in` : ''}</div></div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div class="mn-bal">${money(owedOn(x))}</div>
+      <button class="btn tiny ghost" onclick="markInvoicePaid('${escapeHtml(x.number)}')">Paid</button>
+    </div></div>`;
+
   const txRow = (t, i) => {
     const g = suggestOwner(t, all);
     const certain = g && g.byRef;
@@ -2003,7 +2037,7 @@ function renderMoney() {
     return `<div class="mn-tx ${certain ? 'tx-certain' : likely ? 'tx-likely' : ''}">
       <div style="min-width:0">
         <div class="mn-name">${money(t.amount)}${certain ? ` <span class="tx-flag">${escapeHtml(g.byRef)}</span>` : ''}</div>
-        <div class="mn-sub">${escapeHtml(fmtDateShort(t.iso || todayISO()))} · ${escapeHtml(t.desc.slice(0, 44))}</div>
+        <div class="mn-sub">${escapeHtml(fmtDateShort(t.iso || today))} · ${escapeHtml(t.desc.slice(0, 44))}</div>
         ${certain ? `<div class="mn-sub" style="color:var(--pine)">${who} · ${escapeHtml(g.invoice || '')}${g.exact ? ' · amount matches' : ' · amount differs'}</div>`
           : likely ? `<div class="mn-sub">looks like ${who} — they owe exactly this</div>` : ''}
       </div>
@@ -2014,8 +2048,6 @@ function renderMoney() {
     </div>`;
   };
 
-  /* Split what is left to do by how sure we are, so the certain ones can be
-     cleared in one pass and the guesses get the attention. */
   const graded = open.map(t => ({ t, g: suggestOwner(t, all) }));
   const certain = graded.filter(x => x.g && x.g.byRef);
   const likely  = graded.filter(x => x.g && !x.g.byRef && x.g.exact);
@@ -2024,67 +2056,52 @@ function renderMoney() {
   openSheet(`
     <h2 class="sheet-title">Money</h2>
 
-    ${(() => {
-      /* "$10,726 outstanding across 29 clients" counted every visit since the
-         start date whether or not anyone had ever been asked to pay for it —
-         a number nobody can act on, attached to a feeling of being owed a
-         fortune. What is actually actionable is what has been invoiced and not
-         paid; everything else is work not yet billed, which is a different
-         problem with a different screen. */
-      const sent = (DB.meta && DB.meta.invoicesSent) || [];
-      const unpaid = sent.filter(x => !x.paidAt);
-      const owedOn = x => Number(x.total || 0) - Number(x.paidAmount || 0);
-      const due = unpaid.reduce((t, x) => t + owedOn(x), 0);
-      const overdue = unpaid.filter(x => x.dueISO && x.dueISO < todayISO());
-      const overdueSum = overdue.reduce((t, x) => t + owedOn(x), 0);
-      return `<div class="mn-hero ${due > 0 ? '' : 'clear'}">
-        <div class="mn-hero-num">${due > 0 ? money(due) : 'All square'}</div>
-        <div class="mn-hero-cap">${due > 0
-          ? `invoiced and unpaid · ${unpaid.length} invoice${unpaid.length===1?'':'s'}${
-              overdue.length ? ` · <b style="color:var(--owe)">${money(overdueSum)} overdue</b>` : ''}`
-          : sent.length ? 'every invoice sent has been paid' : 'nothing invoiced yet'}</div>
-      </div>
-      ${outstanding > 0 ? `<div class="mn-line">
-        <span>${money(outstanding)} of visits haven't been invoiced yet.</span>
-        <button class="btn tiny ghost" onclick="openInvoicesSheet()">Invoices</button>
-      </div>` : ''}`;
-    })()}
-
     <div class="mn-line">
-      <span>Visits up to today${line ? `, from ${fmtDateShort(line)}` : ''}. Future bookings aren't counted.</span>
-      <button class="btn tiny ghost" onclick="openSettleLine()">${line ? 'Change start date' : 'Set a start date'}</button>
+      <button class="btn tiny ghost" onclick="moneyWeekStep(-1)">←</button>
+      <span><b>${escapeHtml(wk.label)}</b></span>
+      <button class="btn tiny ghost" onclick="moneyWeekStep(1)" ${wk.offset >= 0 ? 'disabled' : ''}>→</button>
     </div>
 
-    ${certain.length ? `<div class="section-title">They told us which invoice (${certain.length})</div>
-      <p class="sub muted small" style="margin:-4px 0 8px">Paid with the reference we asked for. Confirm and the invoice is settled.</p>
+    <div class="mn-hero ${takings > 0 ? 'clear' : ''}">
+      <div class="mn-hero-num">${money(takings)}</div>
+      <div class="mn-hero-cap">came in${wk.offset === 0 ? ' this week' : ''} · ${sentThisWeek.length} invoice${sentThisWeek.length===1?'':'s'} sent, ${money(sentThisWeek.reduce((t,x)=>t+Number(x.total||0),0))}</div>
+    </div>
+
+    <div class="section-title" style="margin-top:18px">Load this week's statement</div>
+    <label class="btn ${certain.length || open.length ? 'ghost' : 'primary'} block" style="cursor:pointer">
+      ${PAY_TXS.length ? 'Load a different CSV' : 'Choose bank CSV'}
+      <input type="file" accept=".csv,text/csv" style="display:none" onchange="onReconFile(event)">
+    </label>
+    <p class="sub small" style="margin-top:8px">Read in your browser, nothing uploaded. Anything already dealt with is skipped, so overlapping weeks are fine.</p>
+
+    ${certain.length ? `<div class="section-title" style="margin-top:18px">They told us which invoice (${certain.length})</div>
+      <p class="sub muted small" style="margin:-4px 0 8px">Paid with the reference we asked for.</p>
       ${certain.map(x => txRow(x.t, PAY_TXS.indexOf(x.t))).join('')}
       ${certain.length > 1 ? `<button class="btn primary block mt-2" onclick="confirmAllCertain()">Confirm all ${certain.length}</button>` : ''}` : ''}
 
     ${likely.length ? `<div class="section-title" style="margin-top:18px">Probably these (${likely.length})</div>
-      <p class="sub muted small" style="margin:-4px 0 8px">Name matches and the amount is exactly what they owe.</p>
       ${likely.map(x => txRow(x.t, PAY_TXS.indexOf(x.t))).join('')}` : ''}
 
     ${unknown.length ? `<div class="section-title" style="margin-top:18px">Not sure (${unknown.length})</div>
       ${unknown.map(x => txRow(x.t, PAY_TXS.indexOf(x.t))).join('')}` : ''}
 
     ${noise.length ? `<p class="sub small" style="margin:14px 0 0">
-        ${noise.length} other line${noise.length===1?'':'s'} skipped — already dealt with, your own transfers, shops and bills, or outside the dates.
+        ${noise.length} line${noise.length===1?'':'s'} skipped — already dealt with, your own transfers, shops and bills, or outside the dates.
         <button class="btn tiny ghost" onclick="toggleNoise()">${PAY_SHOW_NOISE ? 'Hide' : 'Show'}</button></p>
       ${PAY_SHOW_NOISE ? noise.map(t => txRow(t, PAY_TXS.indexOf(t))).join('') : ''}` : ''}
 
-    <div class="section-title" style="margin-top:18px">Owing (${owing.length})</div>
-    ${owing.length ? owing.map(row).join('') : '<p class="sub muted small">Nobody owes anything.</p>'}
+    ${overdue.length ? `<div class="section-title" style="margin-top:22px">Chase these (${overdue.length})</div>
+      ${overdue.map(x => invRow(x, true)).join('')}` : ''}
 
-    ${settled.length ? `<div class="section-title" style="margin-top:18px">
-      <button class="btn tiny ghost" onclick="togglePaidUp()">${PAY_SHOW_SETTLED ? 'Hide' : 'Show'} paid up (${settled.length})</button>
-    </div>${PAY_SHOW_SETTLED ? settled.map(row).join('') : ''}` : ''}
+    ${waiting.length ? `<div class="section-title" style="margin-top:18px">Waiting (${waiting.length})</div>
+      ${waiting.map(x => invRow(x, false)).join('')}` : ''}
 
-    <div class="section-title" style="margin-top:22px">Got a bank export?</div>
-    <label class="btn ghost block" style="cursor:pointer">
-      ${PAY_TXS.length ? 'Load a different CSV' : 'Load bank CSV'}
-      <input type="file" accept=".csv,text/csv" style="display:none" onchange="onReconFile(event)">
-    </label>
-    <p class="sub small" style="margin-top:8px">Optional. It reads the file in your browser and suggests who each payment came from — you confirm each one.</p>
+    ${!overdue.length && !waiting.length ? `<p class="sub muted small" style="margin-top:18px">Every invoice sent has been paid.</p>` : ''}
+
+    ${notYetInvoiced > 0 ? `<div class="mn-line" style="margin-top:22px">
+      <span>${money(notYetInvoiced)} of visits still haven't been invoiced.</span>
+      <button class="btn tiny ghost" onclick="openInvoicesSheet()">Invoices</button>
+    </div>` : ''}
   `);
 }
 
@@ -4689,7 +4706,7 @@ Object.assign(window, {
   openCapacitySheet, saveCapacityForm,
   openImportSheet, importDataFile, exportBackup,
   openMoneySheet, onReconFile, renderMoney, togglePaidUp, toggleNoise,
-  confirmAllCertain,
+  confirmAllCertain, moneyWeekStep,
   openInvoicesSheet, renderInvoices, openOneInvoice, printInvoice,
   markInvoicePaid, reopenInvoice,
   recordDeposit, markDepositPaid, clearDeposit,
