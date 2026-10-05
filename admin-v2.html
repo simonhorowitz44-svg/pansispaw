@@ -2024,6 +2024,7 @@ function onReconFile(e) {
          knows and nobody was reading. */
       const days = PAY_TXS.map(t => txDateISO(t.date)).filter(Boolean).sort();
       PAY_PERIOD = days.length ? { from: days[0], to: days[days.length - 1], n: PAY_TXS.length } : null;
+      autoRecord();          // the file has the money in it; record it
       renderMoney();
     } catch (err) { toast('Could not read that file: ' + err.message); }
   };
@@ -2074,7 +2075,6 @@ function renderMoney() {
   const noise = split.noise.filter(t => !t.done);
   const graded = open.map(t => ({ t, g: suggestOwner(t, all) }))
                      .sort((x, y) => (y.g ? y.g.score : 0) - (x.g ? x.g.score : 0));
-  const auto = graded.filter(x => x.g && x.g.score >= 900);
 
   const txRow = ({ t, g }) => {
     const i = PAY_TXS.indexOf(t);
@@ -2120,11 +2120,28 @@ function renderMoney() {
     </div>` : ''}
 
     ${PAY_TXS.length && !open.length ? `<div class="mn-line" style="margin-top:12px;background:#eef4e8">
-      <span><b>Nothing left to sort.</b> Every credit in that file is accounted for.</span></div>` : ''}
+      <span><b>All done.</b> Every payment in that file is recorded.</span></div>` : ''}
 
-    ${open.length ? `<div class="section-title" style="margin-top:18px">To sort (${open.length})</div>
-      ${auto.length > 1 ? `<button class="btn primary block" style="margin-bottom:10px" onclick="confirmAllCertain()">Confirm ${auto.length} we're sure about</button>` : ''}
+    ${open.length ? `<div class="section-title" style="margin-top:18px">Who are these from? (${open.length})</div>
+      <p class="sub muted small" style="margin:-4px 0 8px">Everything else was recorded automatically. These we can't put a name to.</p>
       ${graded.map(txRow).join('')}` : ''}
+
+    ${(() => {
+      /* What this upload just recorded, so she can see it happened and undo
+         anything that looks wrong. */
+      const justNow = (DB.payments || []).filter(p => p.auto && PAY_TXS.some(t => t.id === p.txId));
+      if (!justNow.length) return '';
+      const sum = justNow.reduce((t2, p) => t2 + Number(p.amount || 0), 0);
+      return `<div class="section-title" style="margin-top:20px">Recorded from this statement (${justNow.length}) · ${money(sum)}</div>
+        ${justNow.map(p => { const o = ownerById(p.ownerId); return `<div class="mn-row clear">
+          <div><div class="mn-name">${escapeHtml(o ? o.name : '—')}</div>
+            <div class="mn-sub">${fmtDateShort(p.date)} · ${escapeHtml(String(p.note||'').slice(0,38))}${
+              (p.invoices||[]).length ? ' · ' + escapeHtml(p.invoices.join(', ')) : ' · on account'}</div></div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div class="mn-bal">${money(p.amount)}</div>
+            <button class="btn tiny ghost" onclick="undoRecorded('${p.id}')">Undo</button>
+          </div></div>`; }).join('')}`;
+    })()}
 
     ${noise.length ? `<p class="sub small" style="margin:14px 0 0">
         ${noise.length} line${noise.length===1?'':'s'} skipped — already sorted, set aside, your own transfers or bills.
@@ -2255,9 +2272,15 @@ async function assignTx(i, ownerId, opts = {}) {
   const t = PAY_TXS[i]; if (!t || t.done) return;
   const o = ownerById(ownerId); if (!o) return;
   const when = t.iso || txDateISO(t.date) || todayISO();
-  DB.payments.push({ id: uid(), ownerId, amount: t.amount, date: when,
-                     method: 'bank', note: t.desc.slice(0, 60), createdAt: new Date().toISOString() });
   const r = settleInvoiceFor(ownerId, t.amount, t.matchedRef, when);
+  const payId = uid();
+  if (!t.id) t.id = uid();
+  DB.payments.push({ id: payId, ownerId, amount: t.amount, date: when,
+                     method: 'bank', note: t.desc.slice(0, 60), createdAt: new Date().toISOString(),
+                     /* what it settled and where it came from, so Undo can put
+                        all of it back rather than only the payment */
+                     invoices: r ? [...r.settled.map(x => x.number), ...(r.partial ? [r.partial.number] : [])] : [],
+                     txKey: txKey(t), payerKey: payerKey(t.desc), txId: t.id, auto: !!opts.auto });
   learnPayer(t.desc, ownerId);   // so this payer is recognised without asking next time
   t.done = true;
   rememberTx(t, 'assigned');           // so next week's statement does not ask again
@@ -2285,6 +2308,52 @@ async function notAClient(i) {
   if (k) DB.meta.notClients[k] = true;
   await save(DB); renderMoney();
   toast('Set aside — we won\'t ask again', 'ok');
+}
+
+/* Loading a statement records the payments in it.
+
+   The first version showed each credit with a suggestion and waited to be
+   tapped — so a payment could be sitting in the file, visibly matched to the
+   right client, while the invoice still read unpaid. That is not a safety
+   feature, it is the tool refusing to do its job. If the money is in the
+   statement and we can tell whose it is, it is recorded.
+
+   Only genuinely ambiguous credits are left to ask about: ones we cannot put a
+   name to at all. Everything recorded this way is listed with an Undo, because
+   being wrong occasionally and reversible beats being useless reliably. */
+async function autoRecord() {
+  const all = clientBalances();
+  const todo = PAY_TXS.map((t, i) => ({ t, i, g: suggestOwner(t, all) }))
+                      .filter(x => !x.t.done && x.g);
+  if (!todo.length) { renderMoney(); return; }
+  for (const x of todo) {
+    x.t.matchedRef = x.g.byRef || null;
+    await assignTx(x.i, x.g.owner.id, { quiet: true, auto: true });
+  }
+  await save(DB);
+  renderMoney();
+  const sum = todo.reduce((t2, x) => t2 + x.t.amount, 0);
+  toast(`${todo.length} payment${todo.length===1?'':'s'} recorded · ${money(sum)}`, 'ok');
+}
+
+/* Undo one. The payment comes out, and any invoice it settled goes back to
+   unpaid — otherwise a wrong match leaves an invoice marked paid with no money
+   behind it, which is worse than the mistake. */
+async function undoRecorded(paymentId) {
+  const i = (DB.payments || []).findIndex(p => p.id === paymentId);
+  if (i < 0) return;
+  const p = DB.payments[i];
+  ((DB.meta && DB.meta.invoicesSent) || []).forEach(inv => {
+    if ((p.invoices || []).includes(inv.number)) { inv.paidAt = null; inv.paidAmount = null; }
+  });
+  if (p.txKey && DB.meta && DB.meta.reconciled) delete DB.meta.reconciled[p.txKey];
+  if (p.payerKey && DB.meta && DB.meta.payers && DB.meta.payers[p.payerKey] === p.ownerId)
+    delete DB.meta.payers[p.payerKey];
+  DB.payments.splice(i, 1);
+  const t = PAY_TXS.find(x => x.id === p.txId);
+  if (t) { t.done = false; }
+  await save(DB); renderMoney();
+  toast('Put back — tell me who it was', 'ok');
 }
 
 async function confirmAllCertain() {
@@ -4760,7 +4829,7 @@ Object.assign(window, {
   openCapacitySheet, saveCapacityForm,
   openImportSheet, importDataFile, exportBackup,
   openMoneySheet, onReconFile, renderMoney, togglePaidUp, toggleNoise,
-  confirmAllCertain, notAClient,
+  confirmAllCertain, notAClient, undoRecorded,
   openInvoicesSheet, renderInvoices, openOneInvoice, printInvoice,
   markInvoicePaid, reopenInvoice,
   recordDeposit, markDepositPaid, clearDeposit,
