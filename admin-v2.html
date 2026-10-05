@@ -121,9 +121,13 @@ body.modal-open { overflow: hidden; }
 .tab:active .tab-ico { transform: scale(0.9); }
 
 /* Shared */
-.greet { font-family: var(--font-serif); font-weight: 500; font-size: clamp(28px, 6vw, 40px); color: var(--ink); line-height: 1.1; letter-spacing: -0.02em; margin: var(--s5) 0 var(--s2); font-variation-settings: 'opsz' 144, 'SOFT' 100; }
+/* Was clamp(28px, 6vw, 40px) with generous margins — about ninety pixels of
+   mood before the first dog, which on a small phone pushed the fourth and
+   fifth below the fold at exactly the hour she has least attention. Still the
+   nicest thing on the screen, just no longer the biggest. */
+.greet { font-family: var(--font-serif); font-weight: 500; font-size: clamp(24px, 5vw, 30px); color: var(--ink); line-height: 1.15; letter-spacing: -0.02em; margin: var(--s4) 0 var(--s1); font-variation-settings: 'opsz' 144, 'SOFT' 100; }
 .greet em { font-style: italic; color: var(--ink-2); }
-.sub { color: var(--ink-2); font-size: 15px; margin: 0 0 var(--s6); line-height: 1.5; }
+.sub { color: var(--ink-2); font-size: 14px; margin: 0 0 var(--s4); line-height: 1.45; }
 .sub.tight { margin-bottom: var(--s3); }
 .section-title { font-family: var(--font-serif); font-weight: 600; font-size: 15px; color: var(--ink-2); text-transform: uppercase; letter-spacing: 0.12em; margin: var(--s7) 0 var(--s3); display: flex; align-items: center; gap: var(--s3); }
 .section-title::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--edge) 0%, transparent 100%); }
@@ -275,7 +279,6 @@ body.modal-open { overflow: hidden; }
 .week-dog-name { font-family: var(--font-serif); font-weight: 600; font-size: 15px; color: var(--ink); }
 .week-dog-meta { font-size: 12px; color: var(--ink-2); }
 /* Today — one plain list of who's on */
-.today-count { font-size: 13px; color: var(--ink-2); margin: 0 0 14px; }
 .today-row.cancelled .today-name, .today-row.cancelled .today-meta { text-decoration: line-through; opacity: 0.55; }
 .week-dog-row.cancelled .week-dog-name, .week-dog-row.cancelled .week-dog-price { text-decoration: line-through; opacity: 0.55; }
 .row-cancel { font-size: 12px; color: var(--owe); }
@@ -359,6 +362,10 @@ body.modal-open { overflow: hidden; }
 .today-warn { background: #fdf3e7; color: #a8621f; font-size: 13px; line-height: 1.5;
   padding: 10px 12px; border-radius: var(--r2); margin-bottom: 14px; }
 .today-list { border-top: 1px solid var(--edge-2); }
+/* The mood line is lovely in the evening and dead weight at 7:40, so it gives
+   its size to the thing she actually came to read. */
+.today-count { font-family: var(--font-serif); font-size: 19px; color: var(--ink); margin: 2px 0 10px; }
+.today-count b { font-weight: 600; }
 .today-row { display: flex; align-items: center; gap: 12px; padding: 12px 4px;
   border-bottom: 1px solid var(--edge-2); }
 .today-row.dupe { background: #fdf3e7; }
@@ -370,6 +377,11 @@ body.modal-open { overflow: hidden; }
 .today-name { font-family: var(--font-serif); font-size: 16px; font-weight: 500; color: var(--ink); }
 .today-meta { font-size: 12px; color: var(--ink-2); margin-top: 1px; }
 .today-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+/* The one action on a row is a real target: 44px is Apple's minimum and this
+   is tapped one-handed, outdoors, with a dog on the lead. */
+.btn.day-act { min-height: 44px; min-width: 96px; padding: 0 16px; font-size: 14px; font-weight: 600; }
+.today-flags { display: flex; gap: 5px; margin-top: 4px; flex-wrap: wrap; }
+.today-flags .pill { font-size: 10.5px; padding: 2px 7px; }
 .row-here { font-size: 12px; color: var(--action-dark); }
 .row-done { font-size: 12px; color: var(--ink-3); }
 .week-dog-price { font-family: var(--font-serif); font-weight: 500; font-size: 15px; color: var(--ink); font-variant-numeric: tabular-nums; margin-left: auto; flex-shrink: 0; }
@@ -1290,8 +1302,18 @@ function renderDay() {
   const dupes = Object.keys(seen).filter(id => seen[id] > 1)
     .map(id => dogById(id)?.name).filter(Boolean);
 
-  const n = bks.length;
-  html += `<div class="today-count">${n} ${n === 1 ? 'dog' : 'dogs'} today</div>`;
+  /* "5 dogs today" was the most useful number on the screen and it was rendered
+     as a 13px grey caption under a 40px greeting. At 7:40 the question is not
+     how many are coming, it is who is still to come — so say that, and say it
+     bigger than the mood. */
+  const here = bks.filter(b => b.arrivalLogged && !b.departureLogged && !b.cancelled).length;
+  const gone = bks.filter(b => b.departureLogged && !b.cancelled).length;
+  const toCome = bks.filter(b => !b.arrivalLogged && !b.cancelled).length;
+  const parts = [];
+  if (toCome) parts.push(`<b>${toCome}</b> still to come`);
+  if (here)   parts.push(`<b>${here}</b> here`);
+  if (gone)   parts.push(`${gone} gone home`);
+  html += `<div class="today-count">${parts.length ? parts.join(' · ') : `${bks.length} booked`}</div>`;
 
   if (dupes.length) {
     html += `<div class="today-warn">${escapeHtml(dupes.join(', '))} ${dupes.length === 1 ? 'is' : 'are'} listed twice — likely a duplicate booking. Tap to check.</div>`;
@@ -1321,6 +1343,17 @@ function dayRow(b, isDupe) {
     }
   }
 
+  /* One thing to do per row.
+
+     "Arrived" and "Cancel" were the same 25px button ten pixels apart, at the
+     far right edge, tapped one-handed with a lead in the other. The two most
+     opposite actions in the app looked identical and sat a thumb-slip apart —
+     and arriving happens five times a day while cancelling happens three times
+     a month. They never deserved equal weight.
+
+     So the row has one full-height primary action and nothing else. Cancelling
+     moved into the booking sheet, which is one tap away through the dog's name
+     and is where every other change to a booking already lives. */
   let status = '', action = '';
   if (b.cancelled) {
     status = `<span class="row-cancel">Cancelled${b.cancelCharge ? ' · $' + b.cancelCharge : ' · no charge'}</span>`;
@@ -1329,17 +1362,28 @@ function dayRow(b, isDupe) {
     status = `<span class="row-done">Left ${b.departureLogged}</span>`;
   } else if (b.arrivalLogged) {
     status = `<span class="row-here">Here since ${b.arrivalLogged}</span>`;
-    action = `<button class="btn tiny" data-depart="${b.id}">Picked up</button>`;
+    action = `<button class="btn day-act" data-depart="${b.id}">Picked up</button>`;
   } else {
-    action = `<button class="btn tiny" data-arrive="${b.id}">Arrived</button>`
-           + `<button class="btn tiny" onclick="openCancelSheet('${b.id}')">Cancel</button>`;
+    action = `<button class="btn day-act primary" data-arrive="${b.id}">✓ Here</button>`;
   }
+
+  /* What she needs standing at the door: when they are due, and anything that
+     could hurt the dog. Both have always been on the record and neither has
+     ever been on this screen — a dog on medication looked exactly like one
+     that isn't. */
+  const due = !b.arrivalLogged && !b.cancelled && b.arrivalTime ? friendlyTime(b.arrivalTime) : '';
+  const flags = [];
+  if (dog && isMeaningfulHealth(dog.medicalConditions)) flags.push(`<span class="pill med" title="${escapeHtml(dog.medicalConditions)}">⚕ meds</span>`);
+  if (dog && isMeaningfulHealth(dog.allergies))         flags.push(`<span class="pill med" title="${escapeHtml(dog.allergies)}">⚕ allergy</span>`);
+  if (dog && dog.aggression && !/^(no|none|nil|n\/a)/i.test(String(dog.aggression).trim()))
+    flags.push(`<span class="pill owe" title="${escapeHtml(dog.aggression)}">⚠ care</span>`);
 
   return `<div class="today-row ${isDupe ? 'dupe' : ''} ${b.cancelled ? 'cancelled' : ''}">
     <div class="today-face ${isNight ? 'night' : ''}" data-openbk="${b.id}">${dog ? photoOrGlyph(dog) : '?'}</div>
     <div class="today-body" data-openbk="${b.id}">
       <div class="today-name">${escapeHtml(dog?.name || 'Unknown dog')}</div>
-      <div class="today-meta">${escapeHtml(owner?.name || '—')} · ${note}</div>
+      <div class="today-meta">${escapeHtml(owner?.name || '—')}${due ? ' · due ' + due : ''} · ${note}</div>
+      ${flags.length ? `<div class="today-flags">${flags.join('')}</div>` : ''}
     </div>
     <div class="today-right">${status}${action}</div>
   </div>`;
