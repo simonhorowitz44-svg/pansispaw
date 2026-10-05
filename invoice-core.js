@@ -30,6 +30,24 @@ export const SURCHARGE_LABELS = {
   publicHoliday: 'Public holiday', xmasPeakDay: 'Peak season', xmasPeakNight: 'Peak season'
 };
 
+/* What each extra is for, in a sentence. The rate itself is filled in from the
+   constants above rather than written out, so a price rise cannot leave the
+   explanation describing the old one. Every charged line on an invoice should
+   answer "what is this" without anyone having to ask. */
+export const ADDON_WHY = {
+  senior: 'extra checks and a quieter space, per day',
+  puppy:  'closer supervision and more frequent breaks, per day',
+  med:    'giving medication, per visit',
+  diet:   'preparing their own food, per day',
+  taxi:   'collected from home and dropped back, per trip'
+};
+export const SURCHARGE_WHY = {
+  publicHoliday: 'NSW public holiday',
+  xmasPeakDay:   'Christmas and summer peak',
+  xmasPeakNight: 'Christmas and summer peak'
+};
+const withRate = (why, amt) => `${why} · $${amt}`;
+
 /* The extras baked into a booking's price, as {what, amt} the invoice can show
    as their own lines. Empty where they don't apply: a custom price is whatever
    Andressa typed, and Scouts is a flat rate with transport already in it. */
@@ -37,12 +55,16 @@ export function bookingExtras(b) {
   if (!b || b.cancelled || b.customPrice != null || b.session === 'scouts') return [];
   const out = [];
   for (const k of ['senior', 'puppy', 'med', 'diet', 'taxi'])
-    if (b.addOns?.[k] && ADDONS[k]) out.push({ what: ADDON_LABELS[k], amt: ADDONS[k] });
+    if (b.addOns?.[k] && ADDONS[k])
+      out.push({ what: ADDON_LABELS[k], amt: ADDONS[k], note: withRate(ADDON_WHY[k], ADDONS[k]) });
   if (b.surcharges?.publicHoliday && SURCHARGES.publicHoliday)
-    out.push({ what: SURCHARGE_LABELS.publicHoliday, amt: SURCHARGES.publicHoliday });
+    out.push({ what: SURCHARGE_LABELS.publicHoliday, amt: SURCHARGES.publicHoliday,
+               note: withRate(SURCHARGE_WHY.publicHoliday, SURCHARGES.publicHoliday) });
   if (b.surcharges?.xmasPeak) {
-    const amt = b.session === 'overnight' ? SURCHARGES.xmasPeakNight : SURCHARGES.xmasPeakDay;
-    if (amt) out.push({ what: SURCHARGE_LABELS.xmasPeakDay, amt });
+    const night = b.session === 'overnight';
+    const amt = night ? SURCHARGES.xmasPeakNight : SURCHARGES.xmasPeakDay;
+    if (amt) out.push({ what: SURCHARGE_LABELS.xmasPeakDay, amt,
+                        note: withRate(night ? SURCHARGE_WHY.xmasPeakNight : SURCHARGE_WHY.xmasPeakDay, amt) });
   }
   return out;
 }
@@ -516,7 +538,7 @@ export function buildInvoice(db, ownerId, opts = {}) {
                free: !dayC }, dayC, b);
       }
       if (splittable) extras.forEach(x =>
-        push({ date:b.date, dog:dogName, what:x.what }, cents(x.amt), b));
+        push({ date:b.date, dog:dogName, what:x.what, note:x.note || '' }, cents(x.amt), b));
 
       /* A one-off charge Andressa adds by hand. Its own line rather than folded
          into the price, and below the day it relates to — a charge printed above

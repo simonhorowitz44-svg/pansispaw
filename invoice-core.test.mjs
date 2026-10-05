@@ -1224,5 +1224,33 @@ console.log('\nA line that explains its own price');
     /^long stay rate · dropped 3pm, collected 10am next day$/.test(line().note));
 }
 
+
+console.log('\nEvery charged line says what it is');
+{
+  const db = {
+    owners:[{ id:'o1', name:'Emma', email:'e@x.com' }],
+    dogs:[{ id:'d1', ownerId:'o1', name:'Celine', size:'small' }],
+    packs:[], meta:{ invoicing:{ goLive:'2026-01-01' } },
+    bookings:[{ id:'b1', dogId:'d1', date:'2026-10-05', session:'full',
+                addOns:{ med:true, taxi:true },
+                surcharges:{ publicHoliday:true } }]
+  };
+  const inv = C.buildInvoice(db, 'o1', { asAt:'2026-10-06' });
+  const noteFor = what => (inv.lines.find(l => l.what === what) || {}).note;
+
+  eq('medication says what it is and the rate', noteFor('Medication'), 'giving medication, per visit · $5');
+  eq('transport too', noteFor('Pickup & drop-off'), 'collected from home and dropped back, per trip · $35');
+  eq('and the holiday surcharge names the holiday', noteFor('Public holiday'), 'NSW public holiday · $25');
+  t('no line is left bare', inv.lines.filter(l => l.amt > 0).every(l => l.what === 'Full day' || l.note));
+
+  /* The rate in the sentence comes from the constant, so it cannot describe a
+     price that has since changed. */
+  const was = C.ADDONS.med;
+  C.setPricing({ addons: { med: { amount: 7 } } });
+  const inv2 = C.buildInvoice(db, 'o1', { asAt:'2026-10-06' });
+  t('and follows a price change', /\$7$/.test((inv2.lines.find(l => l.what === 'Medication') || {}).note || ''));
+  C.setPricing({ addons: { med: { amount: was } } });
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
