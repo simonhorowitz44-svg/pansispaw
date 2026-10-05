@@ -773,6 +773,53 @@ function normalizeDb(db) {
   return db;
 }
 
+/* ---------- NSW public holidays ---------- */
+/* Ticking the public holiday chip by hand means remembering, every time. The
+   dates are computed rather than listed so the table never goes stale: Easter
+   from the standard computus, the Monday holidays by rule, and the fixed dates
+   with their substitute days when they fall on a weekend. Anzac Day gets no
+   substitute in NSW. */
+function easterSunday(y) {
+  const a=y%19, b=Math.floor(y/100), c=y%100, d=Math.floor(b/4), e=b%4,
+        f=Math.floor((b+8)/25), g=Math.floor((b-f+1)/3), h=(19*a+b-d-g+15)%30,
+        i=Math.floor(c/4), k=c%4, l=(32+2*e+2*i-h-k)%7, m=Math.floor((a+11*h+22*l)/451),
+        mo=Math.floor((h+l-7*m+114)/31), da=((h+l-7*m+114)%31)+1;
+  return new Date(Date.UTC(y, mo-1, da));
+}
+const isoUTC = d => d.toISOString().slice(0,10);
+const addDaysUTC = (d,n) => new Date(d.getTime() + n*86400000);
+function nthWeekdayUTC(y, month, weekday, n) {      // month 0-based, weekday 0=Sun
+  const first = new Date(Date.UTC(y, month, 1));
+  const shift = (weekday - first.getUTCDay() + 7) % 7;
+  return new Date(Date.UTC(y, month, 1 + shift + (n-1)*7));
+}
+const nswHolidayCache = {};
+function nswHolidays(year) {
+  if (nswHolidayCache[year]) return nswHolidayCache[year];
+  const out = new Set();
+  const fixed = (m, d) => {
+    const dt = new Date(Date.UTC(year, m, d));
+    out.add(isoUTC(dt));
+    const dow = dt.getUTCDay();
+    if (dow === 0) out.add(isoUTC(addDaysUTC(dt, 1)));        // Sunday -> Monday
+    if (dow === 6) out.add(isoUTC(addDaysUTC(dt, 2)));        // Saturday -> Monday
+  };
+  fixed(0, 1);                                                // New Year's Day
+  fixed(0, 26);                                               // Australia Day
+  const easter = easterSunday(year);
+  [-2, -1, 0, 1].forEach(n => out.add(isoUTC(addDaysUTC(easter, n))));  // Good Friday -> Easter Monday
+  out.add(isoUTC(new Date(Date.UTC(year, 3, 25))));           // Anzac Day, no substitute in NSW
+  out.add(isoUTC(nthWeekdayUTC(year, 5, 1, 2)));              // King's Birthday, 2nd Mon June
+  out.add(isoUTC(nthWeekdayUTC(year, 9, 1, 1)));              // Labour Day, 1st Mon October
+  fixed(11, 25); fixed(11, 26);                               // Christmas, Boxing Day
+  nswHolidayCache[year] = out;
+  return out;
+}
+function isNswHoliday(iso) {
+  if (!iso || iso.length < 10) return false;
+  return nswHolidays(+iso.slice(0,4)).has(iso);
+}
+
 /* ---------- Pack helpers ---------- */
 function packsForDog(dogId) { return DB.packs.filter(p => p.dogId === dogId); }
 function activePacksForDog(dogId) {
@@ -1575,11 +1622,27 @@ function weekDogRow(b, opts = {}) {
   const billTag = invNo  ? ` · <span class="billed-tag" title="${escapeHtml(invNo)}">✓ invoiced</span>`
                 : queued ? ' · <span class="billed-tag sending">sending</span>'
                 : '';
+
+  /* A day that came and went without anyone tapping Arrived looks identical to
+     a day the dog never turned up — and both bill in full, which is right for
+     one and wrong for the other. Terms say a no-show is charged at half, so
+     she needs to be able to see which is which. Only on days already past, and
+     only on daycare: an overnight is marked differently and Scouts runs are a
+     van, not a drop-off. */
+  const past = b.date < todayISO();
+  const unlogged = past && !b.cancelled && !b.arrivalLogged
+                && ['full','half','extended'].includes(b.session)
+    ? ' · <span class="text-owe">never marked arrived</span>' : '';
+
+  /* Sixty-two bookings carry a hand-typed price. Showing it here is how a
+     wrong one gets noticed before it reaches an invoice. */
+  const customTag = (b.customPrice != null && !b.cancelled)
+    ? ` · <span class="billed-tag" style="color:var(--honey)" title="${escapeHtml(b.customPriceNote || 'no reason recorded')}">custom${b.customPriceNote ? '' : ' ⚠'}</span>` : '';
   return `<div class="week-dog-row k-${kind} ${b.cancelled ? 'cancelled' : ''}" data-openbk="${b.id}">
     <div class="week-dog-face ${isNight?'night':''}">${photoOrGlyph(dog)}</div>
     <div class="week-dog-body">
       <div class="week-dog-name">${escapeHtml(dog.name)} <span class="muted small">· ${escapeHtml(owner?.name || '—')}</span></div>
-      <div class="week-dog-meta">${b.cancelled ? 'Cancelled' + (b.cancelCharge ? ' · $' + b.cancelCharge + ' charged' : ' · no charge') : SESSION_LABELS[b.session] + context + unpaidTag + billTag}</div>
+      <div class="week-dog-meta">${b.cancelled ? 'Cancelled' + (b.cancelCharge ? ' · $' + b.cancelCharge + ' charged' : ' · no charge') : SESSION_LABELS[b.session] + context + unpaidTag + customTag + billTag + unlogged}</div>
     </div>
     <div class="week-dog-price">$${amt}</div>
   </div>`;
@@ -2871,7 +2934,12 @@ function openBookingSheet(bookingId, prefillDate) {
         </div>
       </div>
       <div class="field-group" id="packOfferSlot"></div>
-      <div class="field-group"><label>Custom price (blank = auto)</label><input class="field" name="customPrice" type="number" value="${b.customPrice ?? ''}" placeholder="Auto-calculated"></div>
+      <div class="field-row">
+        <div class="field-group"><label>Custom price (blank = auto)</label><input class="field" name="customPrice" type="number" value="${b.customPrice ?? ''}" placeholder="Auto-calculated"></div>
+        <div class="field-group"><label>Agreed because</label><input class="field" name="customPriceNote" value="${escapeHtml(b.customPriceNote || '')}" placeholder="e.g. old rate, long stay"></div>
+      </div>
+      <span class="muted small">Sixty-two bookings carry a hand-typed price and none of them record why.
+        When a client queries one in three months, this line is the whole answer.</span>
       ${(() => { const gl = DB.meta?.invoicing?.goLive; return b.date && gl && b.date < gl; })() ? `<div class="field-group">
         <label class="check"><input type="checkbox" name="billAnyway" ${b.billAnyway?'checked':''}>
           Bill this one even though it's before ${fmtDateShort(DB.meta.invoicing.goLive)}</label>
@@ -2886,17 +2954,12 @@ function openBookingSheet(bookingId, prefillDate) {
         gets queried.</span>
       <div class="field-group"><label>Notes</label><textarea class="field" name="notes" rows="2">${escapeHtml(b.notes||'')}</textarea></div>
 
-      <div class="field-row">
-        <div class="field-group"><label>Payment</label>
+      ${SHOW_PAYMENTS ? `<div class="field-group"><label>Payment</label>
           <select name="paymentStatus" class="field">
             <option value="pending" ${b.paymentStatus==='pending'?'selected':''}>Pending</option>
             <option value="paid" ${b.paymentStatus==='paid'?'selected':''}>Paid</option>
-          </select>
-        </div>
-        <div class="field-group" style="display:flex; align-items:end;">
-          <button type="submit" class="btn primary block">${isNew?'Add booking':'Save'}</button>
-        </div>
-      </div>
+          </select></div>` : ''}
+      <button type="submit" class="btn primary block">${isNew?'Add booking':'Save'}</button>
       ${!isNew ? `<button type="button" class="btn danger block" onclick="deleteBooking('${b.id}')">Delete booking</button>` : ''}
     </form>`);
   updateBookingPrice();
@@ -2905,6 +2968,14 @@ function openBookingSheet(bookingId, prefillDate) {
 function updateBookingPrice() {
   const f = document.getElementById('bkForm');
   if (!f) return;
+
+  /* Tick the public holiday chip the first time we see a date that is one.
+     After that it is hers to untick — this only fires when the date changes. */
+  if (f.ph && f.date && f.dataset.phDate !== f.date.value) {
+    f.dataset.phDate = f.date.value;
+    f.ph.checked = isNswHoliday(f.date.value);
+  }
+
   const dog = dogById(f.dogId.value);
   if (!dog) { document.getElementById('priceNum').textContent = '$0'; document.getElementById('priceBreak').textContent = 'Pick a dog'; return; }
   const session = f.session.value;
@@ -3156,6 +3227,7 @@ async function saveBookingForm(e, id, isNew) {
     addOns: { senior: f.senior.checked, puppy: f.puppy.checked, med: f.med.checked, diet: f.diet.checked, taxi: f.taxi.checked },
     surcharges: { publicHoliday: f.ph.checked, xmas: false, xmasPeak: f.xmas.checked },
     customPrice: (custom != null && !isNaN(custom)) ? custom : null,
+    customPriceNote: (f.customPriceNote?.value || '').trim() || null,
     billAnyway: f.billAnyway ? f.billAnyway.checked : (existing?.billAnyway || false),
     extraCharge: (() => { const v = parseFloat(f.extraCharge?.value); return isNaN(v) || v === 0 ? null : v; })(),
     extraNote: (f.extraNote?.value || '').trim(),
@@ -3168,7 +3240,12 @@ async function saveBookingForm(e, id, isNew) {
     cancelled:    existing?.cancelled || false,
     cancelledAt:  existing?.cancelledAt || null,
     cancelCharge: existing?.cancelCharge ?? null,
-    total: 0, paymentStatus: f.paymentStatus.value, paidAt: existing?.paidAt || null,
+    /* Marking a day Paid here recorded money with no amount, no date and no
+       method, did not stop an invoice going out for it, and was the one
+       payment control not hidden behind SHOW_PAYMENTS. Money is recorded in
+       DB.payments or not at all. */
+    total: 0, paymentStatus: f.paymentStatus ? f.paymentStatus.value : (existing?.paymentStatus || 'pending'),
+    paidAt: existing?.paidAt || null,
     notes: f.notes.value, createdAt: existing?.createdAt || new Date().toISOString(),
     seriesId: existing?.seriesId, seriesPattern: existing?.seriesPattern,
     report: existing?.report || null
