@@ -701,7 +701,15 @@ const LAST_SAVE_KEY = "pansis_admin_last_save_ts";
 async function loadPricing() {
   try {
     const r = await fetch('pricing.json?t=' + Date.now());
-    if (r.ok) setPricing(await r.json());
+    if (!r.ok) return;
+    const p = await r.json();
+    setPricing(p);
+    /* Pack discounts live in the same file as the rates they discount, so a
+       price rise and its pack prices can be changed together. */
+    if (p.discounts) {
+      if (p.discounts.pack5)  PACK_DISCOUNTS[5]  = (p.discounts.pack5.pct  || 0) / 100;
+      if (p.discounts.pack10) PACK_DISCOUNTS[10] = (p.discounts.pack10.pct || 0) / 100;
+    }
   } catch {}
 }
 
@@ -832,9 +840,13 @@ function packSummary(p) {
   const days = Math.ceil((new Date(p.expiryDate + 'T00:00:00') - new Date(todayISO() + 'T00:00:00')) / 86400000);
   return { used, remaining, expiresInDays: days, expired: days < 0 };
 }
+/* Read from pricing.json so the file is not quietly decorative. It carried
+   several keys nothing ever read — editing the late fee there did nothing at
+   all — so the ones that remain have to actually do something. */
+let PACK_DISCOUNTS = { 5: 0.05, 10: 0.10 };
 function calcPackPrice(dogSize, packSize) {
   const base = PRICES[dogSize]?.full || 90;
-  const discount = packSize === 5 ? 0.05 : packSize === 10 ? 0.10 : 0;
+  const discount = PACK_DISCOUNTS[packSize] || 0;
   return Math.round(base * packSize * (1 - discount));
 }
 function loadFromStorage() {

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-09-30",
+  "updated": "2026-10-05",
   "prices": {
     "small": {
       "half": 55,
@@ -52,11 +52,6 @@
       "amount": 35,
       "label": "Pickup & dropoff ≤5km",
       "unit": "trip"
-    },
-    "taxi10": {
-      "amount": 50,
-      "label": "Pickup & dropoff 5–10km",
-      "unit": "trip"
     }
   },
   "surcharges": {
@@ -71,14 +66,6 @@
     "xmasPeakNight": {
       "amount": 30,
       "label": "Christmas/Summer peak (boarding)"
-    },
-    "latePickupPer30": {
-      "amount": 10,
-      "label": "Late pickup per 30 min after 5:00 PM"
-    },
-    "latePickupCapDay": {
-      "amount": 40,
-      "label": "Late pickup daily cap"
     }
   },
   "discounts": {
@@ -89,16 +76,7 @@
     "pack10": {
       "pct": 10,
       "label": "10-day pack"
-    },
-    "sibling": {
-      "pct": 10,
-      "label": "Sibling rate (2 dogs same household)"
     }
   },
-  "xmasPeakWindow": {
-    "startMonth": 12,
-    "startDay": 20,
-    "endMonth": 1,
-    "endDay": 28
-  }
+  "_note": "Prices, add-ons and surcharges are read by setPricing in invoice-core.js. Pack discounts are read by calcPackPrice in admin-v2.html. Late-pickup and check-in fees are constants in invoice-core.js, not here — keys for them used to sit in this file and changing them did nothing."
 }
