@@ -220,6 +220,17 @@ body.modal-open { overflow: hidden; }
 .week-dog-row:first-of-type { border-top: 0; }
 .billed-tag { color: var(--pine); font-weight: 600; }
 .billed-tag.sending { color: var(--honey); }
+/* An invoiced day is finished business: it keeps its place so the week still
+   reads as a week, but it stops competing for attention. The session colour is
+   what says "this is live money", so a billed row gives it up — and what is
+   left standing out in colour is exactly what still has to be sent. A day
+   still to invoice gets the opposite treatment and leans forward. */
+.week-dog-row.is-done { opacity:.42; background:none !important; box-shadow:none !important; filter:saturate(.3); }
+.week-dog-row.is-done:hover { opacity:.85; }
+.week-dog-row.is-done .week-dog-face { border-color: var(--edge-2) !important; }
+.week-dog-row.is-owing { box-shadow: inset 3px 0 0 var(--owe) !important; }
+.week-dog-row.is-owing .week-dog-price { color: var(--owe); font-weight:700; }
+
 .bill-state { display:block; font-size:10px; font-weight:700; letter-spacing:.04em;
   text-transform:uppercase; margin-top:2px; }
 .bill-state.done    { color: var(--sage); }
@@ -1672,7 +1683,7 @@ function weekDogRow(b, opts = {}) {
      wrong one gets noticed before it reaches an invoice. */
   const customTag = (b.customPrice != null && !b.cancelled)
     ? ` · <span class="billed-tag" style="color:var(--honey)" title="${escapeHtml(b.customPriceNote || 'no reason recorded')}">custom${b.customPriceNote ? '' : ' ⚠'}</span>` : '';
-  return `<div class="week-dog-row k-${kind} ${b.cancelled ? 'cancelled' : ''}" data-openbk="${b.id}">
+  return `<div class="week-dog-row k-${kind} ${b.cancelled ? 'cancelled' : ''} ${billState ? 'is-' + billState.cls : ''}" data-openbk="${b.id}">
     <div class="week-dog-face ${isNight?'night':''}">${photoOrGlyph(dog)}</div>
     <div class="week-dog-body">
       <div class="week-dog-name">${escapeHtml(dog.name)} <span class="muted small">· ${escapeHtml(owner?.name || '—')}</span></div>
