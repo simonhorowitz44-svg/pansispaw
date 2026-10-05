@@ -33,5 +33,10 @@
 !/scouts-club-logo.png
 !/scouts-club-logo.jpg
 
+# Extended care stay form. Unlinked and noindex, but this repo is public, so
+# the page itself is readable by anyone who looks — see the note in the file.
+!/stay/
+!/stay/index.html
+
 # Everything else (legal docs, evidence, drafts, venvs, internal notes)
 # stays local and is never committed.
