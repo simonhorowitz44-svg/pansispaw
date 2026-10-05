@@ -353,6 +353,7 @@ body.modal-open { overflow: hidden; }
 .mn-row.sending { background:linear-gradient(90deg,#eef4e8 0%,transparent 55%); cursor:default; }
 .mn-tx.tx-certain { background:linear-gradient(90deg,#eef4e8 0%,transparent 60%); box-shadow:inset 3px 0 0 var(--sage); }
 .mn-tx.tx-likely  { box-shadow:inset 3px 0 0 var(--honey); }
+.tx-flag.maybe { background:var(--honey); color:#3f2814; }
 .tx-flag { font-size:10px; font-weight:800; letter-spacing:.05em; color:#fff;
   background:var(--sage); padding:2px 7px; border-radius:999px; vertical-align:middle; }
 .mn-row.sending .mn-sub { color:var(--pine); }
@@ -1843,42 +1844,85 @@ function paymentsFor(ownerId) {
 }
 
 /* Best guess at whose payment a bank credit is. Suggestion only — a human confirms. */
-function suggestOwner(tx, balances) {
-  const ref = cleanRef(tx.desc);
-  const words = ref.split(' ').filter(w => w.length > 2);
+/* Who is this money from?
 
-  /* Every invoice now asks the client to quote a reference — ELVIS-0927. When
-     one turns up in the bank description that is not a guess, it is the client
-     telling you which invoice they just paid. Checked before the name matching,
-     which is guesswork by comparison. */
-  /* On the raw description, not on cleanRef's output. cleanRef strips every run
-     of digits so names survive — which also stripped the digits out of every
-     reference, so ELVIS0927 could never be found and this branch had never
-     fired once. Unpaid invoices first: a reference is DOG-MMDD and repeats
-     every year. */
-  const squashed = String(tx.desc || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  const sent = DB.meta?.invoicesSent || [];
+   Identity answers that question and nothing else does. The old scoring gave a
+   name word 10 points and an exact amount 60, so a transfer reading "KYLE
+   RIFKIN Pepperoni $360" was offered as Nicole Jack, because Nicole happened to
+   owe exactly $360. Obviously wrong to anyone reading it, and with sixty
+   clients on a short price list identical totals are routine rather than
+   remarkable.
+
+   So amount never identifies anybody. It only raises confidence in somebody
+   already identified by name, dog or a reference. If Kyle pays $360 and Kyle
+   has no open invoice, that is evidence Kyle has unbilled work — not evidence
+   for Nicole. */
+function suggestOwner(tx, balances) {
+  const desc     = String(tx.desc || '').toUpperCase();
+  const squashed = desc.replace(/[^A-Z0-9]/g, '');
+  const words    = cleanRef(tx.desc).split(' ').filter(w => w.length > 2);
+  const sent     = DB.meta?.invoicesSent || [];
+  const ownerOf  = id => (DB.owners || []).find(o => o.id === id);
+  const openFor  = id => sent.filter(x => x.ownerId === id && !x.paidAt)
+                             .reduce((t, x) => t + (Number(x.total||0) - Number(x.paidAmount||0)), 0);
+
+  /* 1. The reference we asked them to quote. Certain. */
   const matchesRef = x => x.ref && squashed.includes(String(x.ref).toUpperCase().replace(/[^A-Z0-9]/g, ''));
   const hit = sent.filter(x => !x.paidAt).find(matchesRef) || sent.find(matchesRef);
   if (hit) {
-    const e = balances.find(x => x.owner.id === hit.ownerId);
-    const owner = e ? e.owner : (DB.owners || []).find(o => o.id === hit.ownerId);
-    if (owner) return { owner, score: 1000, exact: Math.abs(tx.amount - hit.total) < 0.01,
-                        byRef: hit.ref, invoice: hit.number };
+    const owner = ownerOf(hit.ownerId);
+    if (owner) return { owner, score: 1000, byRef: hit.ref, invoice: hit.number,
+                        exact: Math.abs(tx.amount - (Number(hit.total) - Number(hit.paidAmount||0))) < 0.01,
+                        why: `quoted ${hit.ref}` };
   }
 
+  /* 2. A payer we have confirmed before. People pay from the same account for
+     years, so one confirmation is worth more than any amount of guessing — and
+     this gets stronger every week rather than staying as clever as the day it
+     was written. */
+  const learned = (DB.meta && DB.meta.payers) || {};
+  const key = payerKey(tx.desc);
+  if (key && learned[key]) {
+    const owner = ownerOf(learned[key]);
+    if (owner) return { owner, score: 900, learned: true,
+                        exact: Math.abs(tx.amount - openFor(owner.id)) < 0.01,
+                        why: 'paid from this account before' };
+  }
+
+  /* 3. The owner's name, then the dog's. Clients write the dog more often than
+     themselves. */
   let best = null;
   balances.forEach(e => {
-    const names = [e.owner.name || '', ...e.dogs];
-    let hit = 0;
-    names.forEach(n => String(n).toUpperCase().split(/\s+/).filter(p => p.length > 2)
-      .forEach(p => { if (words.some(w => w === p || w.includes(p) || p.includes(w))) hit++; }));
-    const exact = Math.abs(tx.amount - e.balance) < 0.01;
-    if (!hit && !exact) return;
-    const score = hit * 10 + (exact ? 60 : 0);
-    if (!best || score > best.score) best = { owner: e.owner, score, exact };
+    const nameHits = String(e.owner.name || '').toUpperCase().split(/\s+/)
+      .filter(p => p.length > 2).filter(p => words.includes(p)).length;
+    const dogHits = e.dogs.filter(d => {
+      const D = String(d).toUpperCase();
+      return D.length > 2 && words.includes(D);
+    }).length;
+    if (!nameHits && !dogHits) return;                 // no identity, no suggestion
+    const score = nameHits * 40 + dogHits * 30;
+    if (!best || score > best.score) best = {
+      owner: e.owner, score,
+      exact: Math.abs(tx.amount - openFor(e.owner.id)) < 0.01,
+      why: nameHits && dogHits ? 'name and dog match'
+         : nameHits ? 'name matches' : "dog's name is on it"
+    };
   });
   return best;
+}
+
+/* The payer string a bank repeats transfer after transfer, with the one-off
+   bits — receipt numbers, dates, references — taken out, so the same person
+   keys the same way every week. */
+function payerKey(desc) {
+  const k = cleanRef(desc).replace(/\s+/g, ' ').trim();
+  return k.length > 3 ? k.slice(0, 40) : '';
+}
+function learnPayer(desc, ownerId) {
+  const k = payerKey(desc); if (!k) return;
+  DB.meta = DB.meta || {};
+  DB.meta.payers = DB.meta.payers || {};
+  DB.meta.payers[k] = ownerId;
 }
 
 /* A bank export is the whole account — your own transfers, interest, refunds.
@@ -1935,6 +1979,8 @@ function sortCredits(txs) {
        description says. A surname that happens to read like a shop is far more
        likely than a shop paying us for daycare. */
     const looksLikeAClient = !!suggestOwner(t, clientBalances());
+    const k = payerKey(t.desc);
+    if (k && ((DB.meta && DB.meta.notClients) || {})[k]) { noise.push(t); return; }
     if (!looksLikeAClient && NOT_A_PAYMENT.test(t.desc)) { noise.push(t); return; }
     if (!looksLikeAClient && NOT_A_CLIENT.test(t.desc))  { noise.push(t); return; }
     if (seenTx(t)) { t.done = true; t.alreadySeen = true; noise.push(t); return; }
@@ -1947,24 +1993,8 @@ function sortCredits(txs) {
   return { keep, noise };
 }
 
-/* The money week matches the invoicing week — Saturday to Friday — so a week
-   on this screen holds exactly the days that get billed together. */
-let MONEY_WEEK = 0;        // 0 = this week, -1 = last, and so on
-function moneyWeek() {
-  const d = new Date(todayISO() + 'T00:00:00');
-  d.setDate(d.getDate() + MONEY_WEEK * 7);
-  const back = (d.getDay() + 1) % 7;                 // Saturday starts the week
-  const from = new Date(d); from.setDate(d.getDate() - back);
-  const to   = new Date(from); to.setDate(from.getDate() + 6);
-  const iso = x => `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`;
-  const label = MONEY_WEEK === 0 ? 'This week'
-    : MONEY_WEEK === -1 ? 'Last week'
-    : `${from.getDate()} ${from.toLocaleDateString('en-AU',{month:'short'})} – ${to.getDate()} ${to.toLocaleDateString('en-AU',{month:'short'})}`;
-  return { from: iso(from), to: iso(to), label, offset: MONEY_WEEK };
-}
-function moneyWeekStep(n) { MONEY_WEEK = Math.min(0, MONEY_WEEK + n); renderMoney(); }
 
-function openMoneySheet() { PAY_TXS = []; MONEY_WEEK = 0; renderMoney(); }
+function openMoneySheet() { PAY_TXS = []; renderMoney(); }
 
 function onReconFile(e) {
   const f = e.target.files[0]; if (!f) return;
@@ -1987,121 +2017,100 @@ function hydrateBiz() {
 }
 
 function renderMoney() {
-  /* This screen used to open on a cumulative list of 29 clients and $10,726,
-     almost all of it work that had never been invoiced. True, and useless: it
-     is not a list anybody can act on, and the one number that matters — what
-     has been asked for and not paid — was buried beneath it.
+  /* Three jobs, in the order the money matters.
 
-     The job is weekly. Download a statement, match what came in, chase what
-     has not. So the screen is a week at a time, and everything on it is either
-     a payment to place or an invoice to chase. The cumulative picture is one
-     line at the bottom that links to where it can be dealt with. */
+     Billing comes first, because that is where it actually is: five invoices
+     have ever gone out against about ten thousand dollars of delivered work. A
+     screen that opened on matching payments was solving the small end of the
+     problem while the big end sat off-screen.
+
+     Then placing what came in — against a client, not an invoice. Clients pay
+     two invoices in one transfer, or half of one, or a round number that is
+     neither. They do not have invoice payments, they have a balance, and
+     deciding which invoice a credit belongs to is bookkeeping rather than
+     something to ask a person about.
+
+     Then who to chase. That one is never weekly: the invoice worth chasing is
+     the oldest one, not the most recent. There is no week selector any more —
+     the frame is "since the last upload", which is what a weekly statement
+     actually gives you. */
   const all = clientBalances();
-  const notYetInvoiced = all.filter(e => e.balance > 0).reduce((s2, e) => s2 + e.balance, 0);
+  const today = todayISO();
+  const sent = (DB.meta && DB.meta.invoicesSent) || [];
+  const owedOn = x => Number(x.total || 0) - Number(x.paidAmount || 0);
+
+  const notYetInvoiced = all.filter(e => e.balance > 0).reduce((t, e) => t + e.balance, 0);
+  const unpaid  = sent.filter(x => !x.paidAt)
+                      .sort((a2,b2) => String(a2.dueISO||a2.sentAt).localeCompare(String(b2.dueISO||b2.sentAt)));
+  const owedSum = unpaid.reduce((t, x) => t + owedOn(x), 0);
+  const daysLate = x => x.dueISO ? Math.round((new Date(today) - new Date(x.dueISO)) / 86400000) : 0;
+
   const split = sortCredits(PAY_TXS);
   const open  = split.keep.filter(t => !t.done);
   const noise = split.noise.filter(t => !t.done);
-  const today = todayISO();
+  const graded = open.map(t => ({ t, g: suggestOwner(t, all) }))
+                     .sort((x, y) => (y.g ? y.g.score : 0) - (x.g ? x.g.score : 0));
+  const auto = graded.filter(x => x.g && x.g.score >= 900);
 
-  const wk = moneyWeek();                       // {from, to, label, offset}
-  const sent = (DB.meta && DB.meta.invoicesSent) || [];
-  const inWeek = x => x.sentAt && x.sentAt.slice(0,10) >= wk.from && x.sentAt.slice(0,10) <= wk.to;
-  const owedOn = x => Number(x.total || 0) - Number(x.paidAmount || 0);
-
-  const sentThisWeek = sent.filter(inWeek);
-  const paidThisWeek = sent.filter(x => x.paidAt && x.paidAt.slice(0,10) >= wk.from && x.paidAt.slice(0,10) <= wk.to);
-  const takings = paidThisWeek.reduce((t, x) => t + Number(x.paidAmount || x.total || 0), 0);
-
-  /* Chasing is never weekly — an invoice from three weeks ago is the one that
-     needs a nudge. So these two lists ignore the week being viewed. */
-  const unpaid  = sent.filter(x => !x.paidAt);
-  const overdue = unpaid.filter(x => x.dueISO && x.dueISO < today)
-                        .sort((a2,b2) => String(a2.dueISO).localeCompare(String(b2.dueISO)));
-  const waiting = unpaid.filter(x => !x.dueISO || x.dueISO >= today);
-  const daysLate = x => Math.round((new Date(today) - new Date(x.dueISO)) / 86400000);
-
-  const invRow = (x, late) => `<div class="mn-row ${late ? 'owing' : ''}">
-    <div><div class="mn-name">${escapeHtml(x.ownerName || '—')}</div>
-      <div class="mn-sub">${escapeHtml(x.number)} · ${late ? `<b style="color:var(--owe)">${daysLate(x)} day${daysLate(x)===1?'':'s'} late</b>` : `due ${fmtDateShort(x.dueISO)}`}${
-        Number(x.paidAmount||0) > 0 ? ` · ${money(x.paidAmount)} of ${money(x.total)} in` : ''}</div></div>
-    <div style="display:flex;align-items:center;gap:8px">
-      <div class="mn-bal">${money(owedOn(x))}</div>
-      <button class="btn tiny ghost" onclick="markInvoicePaid('${escapeHtml(x.number)}')">Paid</button>
-    </div></div>`;
-
-  const txRow = (t, i) => {
-    const g = suggestOwner(t, all);
-    const certain = g && g.byRef;
-    const likely  = g && !g.byRef && g.exact;
-    const who = g ? escapeHtml(g.owner.name) : '';
-    return `<div class="mn-tx ${certain ? 'tx-certain' : likely ? 'tx-likely' : ''}">
+  const txRow = ({ t, g }) => {
+    const i = PAY_TXS.indexOf(t);
+    const sure = g && g.score >= 900;
+    return `<div class="mn-tx ${sure ? 'tx-certain' : g ? 'tx-likely' : ''}">
       <div style="min-width:0">
-        <div class="mn-name">${money(t.amount)}${certain ? ` <span class="tx-flag">${escapeHtml(g.byRef)}</span>` : ''}</div>
-        <div class="mn-sub">${escapeHtml(fmtDateShort(t.iso || today))} · ${escapeHtml(t.desc.slice(0, 44))}</div>
-        ${certain ? `<div class="mn-sub" style="color:var(--pine)">${who} · ${escapeHtml(g.invoice || '')}${g.exact ? ' · amount matches' : ' · amount differs'}</div>`
-          : likely ? `<div class="mn-sub">looks like ${who} — they owe exactly this</div>` : ''}
+        <div class="mn-name">${money(t.amount)}${g ? ` <span class="tx-flag ${sure ? '' : 'maybe'}">${escapeHtml(g.owner.name)}</span>` : ''}</div>
+        <div class="mn-sub">${escapeHtml(fmtDateShort(t.iso || today))} · ${escapeHtml(t.desc.slice(0, 42))}</div>
+        ${g ? `<div class="mn-sub" style="color:${sure ? 'var(--pine)' : 'var(--ink-3)'}">${escapeHtml(g.why)}${g.exact ? ' · matches what they owe' : ''}</div>` : ''}
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
-        ${g ? `<button class="btn tiny ${certain ? 'primary' : ''}" onclick="PAY_TXS[${i}].matchedRef=${certain ? `'${escapeHtml(g.byRef)}'` : 'null'};assignTx(${i}, '${g.owner.id}')">${certain ? 'Confirm' : '→ ' + escapeHtml(g.owner.name.split(' ')[0])}</button>` : ''}
-        <button class="btn tiny ghost" onclick="assignTxPick(${i})">${g ? 'Someone else' : 'Assign…'}</button>
+        ${g ? `<button class="btn tiny ${sure ? 'primary' : ''}" onclick="PAY_TXS[${i}].matchedRef=${g.byRef ? `'${escapeHtml(g.byRef)}'` : 'null'};assignTx(${i}, '${g.owner.id}')">${sure ? 'Confirm' : 'Yes'}</button>` : ''}
+        <button class="btn tiny ghost" onclick="assignTxPick(${i})">${g ? 'Someone else' : 'Who is this?'}</button>
+        <button class="btn tiny ghost" onclick="notAClient(${i})">Not a client</button>
       </div>
     </div>`;
   };
 
-  const graded = open.map(t => ({ t, g: suggestOwner(t, all) }));
-  const certain = graded.filter(x => x.g && x.g.byRef);
-  const likely  = graded.filter(x => x.g && !x.g.byRef && x.g.exact);
-  const unknown = graded.filter(x => !x.g || (!x.g.byRef && !x.g.exact));
-
   openSheet(`
     <h2 class="sheet-title">Money</h2>
 
-    <div class="mn-line">
-      <button class="btn tiny ghost" onclick="moneyWeekStep(-1)">←</button>
-      <span><b>${escapeHtml(wk.label)}</b></span>
-      <button class="btn tiny ghost" onclick="moneyWeekStep(1)" ${wk.offset >= 0 ? 'disabled' : ''}>→</button>
+    ${notYetInvoiced > 0 ? `<div class="mn-hero">
+      <div class="mn-hero-num">${money(notYetInvoiced)}</div>
+      <div class="mn-hero-cap">of work finished and never invoiced</div>
     </div>
+    <button class="btn primary block mt-2" onclick="openInvoicesSheet()">Bill what's finished →</button>`
+    : `<div class="mn-hero clear">
+      <div class="mn-hero-num">${owedSum > 0 ? money(owedSum) : 'All square'}</div>
+      <div class="mn-hero-cap">${owedSum > 0 ? `owed on ${unpaid.length} invoice${unpaid.length===1?'':'s'}` : 'everything billed and paid'}</div>
+    </div>`}
 
-    <div class="mn-hero ${takings > 0 ? 'clear' : ''}">
-      <div class="mn-hero-num">${money(takings)}</div>
-      <div class="mn-hero-cap">came in${wk.offset === 0 ? ' this week' : ''} · ${sentThisWeek.length} invoice${sentThisWeek.length===1?'':'s'} sent, ${money(sentThisWeek.reduce((t,x)=>t+Number(x.total||0),0))}</div>
-    </div>
-
-    <div class="section-title" style="margin-top:18px">Load this week's statement</div>
-    <label class="btn ${certain.length || open.length ? 'ghost' : 'primary'} block" style="cursor:pointer">
-      ${PAY_TXS.length ? 'Load a different CSV' : 'Choose bank CSV'}
+    <div class="section-title" style="margin-top:22px">Money in</div>
+    <label class="btn ${open.length ? 'ghost' : 'primary'} block" style="cursor:pointer">
+      ${PAY_TXS.length ? 'Load another statement' : 'Load bank statement'}
       <input type="file" accept=".csv,text/csv" style="display:none" onchange="onReconFile(event)">
     </label>
-    <p class="sub small" style="margin-top:8px">Read in your browser, nothing uploaded. Anything already dealt with is skipped, so overlapping weeks are fine.</p>
+    <p class="sub small" style="margin-top:8px">Read in your browser, nothing uploaded. Anything already sorted is skipped, so it doesn't matter if weeks overlap.</p>
 
-    ${certain.length ? `<div class="section-title" style="margin-top:18px">They told us which invoice (${certain.length})</div>
-      <p class="sub muted small" style="margin:-4px 0 8px">Paid with the reference we asked for.</p>
-      ${certain.map(x => txRow(x.t, PAY_TXS.indexOf(x.t))).join('')}
-      ${certain.length > 1 ? `<button class="btn primary block mt-2" onclick="confirmAllCertain()">Confirm all ${certain.length}</button>` : ''}` : ''}
+    ${PAY_TXS.length && !open.length ? `<div class="mn-line" style="margin-top:12px;background:#eef4e8">
+      <span><b>Nothing left to sort.</b> Every credit in that file is accounted for.</span></div>` : ''}
 
-    ${likely.length ? `<div class="section-title" style="margin-top:18px">Probably these (${likely.length})</div>
-      ${likely.map(x => txRow(x.t, PAY_TXS.indexOf(x.t))).join('')}` : ''}
-
-    ${unknown.length ? `<div class="section-title" style="margin-top:18px">Not sure (${unknown.length})</div>
-      ${unknown.map(x => txRow(x.t, PAY_TXS.indexOf(x.t))).join('')}` : ''}
+    ${open.length ? `<div class="section-title" style="margin-top:18px">To sort (${open.length})</div>
+      ${auto.length > 1 ? `<button class="btn primary block" style="margin-bottom:10px" onclick="confirmAllCertain()">Confirm ${auto.length} we're sure about</button>` : ''}
+      ${graded.map(txRow).join('')}` : ''}
 
     ${noise.length ? `<p class="sub small" style="margin:14px 0 0">
-        ${noise.length} line${noise.length===1?'':'s'} skipped — already dealt with, your own transfers, shops and bills, or outside the dates.
+        ${noise.length} line${noise.length===1?'':'s'} skipped — already sorted, set aside, your own transfers or bills.
         <button class="btn tiny ghost" onclick="toggleNoise()">${PAY_SHOW_NOISE ? 'Hide' : 'Show'}</button></p>
-      ${PAY_SHOW_NOISE ? noise.map(t => txRow(t, PAY_TXS.indexOf(t))).join('') : ''}` : ''}
+      ${PAY_SHOW_NOISE ? noise.map(t => txRow({ t, g: suggestOwner(t, all) })).join('') : ''}` : ''}
 
-    ${overdue.length ? `<div class="section-title" style="margin-top:22px">Chase these (${overdue.length})</div>
-      ${overdue.map(x => invRow(x, true)).join('')}` : ''}
-
-    ${waiting.length ? `<div class="section-title" style="margin-top:18px">Waiting (${waiting.length})</div>
-      ${waiting.map(x => invRow(x, false)).join('')}` : ''}
-
-    ${!overdue.length && !waiting.length ? `<p class="sub muted small" style="margin-top:18px">Every invoice sent has been paid.</p>` : ''}
-
-    ${notYetInvoiced > 0 ? `<div class="mn-line" style="margin-top:22px">
-      <span>${money(notYetInvoiced)} of visits still haven't been invoiced.</span>
-      <button class="btn tiny ghost" onclick="openInvoicesSheet()">Invoices</button>
-    </div>` : ''}
+    ${unpaid.length ? `<div class="section-title" style="margin-top:24px">Owed (${unpaid.length}) · ${money(owedSum)}</div>
+      ${unpaid.map(x => { const late = x.dueISO && x.dueISO < today; return `<div class="mn-row ${late ? 'owing' : ''}">
+        <div><div class="mn-name">${escapeHtml(x.ownerName || '—')}</div>
+          <div class="mn-sub">${escapeHtml(x.number)} · ${late ? `<b style="color:var(--owe)">${daysLate(x)} day${daysLate(x)===1?'':'s'} late</b>` : `due ${fmtDateShort(x.dueISO)}`}${
+            Number(x.paidAmount||0) > 0 ? ` · ${money(x.paidAmount)} of ${money(x.total)} in` : ''}</div></div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="mn-bal">${money(owedOn(x))}</div>
+          <button class="btn tiny ghost" onclick="markInvoicePaid('${escapeHtml(x.number)}')">Paid</button>
+        </div></div>`; }).join('')}`
+      : `<p class="sub muted small" style="margin-top:22px">Nothing outstanding on any invoice sent.</p>`}
   `);
 }
 
@@ -2219,6 +2228,7 @@ async function assignTx(i, ownerId, opts = {}) {
   DB.payments.push({ id: uid(), ownerId, amount: t.amount, date: when,
                      method: 'bank', note: t.desc.slice(0, 60), createdAt: new Date().toISOString() });
   const r = settleInvoiceFor(ownerId, t.amount, t.matchedRef, when);
+  learnPayer(t.desc, ownerId);   // so this payer is recognised without asking next time
   t.done = true;
   rememberTx(t, 'assigned');           // so next week's statement does not ask again
   if (!opts.quiet) {
@@ -2233,6 +2243,20 @@ async function assignTx(i, ownerId, opts = {}) {
 
 /* The whole point of asking clients to quote a reference is that those ones
    need no thought. Clearing them one at a time was the thought. */
+/* Not every credit is a client. Marking one as not-ours has to stick, or the
+   same salary payment comes back every week forever. */
+async function notAClient(i) {
+  const t = PAY_TXS[i]; if (!t) return;
+  t.done = true;
+  rememberTx(t, 'not a client');
+  DB.meta = DB.meta || {};
+  DB.meta.notClients = DB.meta.notClients || {};
+  const k = payerKey(t.desc);
+  if (k) DB.meta.notClients[k] = true;
+  await save(DB); renderMoney();
+  toast('Set aside — we won\'t ask again', 'ok');
+}
+
 async function confirmAllCertain() {
   const all = clientBalances();
   const todo = PAY_TXS.map((t, i) => ({ t, i, g: suggestOwner(t, all) }))
@@ -4706,7 +4730,7 @@ Object.assign(window, {
   openCapacitySheet, saveCapacityForm,
   openImportSheet, importDataFile, exportBackup,
   openMoneySheet, onReconFile, renderMoney, togglePaidUp, toggleNoise,
-  confirmAllCertain, moneyWeekStep,
+  confirmAllCertain, notAClient,
   openInvoicesSheet, renderInvoices, openOneInvoice, printInvoice,
   markInvoicePaid, reopenInvoice,
   recordDeposit, markDepositPaid, clearDeposit,
