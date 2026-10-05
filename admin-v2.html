@@ -2755,7 +2755,7 @@ function openBookingSheet(bookingId, prefillDate) {
   }).join('');
   openSheet(`
     <h2 class="sheet-title">${isNew ? 'New booking' : 'Edit booking'}</h2>
-    <form id="bkForm" oninput="updateBookingPrice()" onsubmit="return saveBookingForm(event, '${b.id}', ${isNew})">
+    <form id="bkForm" data-pack-id="${b.packId || ''}" oninput="updateBookingPrice()" onsubmit="return saveBookingForm(event, '${b.id}', ${isNew})">
       <div class="field-group"><label>Dog</label><select name="dogId" class="field" required>${dogOptions}</select></div>
       <div class="field-row">
         <div class="field-group"><label>Date</label><input class="field" name="date" type="date" value="${b.date}" required></div>
@@ -2839,6 +2839,7 @@ function openBookingSheet(bookingId, prefillDate) {
         <p class="sub small" id="scoutsCap" style="margin:6px 0 0"></p>
       </div>
 
+      ${b.cancelled ? `<div class="today-warn">Cancelled${b.cancelledAt ? ' on ' + fmtDateShort(b.cancelledAt.slice(0,10)) : ''} · ${b.cancelCharge ? '$' + b.cancelCharge + ' charged' : 'nothing charged'}. Saving keeps it cancelled — use Un-cancel on the day to bring it back.</div>` : ''}
       <div id="extrasSlot"></div>
 
       <div class="field-row">
@@ -3007,7 +3008,12 @@ function updateBookingPrice() {
     if (activePacks.length) {
       const p = activePacks[0];
       const rem = p.size - (p.daysUsed || 0);
-      const isChecked = f.usePack && f.usePack.checked;
+      /* On the first paint of an existing booking the checkbox does not exist
+         yet, so reading it gave false — and Save then took that as "she has
+         just unticked it", handed the day back to the pack and rebilled it at
+         full price. Seed from the booking itself until the user has touched
+         the control. */
+      const isChecked = f.usePack ? f.usePack.checked : !!f.dataset.packId;
       packSlot.innerHTML = `<label class="pack-toggle ${isChecked?'on':''}">
         <input type="checkbox" name="usePack" ${isChecked?'checked':''}>
         <div>
@@ -3153,6 +3159,15 @@ async function saveBookingForm(e, id, isNew) {
     billAnyway: f.billAnyway ? f.billAnyway.checked : (existing?.billAnyway || false),
     extraCharge: (() => { const v = parseFloat(f.extraCharge?.value); return isNaN(v) || v === 0 ? null : v; })(),
     extraNote: (f.extraNote?.value || '').trim(),
+    /* A cancelled booking stays cancelled through an edit. This object replaces
+       the stored record wholesale, so anything not named here is dropped — and
+       dropping these three turned "cancelled, nothing owed" back into a live
+       day at full price the moment anyone opened it to add a note. calcTotal
+       returns cancelCharge for a cancelled booking, so carrying them is enough
+       to keep the price right too. */
+    cancelled:    existing?.cancelled || false,
+    cancelledAt:  existing?.cancelledAt || null,
+    cancelCharge: existing?.cancelCharge ?? null,
     total: 0, paymentStatus: f.paymentStatus.value, paidAt: existing?.paidAt || null,
     notes: f.notes.value, createdAt: existing?.createdAt || new Date().toISOString(),
     seriesId: existing?.seriesId, seriesPattern: existing?.seriesPattern,
@@ -3166,7 +3181,10 @@ async function saveBookingForm(e, id, isNew) {
   const usingPack = f.usePack && f.usePack.checked && bk.session !== 'overnight';
   if (usingPack) {
     const active = activePacksForDog(dog.id);
-    const pack = active[0];
+    /* Stay on the pack this booking was already redeemed against. Falling
+       through to activePacksForDog()[0] moved a day onto a different pack the
+       moment a second one was sold. */
+    const pack = (existing?.packId && DB.packs.find(p => p.id === existing.packId)) || active[0];
     if (pack) {
       // Was this booking previously redeemed against a different pack? Return that day.
       if (existing?.packId && existing.packId !== pack.id) {
