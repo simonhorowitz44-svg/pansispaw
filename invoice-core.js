@@ -294,6 +294,32 @@ export function packCoversDate(pack, isoDate) {
   return !pack.expiryDate || isoDate <= pack.expiryDate;
 }
 
+/* ---------- deposits ---------- */
+
+/* A stay is usually held with half the money up front, and the deposit belongs
+   to the stay rather than to any one night of it — so it is stored against the
+   list of bookings it covers. Paying it does not bill anything: the nights are
+   invoiced as normal when the stay finishes, and the deposit comes off the
+   bottom as a credit. That way the invoice shows the full price of the stay,
+   which is what the client agreed to, and then shows their money coming back
+   off it, rather than quietly billing a half they cannot check.
+
+   DEPOSIT_RATE is the default Andressa quotes. The amount is stored on the
+   deposit itself, so changing the rate later cannot rewrite what somebody was
+   actually asked for. */
+export const DEPOSIT_RATE = 0.5;
+
+export function depositFor(db, bookingId) {
+  return (db.deposits || []).find(d => (d.bookingIds || []).includes(bookingId)) || null;
+}
+
+/* What half of a stay comes to, rounded to whole dollars — nobody asks for
+   $162.50 over the phone. */
+export function depositDue(bookings, dog, rate = DEPOSIT_RATE) {
+  const full = (bookings || []).reduce((t, b) => t + calcTotal(b, dog), 0);
+  return Math.round(full * rate);
+}
+
 /* ---------- identity ---------- */
 
 export function surnameTag(owner) {
@@ -385,6 +411,7 @@ export function buildInvoice(db, ownerId, opts = {}) {
      three dogs is one late pickup, so the cap is tallied per date across the
      whole invoice rather than per booking. */
   const lateByDate = {};
+  const dates0 = ls => (ls.map(l => l.date).filter(Boolean).sort().pop() || asAt);
   const push = (o, amt, b) => { lines.push({ ...o, amt: amt / 100 }); totalC += amt; if (b && !bookingIds.includes(b.id)) bookingIds.push(b.id); };
 
   (db.bookings || [])
@@ -588,6 +615,25 @@ export function buildInvoice(db, ownerId, opts = {}) {
       addLate();
     });
 
+  /* Deposits already paid come off the bottom, once each, after everything has
+     been charged. Capped at what the invoice actually comes to: a credit bigger
+     than the bill would hand back money on a document that cannot explain it,
+     so the remainder is said in words and settled by a human. */
+  const creditedDeposits = new Set();
+  for (const id of [...bookingIds]) {
+    const dep = depositFor(db, id);
+    if (!dep || !dep.paidAt || creditedDeposits.has(dep.id)) continue;
+    creditedDeposits.add(dep.id);
+    const paidC = cents(dep.paidAmount != null ? dep.paidAmount : dep.amount);
+    if (paidC <= 0) continue;
+    const useC = Math.min(paidC, Math.max(0, totalC));
+    push({ date: dates0(lines), dog: '', what: 'Deposit already paid',
+           note: `received ${fmtDay(dep.paidAt.slice(0,10))}`, credit: true }, -useC, null);
+    if (paidC > useC) {
+      warnings.push(`${owner.name}'s deposit was $${(paidC/100).toFixed(2)} but this invoice only came to $${(useC/100).toFixed(2)} — $${((paidC-useC)/100).toFixed(2)} is still theirs.`);
+    }
+  }
+
   if (!lines.length) return null;
   const total = totalC / 100;
   const dates = lines.map(l => l.date).sort();
@@ -642,7 +688,9 @@ export function blockers(db, inv, biz, asAt) {
 /* ---------- rendering ---------- */
 
 export function renderInvoiceHTML(inv, biz, o = {}) {
-  const m = n => '$' + Number(n).toFixed(2);
+  /* A credit reads as −$115.00, not $-115.00 — the minus belongs to the money,
+     not to the dollar sign. */
+  const m = n => (Number(n) < 0 ? '\u2212$' + Math.abs(Number(n)).toFixed(2) : '$' + Number(n).toFixed(2));
   const bank = biz.bsb && biz.acct;
   const bankOff = bank && biz.bankDiscount > 0 ? biz.bankDiscount : 0;
   const isInv = !inv.nothingDue;
@@ -724,7 +772,8 @@ export function invoiceText(inv, biz) {
     : `Here's your invoice for ${period}.`);
   L.push('');
   inv.lines.forEach(l => L.push(
-    `${fmtDay(l.date)}  ${l.dog} · ${l.what}${l.note ? ' (' + l.note + ')' : ''}  ${l.amt ? '$' + l.amt.toFixed(2) : '—'}`));
+    `${fmtDay(l.date)}  ${l.dog ? l.dog + ' · ' : ''}${l.what}${l.note ? ' (' + l.note + ')' : ''}  ${
+       l.amt ? (l.amt < 0 ? '-$' + Math.abs(l.amt).toFixed(2) : '$' + l.amt.toFixed(2)) : '—'}`));
   L.push('');
   L.push(inv.nothingDue ? 'Nothing to pay.' : `Total due: $${inv.total.toFixed(2)} by ${fmtDayY(inv.dueISO)}`);
   inv.packNotes.forEach(p => L.push(`${p.dog}'s pack — ${p.left} of ${p.size} still to use${p.expires ? ', up to ' + fmtDayWk(p.expires) : ''}.`));
@@ -754,7 +803,9 @@ export function invoiceText(inv, biz) {
    colours rather than reusing the panel's stylesheet. The numbers come from the
    same buildInvoice, which is the part that must not diverge. */
 export function renderInvoiceEmail(inv, biz, o = {}) {
-  const m = n => '$' + Number(n).toFixed(2);
+  /* A credit reads as −$115.00, not $-115.00 — the minus belongs to the money,
+     not to the dollar sign. */
+  const m = n => (Number(n) < 0 ? '\u2212$' + Math.abs(Number(n)).toFixed(2) : '$' + Number(n).toFixed(2));
   const ink = '#3f2814', ink2 = '#6b5641', ink3 = '#93826d';
   const edge = '#e6dcc8', kraft = '#f6efdd', paper = '#faf6ed';
   const bank = biz.bsb && biz.acct;

@@ -1252,5 +1252,62 @@ console.log('\nEvery charged line says what it is');
   C.setPricing({ addons: { med: { amount: was } } });
 }
 
+
+console.log('\nA stay held with a deposit');
+{
+  const mk = () => ({
+    owners:[{ id:'o1', name:'Mike O\u2019Shea', email:'m@x.com' }],
+    dogs:[{ id:'d1', ownerId:'o1', name:'Greg', size:'medium' }],
+    packs:[], deposits:[], meta:{ invoicing:{ goLive:'2026-01-01' } },
+    bookings:[
+      { id:'n1', dogId:'d1', date:'2026-10-01', session:'overnight' },
+      { id:'n2', dogId:'d1', date:'2026-10-02', session:'overnight' },
+      { id:'n3', dogId:'d1', date:'2026-10-03', session:'overnight' }
+    ]
+  });
+
+  const db = mk();
+  eq('half of three medium nights, rounded',
+     C.depositDue(db.bookings, db.dogs[0]), Math.round(115 * 3 * 0.5));
+
+  /* Recorded but not yet received: the invoice is untouched. */
+  db.deposits = [{ id:'dep1', dogId:'d1', bookingIds:['n1','n2','n3'], amount:173, paidAt:null }];
+  let inv = C.buildInvoice(db, 'o1', { asAt:'2026-10-04' });
+  eq('an unpaid deposit changes nothing', inv.total, 345);
+  t('and puts no line on the invoice', !inv.lines.some(l => l.credit));
+
+  /* Paid: the full stay is still billed, then the money comes back off. */
+  db.deposits[0].paidAt = '2026-09-20T00:00:00.000Z';
+  db.deposits[0].paidAmount = 173;
+  inv = C.buildInvoice(db, 'o1', { asAt:'2026-10-04' });
+  const credit = inv.lines.find(l => l.credit);
+  t('a paid deposit appears as its own line', !!credit);
+  eq('as a credit, not a discount', credit.amt, -173);
+  t('saying when it was received', /received/.test(credit.note || ''));
+  eq('the nights are still billed in full',
+     inv.lines.filter(l => !l.credit).reduce((t,l) => t + l.amt, 0), 345);
+  eq('and the balance is what is left', inv.total, 172);
+
+  /* Once only, however many nights it covered. */
+  eq('credited once, not once a night', inv.lines.filter(l => l.credit).length, 1);
+
+  /* And it has to read like a credit, not like a typo. */
+  const biz = { person:'Andressa', site:'pansispaws.com.au', name:"Pansi's Paws", bsb:'1', acct:'2' };
+  const txt = C.invoiceText(inv, biz);
+  t('the text version shows a minus, not $-', /-\$173\.00/.test(txt) && !/\$-/.test(txt));
+  t('and does not leave a stray separator where the dog would be', !/ {2}· Deposit/.test(txt));
+  t('the email shows a true minus sign', /\u2212\$173\.00/.test(C.renderInvoiceEmail(inv, biz)));
+
+  /* A deposit larger than the bill cannot hand money back on an invoice. */
+  const big = mk();
+  big.bookings = [big.bookings[0]];
+  big.deposits = [{ id:'dep2', dogId:'d1', bookingIds:['n1'], amount:300,
+                    paidAt:'2026-09-20T00:00:00.000Z', paidAmount:300 }];
+  const inv2 = C.buildInvoice(big, 'o1', { asAt:'2026-10-04' });
+  eq('the invoice stops at nothing owed', inv2.total, 0);
+  t('and says what is still theirs',
+    inv2.warnings.some(w => /is still theirs/.test(w)));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

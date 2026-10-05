@@ -712,7 +712,8 @@ import {
   weekEndingFriday, invoiceWeek, weekOf,
   calcTotal, latePickupFee, boardingHoursFee,
   buildInvoice, invoicesDue, sendableInvoices, blockers, orphanBookings,
-  weekRunComplete, renderInvoiceHTML, invoiceText, payRef, invoiceNumber
+  weekRunComplete, renderInvoiceHTML, invoiceText, payRef, invoiceNumber,
+  depositFor, depositDue, DEPOSIT_RATE
 } from './invoice-core.js';
 
 const firebaseConfig = {
@@ -770,7 +771,7 @@ const hapticTap = () => { try { navigator.vibrate?.(15); } catch {} };
 const hapticSuccess = () => { try { navigator.vibrate?.([20, 40, 30]); } catch {} };
 
 function emptyDb() {
-  return { owners: [], dogs: [], bookings: [], packs: [], payments: [], meta: { version:2, settledBefore:'', createdAt: new Date().toISOString(), lastBackup: null, capacity:{maxDaycare:5, maxBoarding:3} } };
+  return { owners: [], dogs: [], bookings: [], packs: [], deposits: [], payments: [], meta: { version:2, settledBefore:'', createdAt: new Date().toISOString(), lastBackup: null, capacity:{maxDaycare:5, maxBoarding:3} } };
 }
 // Two records can never legitimately share an id — that only happens when a
 // double-tap pushed the same booking twice. Strip them on load.
@@ -780,7 +781,7 @@ function emptyDb() {
 function dedupeById(db) {
   if (!db) return 0;
   let dropped = 0;
-  ['bookings', 'owners', 'dogs', 'packs'].forEach(key => {
+  ['bookings', 'owners', 'dogs', 'packs', 'deposits'].forEach(key => {
     if (!Array.isArray(db[key])) return;
     const seen = new Set();
     const before = db[key].length;
@@ -797,7 +798,7 @@ function dedupeById(db) {
 
 function normalizeDb(db) {
   if (!db || typeof db !== 'object') return emptyDb();
-  db.owners ||= []; db.dogs ||= []; db.bookings ||= []; db.packs ||= []; db.meta ||= {};
+  db.owners ||= []; db.dogs ||= []; db.bookings ||= []; db.packs ||= []; db.deposits ||= []; db.meta ||= {};
   db.payments ||= [];                      // money received, as records
   db.meta.settledBefore ||= '';            // everything before this date is done with
   db.meta.biz ||= { acctName:'', bsb:'', acct:'', abn:'', stripeLink:'', email:'' };
@@ -904,7 +905,7 @@ async function loadFromFirestore() {
     const snap = await getDoc(STATE_DOC);
     if (snap.exists()) {
       const r = snap.data();
-      DB = normalizeDb({ owners: r.owners||[], dogs: r.dogs||[], bookings: r.bookings||[], packs: r.packs||[], meta: r.meta });
+      DB = normalizeDb({ owners: r.owners||[], dogs: r.dogs||[], bookings: r.bookings||[], packs: r.packs||[], deposits: r.deposits||[], meta: r.meta });
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); } catch (e) { console.warn('LS write failed', e); }
       return true;
     }
@@ -946,6 +947,7 @@ function reconcileWithPending(db) {
     dogs:     merge(pendingRemoteDb.dogs,     db.dogs),
     bookings: merge(pendingRemoteDb.bookings, db.bookings),
     packs:    merge(pendingRemoteDb.packs,    db.packs),
+    deposits: merge(pendingRemoteDb.deposits, db.deposits),
     meta: db.meta || pendingRemoteDb.meta
   });
   // The user's in-memory DB now reflects the reconciled state
@@ -1018,7 +1020,7 @@ function startRealtimeSync() {
     const r = snap.data();
     // Reliable dedup: skip ONLY writes from this exact browser tab
     if (r._updatedByClientId === CLIENT_ID) return;
-    const nextDb = normalizeDb({ owners: r.owners||[], dogs: r.dogs||[], bookings: r.bookings||[], packs: r.packs||[], meta: r.meta });
+    const nextDb = normalizeDb({ owners: r.owners||[], dogs: r.dogs||[], bookings: r.bookings||[], packs: r.packs||[], deposits: r.deposits||[], meta: r.meta });
     // If a modal is open, buffer the remote update so we don't wipe the in-progress form
     if (modalIsOpen()) {
       pendingRemoteDb = nextDb;
@@ -2342,6 +2344,50 @@ async function queueAllReady() {
 }
 
 /* Paid in cash, or sent by hand. Closes the lines off without emailing. */
+/* ---------- deposits ---------- */
+
+/* Half up front holds the stay. Recording it does not bill anything and does
+   not touch the bookings: the nights are invoiced as normal when the stay
+   finishes, and this comes off the bottom. The nights it covers are frozen
+   onto the deposit at the moment it is asked for, so extending a stay later
+   cannot quietly change what somebody already paid against. */
+async function recordDeposit(bookingId, amount) {
+  const bk = DB.bookings.find(b => b.id === bookingId); if (!bk) return;
+  const stay = stayForBookingId(bookingId);
+  const nights = stay ? stay.bookings : [bk];
+  const dog = dogById(bk.dogId);
+  const typed = prompt(`Deposit for ${dog ? dog.name : 'this stay'} — ${nights.length} night${nights.length===1?'':'s'}.\n\nHalf comes to $${amount}. Change it here if you agreed something else.`, amount);
+  if (typed === null) return;
+  const amt = Math.round(parseFloat(typed));
+  if (!amt || isNaN(amt) || amt < 0) return toast('Not a number', 'warn');
+  DB.deposits = DB.deposits || [];
+  DB.deposits.push({ id: uid(), dogId: bk.dogId, bookingIds: nights.map(n => n.id),
+                     amount: amt, rate: DEPOSIT_RATE,
+                     requestedAt: new Date().toISOString(), paidAt: null, paidAmount: null });
+  await save(DB); closeSheet(); render();
+  toast(`Deposit of $${amt} recorded`, 'ok');
+}
+
+async function markDepositPaid(depositId) {
+  const dep = (DB.deposits || []).find(d => d.id === depositId); if (!dep) return;
+  const typed = prompt(`How much came in?`, dep.amount);
+  if (typed === null) return;
+  const amt = Math.round(parseFloat(typed));
+  if (!amt || isNaN(amt) || amt < 0) return toast('Not a number', 'warn');
+  dep.paidAt = new Date().toISOString();
+  dep.paidAmount = amt;
+  await save(DB); closeSheet(); render();
+  toast(`$${amt} deposit received`, 'ok');
+}
+
+async function clearDeposit(depositId) {
+  const dep = (DB.deposits || []).find(d => d.id === depositId); if (!dep) return;
+  if (dep.paidAt && !confirm(`Remove a deposit of $${dep.paidAmount ?? dep.amount} that has already been received?\n\nIt will stop coming off the invoice.`)) return;
+  DB.deposits = DB.deposits.filter(d => d.id !== depositId);
+  await save(DB); closeSheet(); render();
+  toast('Deposit removed', 'ok');
+}
+
 /* Record that an invoice was paid. The field has existed since the first
    invoice went out and nothing has ever written to it, so "who still owes me"
    has never been answerable from the panel. */
@@ -3030,6 +3076,41 @@ function openBookingSheet(bookingId, prefillDate) {
       </div>
 
       ${b.cancelled ? `<div class="today-warn">Cancelled${b.cancelledAt ? ' on ' + fmtDateShort(b.cancelledAt.slice(0,10)) : ''} · ${b.cancelCharge ? '$' + b.cancelCharge + ' charged' : 'nothing charged'}. Saving keeps it cancelled — use Un-cancel on the day to bring it back.</div>` : ''}
+      ${(() => {
+        /* Stays are usually held with half up front. It belongs to the stay,
+           not to one night of it, so the control works on every night at once
+           and the invoice credits it at the end — the client sees the full
+           price of the stay and then their own money coming off it. */
+        if (isNew || b.session !== 'overnight') return '';
+        const stay = stayForBookingId(b.id);
+        const nights = stay ? stay.bookings : [b];
+        const dog = dogById(b.dogId);
+        const dep = depositFor(DB, b.id);
+        const due = depositDue(nights, dog);
+        if (dep && dep.paidAt) {
+          return `<div class="extras-box">
+            <div class="extras-head">Deposit</div>
+            <div class="extras-row"><span>Received ${fmtDateShort(dep.paidAt.slice(0,10))}, covering ${dep.bookingIds.length} night${dep.bookingIds.length===1?'':'s'}</span><b>$${dep.paidAmount ?? dep.amount}</b></div>
+            <div class="extras-note">Credited on the invoice when the stay is billed.</div>
+            <button type="button" class="btn tiny ghost mt-2" onclick="clearDeposit('${dep.id}')">Remove</button>
+          </div>`;
+        }
+        if (dep) {
+          return `<div class="extras-box">
+            <div class="extras-head">Deposit</div>
+            <div class="extras-row"><span>Asked for ${fmtDateShort(dep.requestedAt.slice(0,10))} · not received yet</span><b>$${dep.amount}</b></div>
+            <button type="button" class="btn tiny primary mt-2" onclick="markDepositPaid('${dep.id}')">Mark received</button>
+            <button type="button" class="btn tiny ghost" onclick="clearDeposit('${dep.id}')">Remove</button>
+          </div>`;
+        }
+        return `<div class="extras-box">
+          <div class="extras-head">Deposit</div>
+          <div class="extras-row"><span>${nights.length} night${nights.length===1?'':'s'} · half of $${nights.reduce((t,x)=>t+calcTotal(x,dog),0)}</span><b>$${due}</b></div>
+          <div class="extras-note">Holds the stay. Billed in full at the end with this taken off.</div>
+          <button type="button" class="btn tiny primary mt-2" onclick="recordDeposit('${b.id}', ${due})">Ask for $${due}</button>
+        </div>`;
+      })()}
+
       <div id="extrasSlot"></div>
 
       <div class="field-row">
@@ -4454,6 +4535,7 @@ Object.assign(window, {
   openMoneySheet, onReconFile, renderMoney, togglePaidUp, toggleNoise,
   openInvoicesSheet, renderInvoices, openOneInvoice, printInvoice,
   markInvoicePaid, reopenInvoice,
+  recordDeposit, markDepositPaid, clearDeposit,
   copyInvoiceText, emailInvoice, openBizSettings, saveBizSettings,
   openInvoiceSettings, saveInvoiceSettings, queueInvoice, queueAllReady, markInvoiceSent,
   openClientMoney, addPayment, removePayment,
