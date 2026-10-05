@@ -3032,7 +3032,10 @@ function openBookingSheet(bookingId, prefillDate) {
       <span class="muted small">Its own line on the invoice, in your words. Use this rather than
         raising the price — a night that costs more than the rate, with no reason given, is what
         gets queried.</span>
-      <div class="field-group"><label>Notes</label><textarea class="field" name="notes" rows="2">${escapeHtml(b.notes||'')}</textarea></div>
+      <div class="field-group"><label>Notes</label><textarea class="field" name="notes" rows="2">${escapeHtml(b.notes||'')}</textarea>
+        <label class="chip" style="margin-top:8px"><input type="checkbox" name="noteOnInvoice" ${b.noteOnInvoice?'checked':''} style="margin-right:6px">Show this note on the invoice</label>
+        <span class="muted small">Off by default — notes are for you, and some of what goes in here
+          isn't for a client to read. Tick it when the note explains a charge.</span></div>
 
       ${SHOW_PAYMENTS ? `<div class="field-group"><label>Payment</label>
           <select name="paymentStatus" class="field">
@@ -3311,6 +3314,7 @@ async function saveBookingForm(e, id, isNew) {
     billAnyway: f.billAnyway ? f.billAnyway.checked : (existing?.billAnyway || false),
     extraCharge: (() => { const v = parseFloat(f.extraCharge?.value); return isNaN(v) || v === 0 ? null : v; })(),
     extraNote: (f.extraNote?.value || '').trim(),
+    noteOnInvoice: f.noteOnInvoice ? f.noteOnInvoice.checked : (existing?.noteOnInvoice || false),
     /* A cancelled booking stays cancelled through an edit. This object replaces
        the stored record wholesale, so anything not named here is dropped — and
        dropping these three turned "cancelled, nothing owed" back into a live

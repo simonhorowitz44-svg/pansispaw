@@ -491,9 +491,28 @@ export function buildInvoice(db, ownerId, opts = {}) {
          back empty, buildInvoice returns null, and the warning explaining it
          is thrown away with it — which is how a day could be worth nothing and
          say nothing. */
+      /* What the line says for itself.
+
+         A hand-typed price arrives as one bare number with nothing to say why
+         it is not the published rate — and sixty-two of the forward bookings
+         are hand-typed. That is the line a client queries, and until now the
+         only answer lived in Andressa's memory. If she recorded why, say it; if
+         she did not, at least say it was agreed rather than calculated.
+
+         The booking's own notes are not published automatically: they are
+         working notes and carry things like a dog's upset stomach or a
+         difficult handover. They go on the invoice only when she ticks to say
+         so, and then they come first, because she wrote them for this. */
+      const bits = [];
+      if (b.noteOnInvoice && b.notes) bits.push(String(b.notes).trim());
+      if (b.customPrice != null && !b.cancelled)
+        bits.push(b.customPriceNote ? String(b.customPriceNote).trim() : 'agreed rate');
+      if (stayNote) bits.push(stayNote);
+      const dayNote = bits.filter(Boolean).join(' · ');
+
       if (dayC || unpriced || b.session === 'meet' || b.session === 'trial') {
         push({ date:b.date, dog:dogName, what:`${label}${trip}`,
-               note: dayC ? stayNote : unpriced ? 'no rate on file — needs a price' : 'on us',
+               note: dayC ? dayNote : unpriced ? 'no rate on file — needs a price' : 'on us',
                free: !dayC }, dayC, b);
       }
       if (splittable) extras.forEach(x =>

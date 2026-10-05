@@ -916,8 +916,10 @@ console.log('\nA stay shows when it started and ended');
 
   const none = base();
   none.bookings = [{ id:'s3', dogId:'d1', date:'2026-09-26', session:'overnight', total:115, customPrice:115 }];
-  eq('and no times means no note',
-     C.buildInvoice(none, 'own_kirsten_1', { asAt:'2026-09-27', from:'2026-09-21' }).lines[0].note, '');
+  /* No times, so nothing to say about the stay — but the price was hand-typed,
+     and a hand-typed price now always says at least that it was agreed. */
+  eq('no times leaves only the price explanation',
+     C.buildInvoice(none, 'own_kirsten_1', { asAt:'2026-09-27', from:'2026-09-21' }).lines[0].note, 'agreed rate');
 
   /* Daycare keeps its own note; this must not leak across. */
   const day = base();
@@ -1182,6 +1184,44 @@ console.log('\nThe check-in charge explains itself to the client');
   t('the plain text version says it too',
     /Arrival before 3pm or collection after 10am/.test(text));
   t('and it never calls it boarding', !/boarding/i.test(html));
+}
+
+
+console.log('\nA line that explains its own price');
+{
+  const db = {
+    owners:[{ id:'o1', name:'Shy Virk', email:'s@x.com' }],
+    dogs:[{ id:'d1', ownerId:'o1', name:'Lola', size:'small' }],
+    packs:[], meta:{ invoicing:{ goLive:'2026-01-01' } }, bookings:[]
+  };
+  const day = extra => ({ id:'b1', dogId:'d1', date:'2026-09-29', session:'full', ...extra });
+  const line = () => C.buildInvoice(db, 'o1', { asAt:'2026-09-30' }).lines[0];
+
+  db.bookings = [day({ customPrice:59, customPriceNote:'old rate, with us since July' })];
+  eq('a hand-typed price says what was agreed', line().note, 'old rate, with us since July');
+
+  db.bookings = [day({ customPrice:59 })];
+  eq('and says it was agreed even when nobody wrote why', line().note, 'agreed rate');
+
+  db.bookings = [day({})];
+  eq('an ordinary day stays quiet', line().note, '');
+
+  /* Working notes stay internal unless she says otherwise. */
+  db.bookings = [day({ notes:'upset tummy, called Shy' })];
+  eq('a note is not published by default', line().note, '');
+
+  db.bookings = [day({ notes:'stayed late for the vet run', noteOnInvoice:true })];
+  eq('and is published when she ticks it', line().note, 'stayed late for the vet run');
+
+  db.bookings = [day({ notes:'agreed on the phone', noteOnInvoice:true, customPrice:59, customPriceNote:'old rate' })];
+  eq('her words come first, then the price reason',
+     line().note, 'agreed on the phone · old rate');
+
+  /* A stay still says when it started and ended, after the rest. */
+  db.bookings = [day({ session:'overnight', arrivalTime:'15:00', departureTime:'10:00',
+                       customPrice:130, customPriceNote:'long stay rate' })];
+  t('a stay keeps its times last',
+    /^long stay rate · dropped 3pm, collected 10am next day$/.test(line().note));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
