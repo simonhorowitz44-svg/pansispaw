@@ -127,6 +127,8 @@
 
     <fieldset>
       <legend>Food</legend>
+      <p class="hint" style="margin-top:0">Please send their own food — a sudden change of
+        diet is the quickest way to upset a stomach, and they settle better on what they know.</p>
       <label for="foodType">What they eat — brand and type</label>
       <input id="foodType" name="foodType" type="text" required>
       <div class="row">
@@ -135,12 +137,11 @@
       </div>
       <div class="row">
         <div><label for="mealTimes">At what times</label><input id="mealTimes" name="mealTimes" type="text"></div>
-        <div><label for="foodSent">Sending their food?</label>
+        <div><label for="foodSent">Food you're sending</label>
           <select id="foodSent" name="foodSent" required>
             <option value="">Choose…</option>
-            <option>Yes, enough for the whole stay</option>
-            <option>Yes, but not quite enough</option>
-            <option>No — please feed what you have</option>
+            <option>Enough for the whole stay</option>
+            <option>Not quite enough — I'll top it up</option>
           </select></div>
       </div>
       <label for="foodNotes">Fussy eating, anything they must not have, treats you're happy with</label>
@@ -186,6 +187,26 @@
       <textarea id="toiletNotes" name="toiletNotes"></textarea>
       <label for="anxietyNotes">Nerves, and what helps</label>
       <textarea id="anxietyNotes" name="anxietyNotes" placeholder="Storms, fireworks, being left, new places…"></textarea>
+    </fieldset>
+
+    <fieldset>
+      <legend>Being left alone</legend>
+      <p class="hint" style="margin-top:0">There are short stretches in any day — a school run,
+        a shop, the vet. Knowing what your dog is used to means I can build up to it rather
+        than find out the hard way.</p>
+      <label for="aloneUsual">How long is your dog used to being left alone?</label>
+      <select id="aloneUsual" name="aloneUsual" required>
+        <option value="">Choose…</option>
+        <option>Never left alone</option>
+        <option>Up to half an hour</option>
+        <option>About an hour</option>
+        <option>Two to three hours</option>
+        <option>Four hours or more — they're fine with it</option>
+      </select>
+      <label for="aloneWhere">Where are they left — loose, crated, one room?</label>
+      <input id="aloneWhere" name="aloneWhere" type="text">
+      <label for="aloneWhat">What do they do when they're left?</label>
+      <textarea id="aloneWhat" name="aloneWhat" placeholder="Settles straight away, barks for a few minutes, chews, paces, scratches at the door…"></textarea>
     </fieldset>
 
     <fieldset>
