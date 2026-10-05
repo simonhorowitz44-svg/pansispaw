@@ -921,7 +921,7 @@ async function loadFromFirestore() {
 function pruneOldPhotos(db) {
   // Drop photos from reports older than 30 days to keep the Firestore doc under 1MB.
   // The report text (mood, moments, story) stays forever — only images are heavy.
-  const cutoffMs = Date.now() - 30 * 86400000;
+  const cutoffMs = Date.now() - 7 * 86400000;   // a report card is read the day it arrives
   let dropped = 0;
   db.bookings.forEach(b => {
     if (!b.report?.photos?.length) return;
@@ -987,7 +987,7 @@ async function save(db) {
   catch (e) { console.warn('LS quota', e); toast('Local cache full — cloud only', 'warn'); }
   try {
     const approxKB = Math.round(JSON.stringify(db).length / 1024);
-    if (approxKB > 850) toast(`⚠ Data size ${approxKB} KB — approaching cloud limit`, 'warn');
+    if (approxKB > 700) toast(`⚠ ${approxKB} KB of ${1024} — delete some photos before saves start failing`, 'warn');
   } catch {}
   try {
     const payload = sanitizeForFirestore({
@@ -1093,7 +1093,17 @@ function stayForBookingId(bookingId) {
   return stays.find(s => s.bookings.some(b => b.id === bookingId));
 }
 
-async function downscalePhoto(file, maxSide=800, quality=0.72) {
+/* Everything lives in one Firestore document with a 1 MiB ceiling, and these
+   photos go in it as base64 — which inflates them by a third again. At 800px
+   and q0.72 a photo runs 80–150 KB, the limit was eight per dog, and five dogs
+   is an ordinary day. That is several megabytes into a one-megabyte document:
+   the save fails, and once it fails nothing else in the app can save either
+   until somebody deletes photos by hand.
+
+   600px at q0.6 is still a perfectly good phone photo for a report card, and
+   three of them tells the story. The real fix is Firebase Storage and a URL,
+   but that is a build; this stops the app bricking itself in the meantime. */
+async function downscalePhoto(file, maxSide=600, quality=0.6) {
   const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = e => res(e.target.result); r.onerror = rej; r.readAsDataURL(file); });
   const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl; });
   let w = img.width, h = img.height;
@@ -1461,7 +1471,7 @@ async function triggerQuickPhoto(bookingId) {
       const data = await downscalePhoto(file);
       b.report = b.report || { photos: [], mood: [], moments: [], story: '', sentAt: null };
       b.report.photos = b.report.photos || [];
-      if (b.report.photos.length >= 8) { toast('Max 8 photos per dog'); return; }
+      if (b.report.photos.length >= 3) { toast('Three photos is plenty — the day has to fit in the cloud', 'warn'); return; }
       b.report.photos.push({ data, addedAt: new Date().toISOString() });
       await save(DB); render();
       hapticTap(); toast('Photo saved');
@@ -4809,7 +4819,7 @@ function buildRitualEmail(d, dog, owner, booking) {
 
 ${dog.name}'s day was ${moodLine.toLowerCase()}.${momentsLine}${storyLine}
 
-Today's invoice ($${booking.total}) is attached. Bank details are on the invoice.
+Your invoice comes separately at the end of the week.
 
 Andressa
 Pansi's Paws — Home Dog Daycare
