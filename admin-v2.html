@@ -1895,7 +1895,10 @@ function suggestOwner(tx, balances) {
   balances.forEach(e => {
     const nameHits = String(e.owner.name || '').toUpperCase().split(/\s+/)
       .filter(p => p.length > 2).filter(p => words.includes(p)).length;
-    const dogHits = e.dogs.filter(d => {
+    /* clientBalances builds dogs as a Set, so it spreads rather than filters —
+       calling .filter on it threw inside the CSV reader and surfaced as
+       "could not read that file", which blamed the bank for our bug. */
+    const dogHits = [...e.dogs].filter(d => {
       const D = String(d).toUpperCase();
       return D.length > 2 && words.includes(D);
     }).length;
@@ -2041,9 +2044,12 @@ function renderMoney() {
 
   const notYetInvoiced = all.filter(e => e.balance > 0).reduce((t, e) => t + e.balance, 0);
   const unpaid  = sent.filter(x => !x.paidAt)
-                      .sort((a2,b2) => String(a2.dueISO||a2.sentAt).localeCompare(String(b2.dueISO||b2.sentAt)));
+                      .sort((a2,b2) => String(a2.sentAt||'').localeCompare(String(b2.sentAt||'')));
   const owedSum = unpaid.reduce((t, x) => t + owedOn(x), 0);
-  const daysLate = x => x.dueISO ? Math.round((new Date(today) - new Date(x.dueISO)) / 86400000) : 0;
+  /* Invoices sent before dueISO existed still have to be chaseable, so fall
+     back to the published seven days from when it went out. */
+  const dueOf = x => x.dueISO || (x.sentAt ? addDaysISO(x.sentAt.slice(0,10), 7) : null);
+  const daysLate = x => { const d = dueOf(x); return d ? Math.round((new Date(today) - new Date(d)) / 86400000) : 0; };
 
   const split = sortCredits(PAY_TXS);
   const open  = split.keep.filter(t => !t.done);
@@ -2102,9 +2108,9 @@ function renderMoney() {
       ${PAY_SHOW_NOISE ? noise.map(t => txRow({ t, g: suggestOwner(t, all) })).join('') : ''}` : ''}
 
     ${unpaid.length ? `<div class="section-title" style="margin-top:24px">Owed (${unpaid.length}) · ${money(owedSum)}</div>
-      ${unpaid.map(x => { const late = x.dueISO && x.dueISO < today; return `<div class="mn-row ${late ? 'owing' : ''}">
+      ${unpaid.map(x => { const due = dueOf(x); const late = due && due < today; return `<div class="mn-row ${late ? 'owing' : ''}">
         <div><div class="mn-name">${escapeHtml(x.ownerName || '—')}</div>
-          <div class="mn-sub">${escapeHtml(x.number)} · ${late ? `<b style="color:var(--owe)">${daysLate(x)} day${daysLate(x)===1?'':'s'} late</b>` : `due ${fmtDateShort(x.dueISO)}`}${
+          <div class="mn-sub">${escapeHtml(x.number)} · ${late ? `<b style="color:var(--owe)">${daysLate(x)} day${daysLate(x)===1?'':'s'} late</b>` : (due ? `due ${fmtDateShort(due)}` : 'sent')}${
             Number(x.paidAmount||0) > 0 ? ` · ${money(x.paidAmount)} of ${money(x.total)} in` : ''}</div></div>
         <div style="display:flex;align-items:center;gap:8px">
           <div class="mn-bal">${money(owedOn(x))}</div>
