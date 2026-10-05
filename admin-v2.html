@@ -1851,9 +1851,15 @@ function suggestOwner(tx, balances) {
      one turns up in the bank description that is not a guess, it is the client
      telling you which invoice they just paid. Checked before the name matching,
      which is guesswork by comparison. */
-  const squashed = ref.replace(/[^A-Z0-9]/g, '');
-  const hit = (DB.meta?.invoicesSent || []).find(x =>
-    x.ref && squashed.includes(String(x.ref).toUpperCase().replace(/[^A-Z0-9]/g, '')));
+  /* On the raw description, not on cleanRef's output. cleanRef strips every run
+     of digits so names survive — which also stripped the digits out of every
+     reference, so ELVIS0927 could never be found and this branch had never
+     fired once. Unpaid invoices first: a reference is DOG-MMDD and repeats
+     every year. */
+  const squashed = String(tx.desc || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const sent = DB.meta?.invoicesSent || [];
+  const matchesRef = x => x.ref && squashed.includes(String(x.ref).toUpperCase().replace(/[^A-Z0-9]/g, ''));
+  const hit = sent.filter(x => !x.paidAt).find(matchesRef) || sent.find(matchesRef);
   if (hit) {
     const e = balances.find(x => x.owner.id === hit.ownerId);
     const owner = e ? e.owner : (DB.owners || []).find(o => o.id === hit.ownerId);
@@ -1879,14 +1885,18 @@ function suggestOwner(tx, balances) {
    Only a fraction is a client paying you. Filter the obvious noise and
    anything outside the window being counted, so the list is short enough
    to actually work through. */
-const NOT_A_PAYMENT = /credit interest|^interest\b|\binterest paid\b|dividend|refund|reversal|rebate|cashback|atm|bpay bill|fee|charge|rtn|dishonour/i;
+/* Every token is anchored. Unanchored, "fee" matched Feeney and COFFEE, "rtn"
+   matched Burtner, and a real client's payment went to the hidden pile — which
+   is the one failure that actually costs money, because nobody goes looking in
+   there for a client. */
+const NOT_A_PAYMENT = /credit interest|^interest\b|\binterest paid\b|\bdividend\b|\brefund\b|\breversal\b|\brebate\b|\bcashback\b|\batm\b|\bbpay bill\b|\bfee(s)?\b|\bcharge(s)?\b|\brtn\b|\bdishonour\b/i;
 
 /* This is a personal account. Salary, rent, gambling and everything else runs
    through the same file, and none of it belongs on a screen about who has paid
    for their dog. Matching on the company names that actually appear beats a
    clever rule: a false positive here hides a real client payment, which is the
    one mistake that costs money. */
-const NOT_A_CLIENT = /betchoice|sportsbet|tab ?corp|bet365|pointsbet|neds|ladbrokes|\bpayroll\b|salary|centrelink|\bato\b|tax office|insurance|telstra|optus|vodafone|origin energy|agl |ausgrid|sydney water|council rates|woolworths|coles|aldi|uber|didi|netflix|spotify|apple\.com|google ?\*|amazon|paypal \*/i;
+const NOT_A_CLIENT = /\bbetchoice\b|\bsportsbet\b|\btab ?corp\b|\bbet365\b|\bpointsbet\b|\bneds\b|\bladbrokes\b|\bpayroll\b|\bsalary\b|\bcentrelink\b|\bato\b|\btax office\b|\binsurance\b|\btelstra\b|\boptus\b|\bvodafone\b|\borigin energy\b|\bagl\b|\bausgrid\b|\bsydney water\b|\bcouncil rates\b|\bwoolworths\b|\bcoles\b|\baldi\b|\buber\b|\bdidi\b|\bnetflix\b|\bspotify\b|apple\.com|google ?\*|\bamazon\b|paypal ?\*/i;
 
 function isOwnTransfer(desc) {
   // "Transfer from xx7698 CommBank app" — an account of yours, no payer name.
@@ -1921,8 +1931,12 @@ function sortCredits(txs) {
     const iso = txDateISO(t.date);
     t.iso = iso;
     if (!t.amount || t.amount <= 0) { noise.push(t); return; }   // a $0 row is not a payment
-    if (NOT_A_PAYMENT.test(t.desc)) { noise.push(t); return; }
-    if (NOT_A_CLIENT.test(t.desc))  { noise.push(t); return; }
+    /* If it looks like one of our clients, it stays, whatever else the
+       description says. A surname that happens to read like a shop is far more
+       likely than a shop paying us for daycare. */
+    const looksLikeAClient = !!suggestOwner(t, clientBalances());
+    if (!looksLikeAClient && NOT_A_PAYMENT.test(t.desc)) { noise.push(t); return; }
+    if (!looksLikeAClient && NOT_A_CLIENT.test(t.desc))  { noise.push(t); return; }
     if (seenTx(t)) { t.done = true; t.alreadySeen = true; noise.push(t); return; }
     if (iso && line && iso < line) { noise.push(t); return; }
     if (iso && iso > today) { noise.push(t); return; }
@@ -2019,9 +2033,10 @@ function renderMoney() {
          problem with a different screen. */
       const sent = (DB.meta && DB.meta.invoicesSent) || [];
       const unpaid = sent.filter(x => !x.paidAt);
-      const due = unpaid.reduce((t, x) => t + Number(x.total || 0), 0);
+      const owedOn = x => Number(x.total || 0) - Number(x.paidAmount || 0);
+      const due = unpaid.reduce((t, x) => t + owedOn(x), 0);
       const overdue = unpaid.filter(x => x.dueISO && x.dueISO < todayISO());
-      const overdueSum = overdue.reduce((t, x) => t + Number(x.total || 0), 0);
+      const overdueSum = overdue.reduce((t, x) => t + owedOn(x), 0);
       return `<div class="mn-hero ${due > 0 ? '' : 'clear'}">
         <div class="mn-hero-num">${due > 0 ? money(due) : 'All square'}</div>
         <div class="mn-hero-cap">${due > 0
@@ -2137,18 +2152,47 @@ async function removePayment(id) {
    has ever written to them, so "who is overdue" was unanswerable even though
    the data was sitting right there. Prefers the invoice whose reference the
    client quoted, then the oldest unpaid one the amount fits. */
-function settleInvoiceFor(ownerId, amount, ref) {
+/* Apply a credit to invoices, oldest first, and stop when the money runs out.
+
+   The first version marked whichever invoice it picked fully paid for any
+   amount at all: $100 against a $220 invoice closed it and the $120 shortfall
+   lived only in a toast that faded. One $440 transfer covering two $220s closed
+   one and left the other owing forever. Both wrong in opposite directions, and
+   both invisible afterwards.
+
+   So: a part-payment accumulates against the invoice and leaves it open, and a
+   payment larger than one invoice runs on to the next. paidAt is the day the
+   money actually arrived, not the day it was reconciled — otherwise anything
+   measuring how long a client took to pay is wrong by however long the
+   statement sat unopened. */
+function settleInvoiceFor(ownerId, amount, ref, whenISO) {
   const sent = (DB.meta && DB.meta.invoicesSent) || [];
-  const mine = sent.filter(x => x.ownerId === ownerId && !x.paidAt);
+  const mine = sent.filter(x => x.ownerId === ownerId && !x.paidAt)
+                   .sort((a, b) => String(a.sentAt).localeCompare(String(b.sentAt)));
   if (!mine.length) return null;
+
   const squash = v => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  const byRef = ref && mine.find(x => squash(x.ref) === squash(ref));
-  const exact = mine.find(x => Math.abs(Number(x.total) - amount) < 0.01);
-  const pick  = byRef || exact || mine.sort((a,b) => String(a.sentAt).localeCompare(String(b.sentAt)))[0];
-  if (!pick) return null;
-  pick.paidAt = new Date().toISOString();
-  pick.paidAmount = amount;
-  return pick;
+  const byRef  = ref ? mine.find(x => squash(x.ref) === squash(ref)) : null;
+  const order  = byRef ? [byRef, ...mine.filter(x => x !== byRef)] : mine;
+
+  const at = whenISO ? new Date(whenISO + 'T00:00:00').toISOString() : new Date().toISOString();
+  let left = amount, settled = [], partial = null;
+  for (const inv of order) {
+    if (left <= 0.009) break;
+    const owed = Number(inv.total) - Number(inv.paidAmount || 0);
+    if (owed <= 0.009) continue;
+    if (left >= owed - 0.009) {
+      inv.paidAmount = Number(inv.total);
+      inv.paidAt = at;
+      settled.push(inv);
+      left -= owed;
+    } else {
+      inv.paidAmount = Number(inv.paidAmount || 0) + left;   // still open, part paid
+      partial = inv;
+      left = 0;
+    }
+  }
+  return { settled, partial, leftOver: Math.max(0, left) };
 }
 
 async function assignTx(i, ownerId, opts = {}) {
@@ -2157,16 +2201,16 @@ async function assignTx(i, ownerId, opts = {}) {
   const when = t.iso || txDateISO(t.date) || todayISO();
   DB.payments.push({ id: uid(), ownerId, amount: t.amount, date: when,
                      method: 'bank', note: t.desc.slice(0, 60), createdAt: new Date().toISOString() });
-  const inv = settleInvoiceFor(ownerId, t.amount, t.matchedRef);
+  const r = settleInvoiceFor(ownerId, t.amount, t.matchedRef, when);
   t.done = true;
   rememberTx(t, 'assigned');           // so next week's statement does not ask again
   if (!opts.quiet) {
     await save(DB); renderMoney();
-    const short = Math.abs((inv ? Number(inv.total) : t.amount) - t.amount);
-    toast(inv
-      ? (short > 0.01 ? `${money(t.amount)} → ${o.name} · ${inv.number} was ${money(inv.total)}`
-                      : `${money(t.amount)} → ${o.name} · ${inv.number} paid`)
-      : `${money(t.amount)} → ${o.name}`, 'ok');
+    const bits = [];
+    if (r && r.settled.length) bits.push(`${r.settled.map(x => x.number).join(', ')} paid`);
+    if (r && r.partial) bits.push(`${r.partial.number} part paid, ${money(Number(r.partial.total) - Number(r.partial.paidAmount))} still owing`);
+    if (r && r.leftOver > 0.009) bits.push(`${money(r.leftOver)} left over`);
+    toast(`${money(t.amount)} → ${o.name}${bits.length ? ' · ' + bits.join(' · ') : ''}`, 'ok');
   }
 }
 
