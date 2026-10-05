@@ -1797,6 +1797,7 @@ function cleanRef(s) {
    is simply billed minus paid. */
 
 let PAY_TXS = [];        // credits read from a bank CSV, waiting to be assigned
+let PAY_PERIOD = null;   // what date range the loaded statement covers
 let PAY_SHOW_SETTLED = false;
 let PAY_SHOW_NOISE = false;
 
@@ -1863,8 +1864,19 @@ function suggestOwner(tx, balances) {
   const words    = cleanRef(tx.desc).split(' ').filter(w => w.length > 2);
   const sent     = DB.meta?.invoicesSent || [];
   const ownerOf  = id => (DB.owners || []).find(o => o.id === id);
-  const openFor  = id => sent.filter(x => x.ownerId === id && !x.paidAt)
-                             .reduce((t, x) => t + (Number(x.total||0) - Number(x.paidAmount||0)), 0);
+  /* What a client owes is their whole account, not their open invoices. Most of
+     the work here has never been invoiced at all — ten thousand dollars of it —
+     so a payment matching someone's booking balance is just as real a signal as
+     one matching an invoice, and ignoring it meant the commonest case scored
+     nothing. Invoiced and uninvoiced both count. */
+  const openFor = id => {
+    const onInvoices = sent.filter(x => x.ownerId === id && !x.paidAt)
+                           .reduce((t, x) => t + (Number(x.total||0) - Number(x.paidAmount||0)), 0);
+    const e = (balances || []).find(x => x.owner.id === id);
+    const onBookings = e ? Math.max(0, e.balance) : 0;
+    return { onInvoices, onBookings, any: [onInvoices, onBookings, onInvoices + onBookings] };
+  };
+  const matchesOwed = (id, amt) => openFor(id).any.some(v => v > 0 && Math.abs(amt - v) < 0.01);
 
   /* 1. The reference we asked them to quote. Certain. */
   const matchesRef = x => x.ref && squashed.includes(String(x.ref).toUpperCase().replace(/[^A-Z0-9]/g, ''));
@@ -1885,7 +1897,7 @@ function suggestOwner(tx, balances) {
   if (key && learned[key]) {
     const owner = ownerOf(learned[key]);
     if (owner) return { owner, score: 900, learned: true,
-                        exact: Math.abs(tx.amount - openFor(owner.id)) < 0.01,
+                        exact: matchesOwed(owner.id, tx.amount),
                         why: 'paid from this account before' };
   }
 
@@ -1906,7 +1918,7 @@ function suggestOwner(tx, balances) {
     const score = nameHits * 40 + dogHits * 30;
     if (!best || score > best.score) best = {
       owner: e.owner, score,
-      exact: Math.abs(tx.amount - openFor(e.owner.id)) < 0.01,
+      exact: matchesOwed(e.owner.id, tx.amount),
       why: nameHits && dogHits ? 'name and dog match'
          : nameHits ? 'name matches' : "dog's name is on it"
     };
@@ -1997,7 +2009,7 @@ function sortCredits(txs) {
 }
 
 
-function openMoneySheet() { PAY_TXS = []; renderMoney(); }
+function openMoneySheet() { PAY_TXS = []; PAY_PERIOD = null; renderMoney(); }
 
 function onReconFile(e) {
   const f = e.target.files[0]; if (!f) return;
@@ -2005,7 +2017,13 @@ function onReconFile(e) {
   r.onload = () => {
     try {
       PAY_TXS = readBankRows(parseCSV(r.result)).map(t => ({ ...t, done: false }));
-      if (!PAY_TXS.length) return toast('No incoming payments found in that file');
+      if (!PAY_TXS.length) return toast('No incoming payments found in that file', 'warn');
+      /* Say what the file actually covers. "Which period am I reconciling" was
+         the question the week selector pretended to answer and never did — the
+         honest answer is whatever range the statement holds, which the file
+         knows and nobody was reading. */
+      const days = PAY_TXS.map(t => txDateISO(t.date)).filter(Boolean).sort();
+      PAY_PERIOD = days.length ? { from: days[0], to: days[days.length - 1], n: PAY_TXS.length } : null;
       renderMoney();
     } catch (err) { toast('Could not read that file: ' + err.message); }
   };
@@ -2065,7 +2083,9 @@ function renderMoney() {
       <div style="min-width:0">
         <div class="mn-name">${money(t.amount)}${g ? ` <span class="tx-flag ${sure ? '' : 'maybe'}">${escapeHtml(g.owner.name)}</span>` : ''}</div>
         <div class="mn-sub">${escapeHtml(fmtDateShort(t.iso || today))} · ${escapeHtml(t.desc.slice(0, 42))}</div>
-        ${g ? `<div class="mn-sub" style="color:${sure ? 'var(--pine)' : 'var(--ink-3)'}">${escapeHtml(g.why)}${g.exact ? ' · matches what they owe' : ''}</div>` : ''}
+        ${g ? `<div class="mn-sub" style="color:${sure ? 'var(--pine)' : 'var(--ink-3)'}">${escapeHtml(g.why)}${g.exact ? ' · exactly what they owe' : ''}${
+          (() => { const e = all.find(x => x.owner.id === g.owner.id);
+                   return e && e.balance > 0 ? ` · ${money(e.balance)} on their account` : ''; })()}</div>` : ''}
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
         ${g ? `<button class="btn tiny ${sure ? 'primary' : ''}" onclick="PAY_TXS[${i}].matchedRef=${g.byRef ? `'${escapeHtml(g.byRef)}'` : 'null'};assignTx(${i}, '${g.owner.id}')">${sure ? 'Confirm' : 'Yes'}</button>` : ''}
@@ -2094,6 +2114,10 @@ function renderMoney() {
       <input type="file" accept=".csv,text/csv" style="display:none" onchange="onReconFile(event)">
     </label>
     <p class="sub small" style="margin-top:8px">Read in your browser, nothing uploaded. Anything already sorted is skipped, so it doesn't matter if weeks overlap.</p>
+
+    ${PAY_PERIOD ? `<div class="mn-line" style="margin-top:10px">
+      <span>This statement covers <b>${fmtDateShort(PAY_PERIOD.from)} – ${fmtDateShort(PAY_PERIOD.to)}</b> · ${PAY_PERIOD.n} line${PAY_PERIOD.n===1?'':'s'}, ${open.length} to sort</span>
+    </div>` : ''}
 
     ${PAY_TXS.length && !open.length ? `<div class="mn-line" style="margin-top:12px;background:#eef4e8">
       <span><b>Nothing left to sort.</b> Every credit in that file is accounted for.</span></div>` : ''}
