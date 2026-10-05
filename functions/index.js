@@ -428,3 +428,113 @@ export const sendTestInvoice = onCall(
                : "Made-up bookings, sent from Resend's shared address because no verified domain is set yet. Real invoices will not send until meta.invoicing.mailFrom is set." };
   }
 );
+
+/* ---------- one-off: the invoicing notice that never arrived ---------- */
+
+/* On 27 September the client announcement went out as a single message with 41
+   recipients. Every hotmail, outlook, bigpond and ozemail address received it.
+   Every single gmail address bounced — 26 of them — after four delivery attempts
+   across fourteen hours, with "recipient's mail server not found", which is
+   plainly not true of gmail.com. One-to-one sending to the same addresses works
+   (Siena's invoice reached her gmail four times over), so the shape of the send
+   is what Google refused, not the domain.
+
+   So this sends the same notice one email at a time. The list is the verified
+   bounce list from that send, written out rather than derived, because a rule
+   like "every gmail client" would quietly include anyone added since.
+
+   The copy is amended twice over: the original promised invoicing "from Monday
+   21 September", which is long past and several of these people have had an
+   invoice already; and it quoted the old 5.30pm pickup with fifteen minutes'
+   grace, which is now 5pm with thirty. */
+
+const NOTICE_BOUNCED = [
+  'aguerron97@gmail.com', 'anand.gururajan@gmail.com', 'ashleigh.bruton@gmail.com',
+  'asjanwalikar@gmail.com', 'beckyjcater@gmail.com', 'benxrach@gmail.com',
+  'dariojuniorsyd@gmail.com', 'davelewin59@gmail.com', 'eduarda.araujo2305@gmail.com',
+  'emilylaw00@gmail.com', 'emma.j.ferguson1@gmail.com', 'hacy.tree@gmail.com',
+  'kirsten.lowe@gmail.com', 'ks.demina@gmail.com', 'kvrifkin@gmail.com',
+  'maripgalasso@gmail.com', 'mikemeloshea@gmail.com', 'nicoleljack@gmail.com',
+  'p.chaimongkol2@gmail.com', 'shysvirk@gmail.com', 'sienaaedwards@gmail.com',
+  'simon.horowitz44@gmail.com', 'slopesjacque@gmail.com', 'sweetinglaura@gmail.com',
+  'thegingrvintage@gmail.com', 'zoe4mclean@gmail.com'
+];
+
+const NOTICE_SUBJECT = 'A small change to how I invoice';
+
+const NOTICE_TEXT = `Hello,
+
+A bit of housekeeping, and then back to the dogs.
+
+I sent this a couple of weeks ago and it didn't reach everyone — that's on me. If you've already had an invoice from me without this turning up first, I'm sorry for the muddle.
+
+At the end of each week your dog has been with me, I'll email you an invoice rather than us sorting it out between ourselves. It lists every day they came, what each one cost, and the total, so you can see exactly what you're paying for.
+
+Paying — bank transfer, details on the invoice, within 7 days. Each invoice carries a short reference; using it means I can match your payment without having to ask.
+
+While I'm here, the two things that occasionally come up, so they're never a surprise on an invoice:
+
+If you need to cancel — more than 24 hours' notice and there's no charge at all. Inside 24 hours it's half the day's rate, because our groups are small and a late cancellation usually can't be filled. If your dog is unwell, always keep them home — I'll credit the day rather than charge it.
+
+Our day finishes at 5pm now, with half an hour's grace, so nothing applies until after 5.30. After that it's $10 per half hour, capped at $40. Life happens — message me if you're running late and we'll sort it out.
+
+Both are written up properly at pansispaws.com.au/terms.html if you'd like the detail.
+
+Nothing else changes. Same dogs, same days, same walks.
+
+Andressa
+Pansi's Paws Home Daycare
+0410 151 509`;
+
+/*  sendInvoicingNotice({mode: 'test'})  — goes to Simon alone
+ *  sendInvoicingNotice({mode: 'send'})  — goes to the 26, one at a time
+ */
+export const sendInvoicingNotice = onCall(
+  { secrets: [RESEND_API_KEY] },
+  async request => {
+    if (!request?.auth) throw new HttpsError('unauthenticated', 'Sign in to the panel first.');
+    const mode = request?.data?.mode || request?.mode || 'test';
+    if (!['test', 'send'].includes(mode)) throw new HttpsError('invalid-argument',
+      "mode must be 'test' (Simon only) or 'send' (the 26 who bounced).");
+
+    const snap = await fs.doc(STATE).get();
+    const biz  = { ...DEFAULT_BIZ, ...(snap.exists ? snap.data().meta?.biz || {} : {}) };
+    const cfg  = snap.exists ? snap.data().meta?.invoicing || {} : {};
+    const list = mode === 'test' ? ['simon.horowitz44@gmail.com'] : NOTICE_BOUNCED;
+
+    const html = `<div style="font:15px/1.65 -apple-system,Helvetica,Arial,sans-serif;color:#3f2814;max-width:560px">`
+      + NOTICE_TEXT.split('\n\n').map(p =>
+          `<p style="margin:0 0 14px">${p.replace(/\n/g, '<br>')}</p>`).join('')
+      + `</div>`;
+
+    const done = [], bad = [];
+    for (const to of list) {
+      try {
+        const id = await sendMail({
+          to, from: ownSender(cfg), replyTo: cfg.replyTo || biz.email, apiKey: RESEND_API_KEY.value(),
+          /* Keyed per recipient and dated, so running this twice cannot send a
+             second copy to anyone within 24 hours. */
+          idempotencyKey: `notice/2026-10-05/${to}`,
+          subject: mode === 'test' ? `[TEST] ${NOTICE_SUBJECT}` : NOTICE_SUBJECT,
+          html, text: NOTICE_TEXT
+        });
+        done.push({ to, id });
+      } catch (e) {
+        logger.error('notice failed', to, e);
+        bad.push({ to, why: String(e.message || e) });
+      }
+      /* One at a time with a breath in between. A burst from a domain this young
+         is what got the first attempt refused. */
+      await new Promise(r => setTimeout(r, 1200));
+    }
+
+    if (mode === 'send') {
+      await fs.doc(STATE).update({
+        'meta.noticesSent': { at: new Date().toISOString(), subject: NOTICE_SUBJECT,
+                              delivered: done.map(d => d.to), failed: bad }
+      });
+    }
+    logger.info('invoicing notice', mode, 'sent', done.length, 'failed', bad.length);
+    return { mode, sent: done.length, failed: bad.length, failures: bad };
+  }
+);
