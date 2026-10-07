@@ -437,6 +437,53 @@ export function weekRunComplete(db, ownerId, todayISO) {
 
 /* ---------- building the invoice ---------- */
 
+/* A boarding stay is one thing, even though it is stored as one booking per
+   night. When the go-live floor lands in the middle of a stay, filtering on
+   date alone bills the back half and silently drops the front: Greg's
+   twenty-three nights came out as eight, and nothing warned about it.
+
+   So a night below the floor is admitted when it belongs to an unbroken run of
+   overnights, for the same dog, that reaches the floor. The floor still blocks
+   every earlier, separate stay — it just stops cutting one stay in two.
+   Cancelled nights count for continuity (a cancelled middle night does not end
+   a stay) but are priced by the normal cancellation rules. */
+export function stayIdsAcrossFloor(db, floorISO) {
+  const keep = new Set();
+  if (!floorISO) return keep;
+
+  const byDog = new Map();
+  for (const b of (db.bookings || [])) {
+    if (b.session !== 'overnight' || !b.date) continue;
+    if (!byDog.has(b.dogId)) byDog.set(b.dogId, []);
+    byDog.get(b.dogId).push(b);
+  }
+
+  const dayNum = iso => Math.round(Date.parse(iso + 'T00:00:00Z') / 86400000);
+
+  for (const nights of byDog.values()) {
+    nights.sort((a, b) => a.date.localeCompare(b.date));
+    let run = [];
+    const flush = () => {
+      if (!run.length) return;
+      const first = run[0].date, last = run[run.length - 1].date;
+      if (first < floorISO && last >= floorISO) {
+        for (const b of run) if (b.date < floorISO) keep.add(b.id);
+      }
+      run = [];
+    };
+    for (const b of nights) {
+      if (!run.length) { run = [b]; continue; }
+      const gap = dayNum(b.date) - dayNum(run[run.length - 1].date);
+      if (gap === 0) { run.push(b); continue; }        // two rows, same night
+      if (gap === 1) { run.push(b); continue; }        // the next night
+      flush();
+      run = [b];
+    }
+    flush();
+  }
+  return keep;
+}
+
 /* Everything billable that hasn't been billed yet.
    opts: { asAt = today, from = meta.invoicingGoLive, includeBilled = false } */
 export function buildInvoice(db, ownerId, opts = {}) {
@@ -452,12 +499,17 @@ export function buildInvoice(db, ownerId, opts = {}) {
   const dates0 = ls => (ls.map(l => l.date).filter(Boolean).sort().pop() || asAt);
   const push = (o, amt, b) => { lines.push({ ...o, amt: amt / 100 }); totalC += amt; if (b && !bookingIds.includes(b.id)) bookingIds.push(b.id); };
 
+  /* Nights below the floor that are part of a stay running through it. */
+  const spanning = stayIdsAcrossFloor(db, floor);
+
   (db.bookings || [])
     /* The go-live date is a blanket floor so the first run cannot bill months
        of history. billAnyway is the deliberate exception: a single old booking
        Andressa knows is unpaid, ticked one at a time. Never a date change —
-       moving the floor back would sweep in everyone at once. */
-    .filter(b => (b.date >= floor || b.billAnyway) && b.date <= asAt)
+       moving the floor back would sweep in everyone at once. A stay that
+       straddles the floor is the other exception, and it is not a judgement
+       call: see stayIdsAcrossFloor above. */
+    .filter(b => (b.date >= floor || b.billAnyway || spanning.has(b.id)) && b.date <= asAt)
     .filter(b => opts.includeBilled || !isBilled(db, b.id))
     .filter(b => ownerOf(db, b.dogId)?.id === ownerId)
     .sort((a,b) => a.date.localeCompare(b.date) || String(a.id).localeCompare(String(b.id)))

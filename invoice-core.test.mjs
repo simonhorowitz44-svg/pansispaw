@@ -1309,5 +1309,91 @@ console.log('\nA stay held with a deposit');
     inv2.warnings.some(w => /is still theirs/.test(w)));
 }
 
+/* ---------- a stay that straddles the go-live date ---------- */
+{
+  /* Greg: 23 nights at an agreed $95, 13 Sep - 5 Oct, with go-live on 28 Sep.
+     Filtering on date alone billed 8 nights and $760, and said nothing. */
+  const mk = () => ({
+    meta: { billed:{}, invoicesSent:[], invoicing:{ goLive:'2026-09-28' } },
+    owners: [{ id:'o1', name:"Mike O'Shea", email:'m@x.com' },
+             { id:'o2', name:'Kyle Rifkin', email:'k@x.com' }],
+    dogs:   [{ id:'g1', ownerId:'o1', name:'Greg',      size:'medium' },
+             { id:'g2', ownerId:'o2', name:'Pepperoni', size:'medium' }],
+    packs: [], bookings: []
+  });
+  const nights = (dogId, fromDay, count, price, month='09') => {
+    const out = []; const d = new Date(Date.UTC(2026, Number(month)-1, fromDay));
+    for (let i = 0; i < count; i++) {
+      const iso = d.toISOString().slice(0,10);
+      out.push({ id:`${dogId}_${iso}`, dogId, date:iso, session:'overnight', customPrice:price });
+      d.setUTCDate(d.getUTCDate() + 1);
+    }
+    return out;
+  };
+
+  const d = mk();
+  d.bookings = nights('g1', 13, 23, 95);
+  const inv = C.buildInvoice(d, 'o1', { asAt:'2026-10-07' });
+  eq('a stay running through go-live is billed whole', inv.lines.length, 23);
+  eq('and totals the whole stay, not the back half',   inv.total, 2185);
+  eq('starting from the first night, not the floor',   inv.lines[0].date, '2026-09-13');
+
+  /* The floor still has to work for everything else. */
+  const sep = mk();
+  sep.bookings = [
+    ...nights('g1', 1, 3, 95),            //  1- 3 Sep, a separate earlier stay
+    ...nights('g1', 29, 2, 95)            // 29-30 Sep, after the floor
+  ];
+  const inv2 = C.buildInvoice(sep, 'o1', { asAt:'2026-10-07' });
+  eq('an earlier separate stay stays blocked by the floor', inv2.lines.length, 2);
+  eq('and only the post-floor nights are charged',          inv2.total, 190);
+
+  /* A gap of one clear night is two stays, not one. */
+  const gap = mk();
+  gap.bookings = [
+    ...nights('g1', 20, 3, 95),           // 20-22 Sep, then 23 Sep off
+    ...nights('g1', 24, 7, 95)            // 24-30 Sep, reaches the floor
+  ];
+  const inv3 = C.buildInvoice(gap, 'o1', { asAt:'2026-10-07' });
+  eq('only the run that reaches the floor is pulled in', inv3.lines.length, 7);
+  eq('the stay before the gap is left alone',            inv3.total, 665);
+
+  /* One dog's straddling stay must not drag in another dog's history. */
+  const two = mk();
+  two.bookings = [...nights('g1', 25, 10, 95), ...nights('g2', 1, 4, 95)];
+  const invA = C.buildInvoice(two, 'o1', { asAt:'2026-10-07' });
+  const invB = C.buildInvoice(two, 'o2', { asAt:'2026-10-07' });
+  eq("the straddling dog's stay is whole",      invA.lines.length, 10);
+  /* Nothing billable at all is a null invoice — that is existing behaviour. */
+  t("the other dog's old stay is still blocked", invB === null);
+
+  /* Day visits below the floor are not a boarding stay and stay blocked. */
+  const day = mk();
+  day.bookings = [
+    { id:'x1', dogId:'g1', date:'2026-09-20', session:'full' },
+    { id:'x2', dogId:'g1', date:'2026-09-21', session:'full' },
+    ...nights('g1', 29, 2, 95)
+  ];
+  const inv4 = C.buildInvoice(day, 'o1', { asAt:'2026-10-07' });
+  eq('a run of day visits does not count as a stay', inv4.lines.length, 2);
+
+  /* A cancelled night in the middle does not split the stay. */
+  const canc = mk();
+  canc.bookings = nights('g1', 24, 7, 95);
+  canc.bookings[1] = { ...canc.bookings[1], cancelled:true, cancelCharge:0 };
+  const inv5 = C.buildInvoice(canc, 'o1', { asAt:'2026-10-07' });
+  eq('a cancelled night mid-stay keeps the stay together', inv5.lines.length, 6);
+  eq('and the cancelled night itself is not charged',      inv5.total, 570);
+
+  /* With no go-live set at all, nothing changes. */
+  const nofloor = mk();
+  nofloor.meta.invoicing = { goLive:'' };
+  nofloor.bookings = nights('g1', 13, 23, 95);
+  eq('no go-live means no spanning logic needed',
+     C.buildInvoice(nofloor, 'o1', { asAt:'2026-10-07' }).total, 2185);
+  eq('and the helper returns nothing for an empty floor',
+     C.stayIdsAcrossFloor(nofloor, '').size, 0);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
