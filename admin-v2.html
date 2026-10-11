@@ -1044,16 +1044,30 @@ async function save(db) {
       const cur = await getDoc(STATE_DOC);
       if (cur.exists()) {
         const r = cur.data();
-        const serverMs = r._updatedAtMs || 0;
-        const theirs = r._updatedByClientId && r._updatedByClientId !== CLIENT_ID;
-        if (theirs && serverMs > knownRemoteMs) {
+        /* An absent client id means the write came from outside the panel —
+           a script, a console, a restore. That is foreign, not ours. The
+           first version of this check read `r._updatedByClientId && ...`,
+           which treated a missing id as "mine" and waved the overwrite
+           through: precisely the case that lost two payments today. */
+        const foreign = r._updatedByClientId !== CLIENT_ID;
+        /* Those same outside writes set no timestamp either, so a clock
+           comparison alone misses them. Fall back to the shape of the data:
+           if any collection is a different size from what we hold, something
+           happened that we have not seen. */
+        const sig = o => [ (o.owners||[]).length, (o.dogs||[]).length,
+                           (o.bookings||[]).length, (o.packs||[]).length,
+                           (o.deposits||[]).length, (o.payments||[]).length,
+                           Object.keys((o.meta&&o.meta.billed)||{}).length,
+                           ((o.meta&&o.meta.invoicesSent)||[]).length ].join(':');
+        const movedOn = (r._updatedAtMs || 0) > knownRemoteMs || sig(r) !== sig(db);
+        if (foreign && movedOn) {
           const remoteDb = normalizeDb({ owners: r.owners||[], dogs: r.dogs||[],
             bookings: r.bookings||[], packs: r.packs||[], deposits: r.deposits||[], meta: r.meta });
           /* reconcileWithPending keeps this tab's edits and carries over
              everything the other device added or changed that we didn't touch. */
           pendingRemoteDb = remoteDb;
           db = reconcileWithPending(db);
-          knownRemoteMs = serverMs;
+          knownRemoteMs = r._updatedAtMs || knownRemoteMs;
           const who = (r._updatedBy || '').split('@')[0] || 'another device';
           toast(`Merged changes from ${who} before saving`, 'info');
         }
