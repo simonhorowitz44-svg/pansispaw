@@ -912,6 +912,18 @@ let lastLocalSaveTs = parseInt(localStorage.getItem(LAST_SAVE_KEY) || '0', 10);
 const CLIENT_ID = (crypto?.randomUUID?.() || Math.random().toString(36).slice(2)) + '-' + Date.now();
 // Buffer for remote snapshots that arrive while a modal is open — applied on close
 let pendingRemoteDb = null;
+/* The whole database is one Firestore document, and a save rewrites all of it
+   from this tab's copy. So a save from a stale tab silently destroys whatever
+   changed in between — it has cost a pack, a client's email, two payments and
+   an invoice flag in a single day.
+
+   reconcileWithPending already merges, but ONLY when the snapshot listener
+   delivered the change first. A sleeping tab, a dropped socket or a phone in a
+   pocket never gets that callback, and then the overwrite is total and silent.
+
+   knownRemoteMs is the _updatedAtMs this tab last saw. save() re-reads the
+   document and refuses if the server has moved on without us. */
+let knownRemoteMs = 0;
 
 async function loadFromFirestore() {
   try {
@@ -919,6 +931,7 @@ async function loadFromFirestore() {
     if (snap.exists()) {
       const r = snap.data();
       DB = normalizeDb({ owners: r.owners||[], dogs: r.dogs||[], bookings: r.bookings||[], packs: r.packs||[], deposits: r.deposits||[], meta: r.meta });
+      knownRemoteMs = r._updatedAtMs || 0;
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); } catch (e) { console.warn('LS write failed', e); }
       return true;
     }
@@ -948,6 +961,25 @@ function pruneOldPhotos(db) {
 // Reconcile the user's in-memory DB with any buffered remote snapshot before writing.
 // For each collection: start from remote (has additions/deletions from other devices),
 // then overlay the user's records — user's edits win on same id; remote records the user didn't touch survive.
+/* meta used to be taken from the local copy wholesale, which threw away the
+   other device's work. The bulk of it is settings where last-writer-wins is
+   fine, but three keys accumulate and must never shrink on a merge:
+   billed (which days have been invoiced), invoicesSent (the ledger) and
+   payers (learned bank-statement matches). Losing an entry from any of them
+   means a client gets billed twice or a payment stops matching. */
+function mergeMeta(remote, mine) {
+  if (!remote) return mine;
+  if (!mine) return remote;
+  const out = { ...remote, ...mine };
+  out.billed = { ...(remote.billed || {}), ...(mine.billed || {}) };
+  out.payers = { ...(remote.payers || {}), ...(mine.payers || {}) };
+  const byNumber = new Map();
+  for (const inv of [...(remote.invoicesSent || []), ...(mine.invoicesSent || [])])
+    byNumber.set(inv.number, inv);          // a later copy wins, none is dropped
+  out.invoicesSent = [...byNumber.values()];
+  return out;
+}
+
 function reconcileWithPending(db) {
   if (!pendingRemoteDb) return db;
   const merge = (base = [], mine = []) => {
@@ -961,7 +993,10 @@ function reconcileWithPending(db) {
     bookings: merge(pendingRemoteDb.bookings, db.bookings),
     packs:    merge(pendingRemoteDb.packs,    db.packs),
     deposits: merge(pendingRemoteDb.deposits, db.deposits),
-    meta: db.meta || pendingRemoteDb.meta
+    /* payments has no merge above because older records predate the field;
+       treat it like the rest. */
+    payments: merge(pendingRemoteDb.payments, db.payments),
+    meta: mergeMeta(pendingRemoteDb.meta, db.meta)
   });
   // The user's in-memory DB now reflects the reconciled state
   DB = merged;
@@ -1002,6 +1037,35 @@ async function save(db) {
     if (approxKB > 700) toast(`⚠ ${approxKB} KB of ${1024} — delete some photos before saves start failing`, 'warn');
   } catch {}
   try {
+    /* Has the document moved on since this tab last saw it? If so, writing
+       would erase whoever changed it. Pull the pending copy in and merge
+       rather than overwrite; only stop if even that can't be done safely. */
+    try {
+      const cur = await getDoc(STATE_DOC);
+      if (cur.exists()) {
+        const r = cur.data();
+        const serverMs = r._updatedAtMs || 0;
+        const theirs = r._updatedByClientId && r._updatedByClientId !== CLIENT_ID;
+        if (theirs && serverMs > knownRemoteMs) {
+          const remoteDb = normalizeDb({ owners: r.owners||[], dogs: r.dogs||[],
+            bookings: r.bookings||[], packs: r.packs||[], deposits: r.deposits||[], meta: r.meta });
+          /* reconcileWithPending keeps this tab's edits and carries over
+             everything the other device added or changed that we didn't touch. */
+          pendingRemoteDb = remoteDb;
+          db = reconcileWithPending(db);
+          knownRemoteMs = serverMs;
+          const who = (r._updatedBy || '').split('@')[0] || 'another device';
+          toast(`Merged changes from ${who} before saving`, 'info');
+        }
+      }
+    } catch (e) {
+      /* Can't check — offline, most likely. Writing blind is how data gets
+         lost, so refuse and let them try again rather than guess. */
+      console.warn('Pre-save check failed', e);
+      toast('Can\'t reach the cloud to check for other changes — not saved. Try again.', 'warn');
+      return false;
+    }
+
     const payload = sanitizeForFirestore({
       ...db,
       _updatedAt: new Date().toISOString(),
@@ -1010,6 +1074,7 @@ async function save(db) {
       _updatedByClientId: CLIENT_ID
     });
     await setDoc(STATE_DOC, payload);
+    knownRemoteMs = now;
     pendingRemoteDb = null;
     // Success — clear pending write counter + hide banner
     failedWriteCount = 0;
@@ -1032,6 +1097,7 @@ function startRealtimeSync() {
     if (!snap.exists()) return;
     const r = snap.data();
     // Reliable dedup: skip ONLY writes from this exact browser tab
+    knownRemoteMs = r._updatedAtMs || knownRemoteMs;
     if (r._updatedByClientId === CLIENT_ID) return;
     const nextDb = normalizeDb({ owners: r.owners||[], dogs: r.dogs||[], bookings: r.bookings||[], packs: r.packs||[], deposits: r.deposits||[], meta: r.meta });
     // If a modal is open, buffer the remote update so we don't wipe the in-progress form

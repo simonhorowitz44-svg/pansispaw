@@ -3,7 +3,7 @@
   "description": "Sends Pansi's Paws invoices when a client's week finishes.",
   "type": "module",
   "main": "index.js",
-  "engines": { "node": "20" },
+  "engines": { "node": "22" },
   "scripts": {
     "sync-core": "cp ../invoice-core.js ./invoice-core.js",
     "deploy": "npm run sync-core && firebase deploy --only functions",
