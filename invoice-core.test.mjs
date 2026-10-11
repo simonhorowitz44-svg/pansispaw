@@ -40,9 +40,11 @@ const base = () => ({
 
 /* ---------- week maths ---------- */
 console.log('\nWeeks');
-eq('a Wednesday belongs to the Sat–Fri week around it', C.weekOf('2026-09-16'), { from:'2026-09-12', to:'2026-09-18' });
-eq('a Saturday starts its own week',                    C.weekOf('2026-09-12'), { from:'2026-09-12', to:'2026-09-18' });
-eq('a Friday ends its week',                            C.weekOf('2026-09-18'), { from:'2026-09-12', to:'2026-09-18' });
+/* The billing week is Monday to Sunday. 14 Sep 2026 is a Monday, 20 Sep a Sunday. */
+eq('a Wednesday belongs to the Mon–Sun week around it', C.weekOf('2026-09-16'), { from:'2026-09-14', to:'2026-09-20' });
+eq('a Monday starts its own week',                      C.weekOf('2026-09-14'), { from:'2026-09-14', to:'2026-09-20' });
+eq('a Sunday ends its week',                            C.weekOf('2026-09-20'), { from:'2026-09-14', to:'2026-09-20' });
+eq('the Saturday before belongs to the previous week',  C.weekOf('2026-09-12'), { from:'2026-09-07', to:'2026-09-13' });
 t('consecutive weeks tile with no gap',
   C.addDaysISO(C.weekOf('2026-09-11').to, 1) === C.weekOf('2026-09-16').from);
 
@@ -357,7 +359,7 @@ console.log('\nDates must not drift with the timezone');
   console.log(`       (this machine is ${Intl.DateTimeFormat().resolvedOptions().timeZone}; ` +
               `toISOString ${tzShifts ? 'DOES' : 'does not'} shift here)`);
   eq('the due date is 7 days after the invoice date', C.addDaysISO('2026-09-17', C.INVOICE_TERMS_DAYS), '2026-09-24');
-  eq('a Friday week still ends on the Friday', C.weekOf('2026-09-17').to, '2026-09-18');
+  eq('a week still ends on the Sunday', C.weekOf('2026-09-17').to, '2026-09-20');
 }
 
 
@@ -1406,47 +1408,49 @@ console.log('\nA stay held with a deposit');
             biz:{ bsb:'062-000', acct:'12345678' } },
     owners: [{ id:'o1', name:'Therese Burke', email:'t@x.com' }],
     dogs:   [{ id:'d1', ownerId:'o1', name:'Elvis', size:'medium' }],
+    /* Mon 12 – Sun 18 Oct is one billing week. Asking on the Wednesday,
+       with a booking still to come on the Friday. */
     packs: [], bookings: [
-      { id:'b1', dogId:'d1', date:'2026-10-06', session:'half' },
-      { id:'b2', dogId:'d1', date:'2026-10-13', session:'full' }   // still to come
+      { id:'b1', dogId:'d1', date:'2026-10-13', session:'half' },  // Tue, done
+      { id:'b2', dogId:'d1', date:'2026-10-16', session:'full' }   // Fri, to come
     ]
   });
   const BZ = { bsb:'062-000', acct:'12345678' };
 
   const d = mk();
-  const inv = C.buildInvoice(d, 'o1', { asAt:'2026-10-11', from:'2026-09-28' });
+  const inv = C.buildInvoice(d, 'o1', { asAt:'2026-10-14', from:'2026-09-28' });
   t('the invoice itself builds', !!inv);
   eq('and the week rule blocks it by default',
-     C.blockers(d, inv, BZ, '2026-10-11'), ['Still has a booking to come this week']);
+     C.blockers(d, inv, BZ, '2026-10-14'), ['Still has a booking to come this week']);
   eq('ignoreWeekRun waives exactly that one',
      C.blockers(d, inv, BZ, '2026-10-11', { ignoreWeekRun:true }), []);
 
   /* The override must not wave through the faults. */
   const noMail = mk(); noMail.owners[0] = { id:'o1', name:'Therese Burke' };
-  const inv2 = C.buildInvoice(noMail, 'o1', { asAt:'2026-10-11', from:'2026-09-28' });
+  const inv2 = C.buildInvoice(noMail, 'o1', { asAt:'2026-10-14', from:'2026-09-28' });
   t('a missing email still blocks, override or not',
-    C.blockers(noMail, inv2, BZ, '2026-10-11', { ignoreWeekRun:true })
+    C.blockers(noMail, inv2, BZ, '2026-10-14', { ignoreWeekRun:true })
       .some(w => /No email/.test(w)));
   t('missing bank details still block',
-    C.blockers(d, inv, {}, '2026-10-11', { ignoreWeekRun:true })
+    C.blockers(d, inv, {}, '2026-10-14', { ignoreWeekRun:true })
       .some(w => /bank details/.test(w)));
 
   /* planRun honours sendNow on the queue entry. */
   const q = mk();
-  const qi = C.buildInvoice(q, 'o1', { asAt:'2026-10-11', from:'2026-09-28' });
-  q.meta.sendQueue = [{ ownerId:'o1', asAt:'2026-10-11', total: qi.total }];
+  const qi = C.buildInvoice(q, 'o1', { asAt:'2026-10-14', from:'2026-09-28' });
+  q.meta.sendQueue = [{ ownerId:'o1', asAt:'2026-10-14', total: qi.total }];
   eq('queued without sendNow, planRun refuses it',
-     C.planRun(q, BZ, q.meta.invoicing, '2026-10-11').jobs.length, 0);
-  q.meta.sendQueue = [{ ownerId:'o1', asAt:'2026-10-11', total: qi.total, sendNow:true }];
+     C.planRun(q, BZ, q.meta.invoicing, '2026-10-14').jobs.length, 0);
+  q.meta.sendQueue = [{ ownerId:'o1', asAt:'2026-10-14', total: qi.total, sendNow:true }];
   eq('queued with sendNow, planRun sends it',
-     C.planRun(q, BZ, q.meta.invoicing, '2026-10-11').jobs.length, 1);
+     C.planRun(q, BZ, q.meta.invoicing, '2026-10-14').jobs.length, 1);
 
   /* A week with nothing left to come needs no override at all. */
   const done = mk();
-  done.bookings = [{ id:'b1', dogId:'d1', date:'2026-10-06', session:'half' }];
-  const inv3 = C.buildInvoice(done, 'o1', { asAt:'2026-10-11', from:'2026-09-28' });
+  done.bookings = [{ id:'b1', dogId:'d1', date:'2026-10-13', session:'half' }];
+  const inv3 = C.buildInvoice(done, 'o1', { asAt:'2026-10-14', from:'2026-09-28' });
   eq('a complete week is unblocked anyway',
-     C.blockers(done, inv3, BZ, '2026-10-11'), []);
+     C.blockers(done, inv3, BZ, '2026-10-14'), []);
 }
 
 /* ---------- money already received before the invoice goes out ---------- */

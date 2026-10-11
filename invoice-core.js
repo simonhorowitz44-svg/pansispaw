@@ -187,17 +187,21 @@ export const cents = n => Math.round(Number(n || 0) * 100);
 export function addDaysISO(iso, n) {
   const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return localISO(d);
 }
-export function weekEndingFriday(d) {
+/* The billing week runs Monday to Sunday. It was Saturday to Friday, which
+   put a Monday or Tuesday visit in the same week as the Saturday before it
+   and held that client's invoice until the following Friday. Andressa thinks
+   in calendar weeks and so do her clients. */
+export function weekEndingSunday(d) {
   const x = new Date(d); x.setHours(0,0,0,0);
-  x.setDate(x.getDate() + ((5 - x.getDay() + 7) % 7));   // forward to Friday
+  x.setDate(x.getDate() + ((7 - x.getDay()) % 7));       // forward to Sunday
   return x;
 }
-export function invoiceWeek(fridayISO) {
-  return { from: addDaysISO(fridayISO, -6), to: fridayISO };
+export function invoiceWeek(sundayISO) {
+  return { from: addDaysISO(sundayISO, -6), to: sundayISO };
 }
 /* The week a date sits in, Saturday through Friday. */
 export function weekOf(isoDate) {
-  return invoiceWeek(localISO(weekEndingFriday(new Date(isoDate + 'T00:00:00'))));
+  return invoiceWeek(localISO(weekEndingSunday(new Date(isoDate + 'T00:00:00'))));
 }
 /* 5pm reads better than 17:00 on a document a dog owner reads. */
 export function friendlyTime(hhmm) {
