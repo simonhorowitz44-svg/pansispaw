@@ -48,7 +48,7 @@
       <p class="form-trust-note">We're insured and have first aid for pets. Your dog is in safe hands.</p>
     </section>
 
-    <form class="enrol-form" id="enrolForm" action="https://formspree.io/f/xzdaajpb" method="POST">
+    <form class="enrol-form" id="enrolForm" action="https://formspree.io/f/xzdaajpb" method="POST" enctype="multipart/form-data">
       <input type="hidden" name="_subject" value="[Pansi's Paw] Enrolment form">
       <input type="hidden" name="_next" value="https://pansispaws.com.au/enrol.html?submitted=1">
       <!-- Dog Details -->
@@ -160,23 +160,18 @@
 
       <!-- Documents -->
       <fieldset class="form-section">
-        <legend>Vaccination &amp; desexing</legend>
-        <p class="form-hint">We still need to see your dog's vaccination certificate (and desexing certificate,
-          if they're desexed) before their first day — but please send those separately rather than attaching
-          them here.</p>
-        <p class="form-hint"><strong>Text them to 0410 151 509</strong> or email
-          <a href="mailto:andressa@pansispaws.com.au">andressa@pansispaws.com.au</a>. A clear photo is fine.</p>
-        <div class="form-group" id="group-vaccSend">
-          <label class="checkbox-label">
-            <input type="checkbox" id="vaccSend" name="will_send_certificates" value="yes" required>
-            I'll send my dog's vaccination certificate by text or email *
-          </label>
-          <span class="field-error" id="error-vaccSend" role="alert"></span>
+        <legend>Documents</legend>
+        <p class="form-hint">Upload photos or PDFs of your dog's vaccination and desexing certificates. Required for enrolment.</p>
+        <div class="form-group" id="group-vaccCert">
+          <label for="vaccCert">Vaccination Certificate *</label>
+          <input type="file" id="vaccCert" name="vaccination_certificate" accept=".pdf,.jpg,.jpeg,.png" required aria-describedby="hint-vaccCert">
+          <span class="field-hint" id="hint-vaccCert">PDF, JPG or PNG. Max 10MB.</span>
+          <span class="field-error" id="error-vaccCert" role="alert"></span>
         </div>
-        <div class="form-group" id="group-vaccDate2">
-          <label for="vaccDateNote">When was your dog last vaccinated?</label>
-          <input type="text" id="vaccDateNote" name="vaccination_date_note" placeholder="e.g. March 2026, or not sure">
-          <span class="field-hint">Roughly is fine — the certificate will confirm it.</span>
+        <div class="form-group" id="group-desexCert">
+          <label for="desexCert">Desexing Certificate</label>
+          <input type="file" id="desexCert" name="desexing_certificate" accept=".pdf,.jpg,.jpeg,.png" aria-describedby="hint-desexCert">
+          <span class="field-hint" id="hint-desexCert">PDF, JPG or PNG. Optional if your dog is not desexed.</span>
         </div>
       </fieldset>
 
