@@ -808,18 +808,26 @@ export function sendableInvoices(db, biz, opts = {}) {
 }
 
 /* Why an invoice isn't going out. Empty array means it is. */
-/* opts.ignoreWeekRun — Andressa deliberately invoicing mid-week from the
-   booking sheet. It waives ONLY the week-complete rule: a client with a
-   booking still to come gets this invoice now and another one later, which
-   is her call to make. Nothing else here can be waived — no email, a line
-   that needs checking, or missing bank details are faults, not preferences,
-   and sending anyway produces a wrong or undeliverable invoice. */
+/* Two waivers, both deliberate acts by Andressa, neither available to an
+   automatic run:
+
+   opts.ignoreWeekRun — invoicing mid-week from the booking sheet. The client
+   gets this invoice now and another one later, which is her call.
+
+   opts.allowSummary — sending a receipt for a period already paid. It carries
+   no request for money, so it is safe to send; it is kept out of automatic
+   runs only because nobody needs an unprompted email saying they owe nothing.
+
+   Nothing else can be waived. A missing email, a line that needs checking or
+   absent bank details are faults, not preferences, and sending anyway
+   produces a wrong or undeliverable invoice. */
 export function blockers(db, inv, biz, asAt, opts = {}) {
   const out = [];
   if (!biz || !biz.bsb || !biz.acct) out.push('No bank details on file');
   if (!inv.owner.email)              out.push('No email address for this client');
   if (inv.warnings.length)           out.push(inv.warnings.length + ' line needs checking');
-  if (inv.nothingDue)                out.push('Nothing to pay — this is a summary, not an invoice');
+  if (inv.nothingDue && !opts.allowSummary)
+                                     out.push('Nothing to pay — this is a summary, not an invoice');
   if (!opts.ignoreWeekRun &&
       !weekRunComplete(db, inv.owner.id, asAt || localISO(new Date())))
                                      out.push('Still has a booking to come this week');
@@ -1068,7 +1076,8 @@ export function planRun(db, biz, cfg = {}, today) {
     }
     /* An entry queued from the booking sheet carries sendNow: she has already
        seen the total and chosen to send mid-week. */
-    const why = blockers(db, inv, biz, asAt, { ignoreWeekRun: !!q.sendNow });
+    const why = blockers(db, inv, biz, asAt,
+                         { ignoreWeekRun: !!q.sendNow, allowSummary: !!q.sendReceipt });
     if (why.length) { refused.push({ ownerId: q.ownerId, who: inv.owner.name, why: why.join('; ') }); continue; }
     if (q.total != null && Math.abs(q.total - inv.total) > 0.005) {
       refused.push({ ownerId: q.ownerId, who: inv.owner.name,

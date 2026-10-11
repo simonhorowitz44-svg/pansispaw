@@ -2507,12 +2507,16 @@ function invBuckets() {
      keeps its Send button and tapping it again queues a second copy. That is
      exactly what happened: four taps, four runs, one client billed four times. */
   const queuedFor = new Set(((DB.meta && DB.meta.sendQueue) || []).map(q => q.ownerId));
-  const out = { ready: [], waiting: [], blocked: [], sending: [] };
+  const out = { ready: [], waiting: [], blocked: [], sending: [], receipts: [] };
   all.forEach(inv => {
     if (queuedFor.has(inv.owner.id)) { out.sending.push(inv); return; }
     const why = blockers(DB, inv, BIZ, today);
-    if (!why.length) out.ready.push(inv);
-    else if (why.length === 1 && why[0].startsWith('Still has')) out.waiting.push(inv);
+    if (!why.length) { out.ready.push(inv); return; }
+    /* Already paid in full. That is the best case, not a problem, and it was
+       landing in "Needs a look" among the genuine faults. */
+    const asReceipt = blockers(DB, inv, BIZ, today, { allowSummary: true });
+    if (inv.nothingDue && !asReceipt.length) { out.receipts.push(inv); return; }
+    if (why.length === 1 && why[0].startsWith('Still has')) out.waiting.push(inv);
     else out.blocked.push({ inv, why });
   });
   return out;
@@ -2616,6 +2620,9 @@ function renderInvoices() {
         Send ${b.ready.length} invoice${b.ready.length===1?'':'s'} · $${total.toFixed(2)}</button>`
       : `<p class="sub muted small">These go out on their own as each client's week finishes.</p>`}` : ''}
 
+    ${b.receipts.length ? `<h3 class="grp-title">Paid already · receipt ready</h3>
+      ${b.receipts.map(i => card(i, ['paid in full — send them the receipt'])).join('')}` : ''}
+
     ${b.blocked.length ? `<h3 class="grp-title">Needs a look</h3>
       ${b.blocked.map(x => card(x.inv, x.why)).join('')}` : ''}
 
@@ -2642,7 +2649,7 @@ function renderInvoices() {
       ${(() => { const r = DB.meta && DB.meta.invoicingLastRun; return r
         ? `<p class="sub muted small">Last run ${fmtDateShort(r.at.slice(0,10))} · ${r.sent||0} sent${r.failed ? ' · ' + r.failed + ' failed' : ''}${r.refused ? ' · ' + r.refused + ' refused' : ''}</p>` : ''; })()}` : ''}
 
-    ${!b.ready.length && !b.blocked.length && !b.waiting.length
+    ${!b.ready.length && !b.blocked.length && !b.waiting.length && !b.receipts.length
       ? '<p class="sub muted small">Nothing to bill — everything up to today has been invoiced.</p>' : ''}
   `);
 }
@@ -2660,6 +2667,9 @@ function openOneInvoice(ownerId) {
     ${renderInvoiceHTML(inv, BIZ)}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
       ${!why.length ? `<button class="btn primary" onclick="queueInvoice('${escapeHtml(ownerId)}')">Send it</button>` : ''}
+      ${inv.nothingDue && !blockers(DB, inv, BIZ, todayISO(), { allowSummary: true }).length
+        ? `<button class="btn primary" onclick="queueInvoice('${escapeHtml(ownerId)}', { receipt: true })">Send receipt</button>` : ''}
+      ${!inv.nothingDue ? `<button class="btn ghost" onclick="payThenReceipt('${escapeHtml(ownerId)}', ${inv.total})">They've paid — record it</button>` : ''}
       <button class="btn ghost" onclick="printInvoice('${escapeHtml(ownerId)}')">Print / save PDF</button>
       <button class="btn ghost" onclick="copyInvoiceText('${escapeHtml(ownerId)}')">Copy as text</button>
       ${inv.owner.email ? `<button class="btn ghost" onclick="emailInvoice('${escapeHtml(ownerId)}')">Open in mail</button>` : ''}
@@ -2670,15 +2680,17 @@ function openOneInvoice(ownerId) {
 
 /* The panel never sends. It writes the intent; the Cloud Function does the
    sending, so it works whether or not this tab is open. */
-async function queueInvoice(ownerId) {
+async function queueInvoice(ownerId, opts = {}) {
   const today = todayISO();
   const inv = buildInvoice(DB, ownerId, { asAt: today });
   if (!inv) return;
-  const why = blockers(DB, inv, BIZ, today);
+  const why = blockers(DB, inv, BIZ, today, { allowSummary: !!opts.receipt });
   if (why.length) return toast(why[0]);
   DB.meta.sendQueue = DB.meta.sendQueue || [];
   DB.meta.sendQueue.push({ ownerId, asAt: today, number: inv.number,
-                           bookingIds: inv.bookingIds, total: inv.total, queuedAt: new Date().toISOString() });
+                           bookingIds: inv.bookingIds, total: inv.total,
+                           ...(opts.receipt ? { sendReceipt: true } : {}),
+                           queuedAt: new Date().toISOString() });
   await save(DB);
   renderInvoices();
   toast(`Sending ${inv.owner.name}'s invoice — $${inv.total.toFixed(2)}`, 'ok');
@@ -2722,6 +2734,15 @@ async function invoiceNow(bookingId) {
   await save(DB);
   closeSheet();
   toast(`Sending ${owner.name}'s invoice — $${inv.total.toFixed(2)}`, 'ok');
+}
+
+/* Record money received against this client, then reopen the invoice — which
+   will now have the payment credited and, if it covers the lot, have become a
+   receipt she can send. addPayment already existed but only in the client's
+   money view, which is nowhere near the invoice she is looking at. */
+async function payThenReceipt(ownerId, suggested) {
+  await addPayment(ownerId, suggested);
+  openOneInvoice(ownerId);
 }
 
 async function queueAllReady() {
@@ -4932,6 +4953,7 @@ function photoOrGlyph(dog) {
 Object.assign(window, {
   doSignIn, signOutAdmin, switchTab,
   openAddMenuSheet, openBookingSheet, saveBookingForm, deleteBooking, invoiceNow,
+  payThenReceipt,
   openStaySheet,
   openDogSheet, openDogEditSheet, saveDogForm, deleteDog,
   openMergeDogSheet, applyMergeDog,

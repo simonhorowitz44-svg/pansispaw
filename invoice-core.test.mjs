@@ -1530,9 +1530,30 @@ console.log('\nA stay held with a deposit');
   const sum = mk();
   sum.payments = [{ id:'p1', ownerId:'o1', amount:130, date:'2026-10-07' }];
   const invS = C.buildInvoice(sum, 'o1', at);
-  t('a summary is blocked from sending',
+  t('a summary is blocked from sending by default',
     C.blockers(sum, invS, BZ, '2026-10-09').some(w => /summary/.test(w)));
-  eq('but it still names the days it covers', invS.bookingIds.length, 2);
+  eq('but Andressa can send it as a receipt',
+     C.blockers(sum, invS, BZ, '2026-10-09', { allowSummary:true }), []);
+  eq('and it still names the days it covers', invS.bookingIds.length, 2);
+
+  /* A receipt reaches the sender only when she asked for one. */
+  const rq = mk();
+  rq.payments = [{ id:'p1', ownerId:'o1', amount:130, date:'2026-10-07' }];
+  rq.meta.sendQueue = [{ ownerId:'o1', asAt:'2026-10-09', total:0 }];
+  eq('queued without sendReceipt, a summary is refused',
+     C.planRun(rq, BZ, rq.meta.invoicing, '2026-10-09').jobs.length, 0);
+  rq.meta.sendQueue = [{ ownerId:'o1', asAt:'2026-10-09', total:0, sendReceipt:true }];
+  eq('queued with sendReceipt, it goes',
+     C.planRun(rq, BZ, rq.meta.invoicing, '2026-10-09').jobs.length, 1);
+
+  /* The waiver is narrow: a receipt to someone with no email still stops. */
+  const nomail = mk();
+  nomail.owners[0] = { id:'o1', name:'Therese Burke' };
+  nomail.payments = [{ id:'p1', ownerId:'o1', amount:130, date:'2026-10-07' }];
+  const invN = C.buildInvoice(nomail, 'o1', at);
+  t('a receipt with no email address still stops',
+    C.blockers(nomail, invN, BZ, '2026-10-09', { allowSummary:true })
+      .some(w => /No email/.test(w)));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
