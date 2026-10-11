@@ -4197,6 +4197,7 @@ function openDogSheet(dogId) {
       ${owner?.email ? `<a class="btn ghost" href="mailto:${escapeHtml(owner.email)}">📧 Email ${escapeHtml((owner.name||'').split(' ')[0])}</a>` : ''}
       ${owner?.phone ? `<a class="btn ghost" href="tel:${escapeHtml(owner.phone)}">📞 Call</a>` : ''}
       <button class="btn ghost" data-editdog="${d.id}">✎ Edit dog</button>
+      <button class="btn ghost" onclick="closeSheet(); openSellPackSheet('${d.id}')">🎟 Sell a pack</button>
       ${owner ? `<button class="btn primary" data-openowner="${owner.id}">Edit client</button>` : ''}
     </div>`);
 }
@@ -4212,9 +4213,9 @@ function openSellPackSheet(dogId) {
   const today = todayISO();
   const expiry = new Date(); expiry.setMonth(expiry.getMonth() + 6);
   openSheet(`
-    <h2 class="sheet-title">Sell a welcome pack</h2>
+    <h2 class="sheet-title">Sell a pack</h2>
     <p class="sheet-sub">For ${escapeHtml(d.name)} · ${escapeHtml(owner?.name || '—')} · ${SIZE_LABELS[d.size]}</p>
-    ${!isFirstTime ? `<div class="pill hi" style="margin-bottom:12px">⚠ This dog has bookings or packs on record. Welcome packs are usually first-time-only — proceed with intent.</div>` : ''}
+    ${activePacksForDog(dogId).length ? `<div class="pill hi" style="margin-bottom:12px">⚠ ${escapeHtml(d.name)} already has an unfinished pack. Two live packs at once make redemptions ambiguous.</div>` : ''}
     <form onsubmit="return savePackForm(event, '${dogId}')">
       <div class="field-group">
         <label>Which pack?</label>
@@ -4224,7 +4225,7 @@ function openSellPackSheet(dogId) {
             <div class="pack-option-body">
               <div class="pack-option-tier">5-day pack</div>
               <div class="pack-option-price">$${price5}</div>
-              <div class="pack-option-unit">$${Math.round(price5/5)}/day · 10% off std $${base}</div>
+              <div class="pack-option-unit">$${Math.round(price5/5)}/day · ${Math.round(PACK_DISCOUNTS[5]*100)}% off std $${base}</div>
             </div>
           </label>
           <label class="pack-option" style="cursor:pointer">
@@ -4232,7 +4233,7 @@ function openSellPackSheet(dogId) {
             <div class="pack-option-body">
               <div class="pack-option-tier">10-day pack</div>
               <div class="pack-option-price">$${price10}</div>
-              <div class="pack-option-unit">$${Math.round(price10/10)}/day · 15% off std $${base}</div>
+              <div class="pack-option-unit">$${Math.round(price10/10)}/day · ${Math.round(PACK_DISCOUNTS[10]*100)}% off std $${base}</div>
             </div>
           </label>
         </div>
@@ -4241,7 +4242,8 @@ function openSellPackSheet(dogId) {
         <div class="field-group"><label>Purchase date</label><input class="field" name="purchaseDate" type="date" value="${today}" required></div>
         <div class="field-group"><label>Expires</label><input class="field" name="expiryDate" type="date" value="${localISO(expiry)}" required></div>
       </div>
-      <div class="field-group"><label>Amount paid</label><input class="field" name="paidAmount" type="number" value="${price5}" required></div>
+      <div class="field-group"><label>Amount paid</label><input class="field" name="paidAmount" type="number" step="0.01" value="${price5}" required>
+        <div class="sub muted small">Overwrite this if a different price was agreed — what goes here is what the invoice credits.</div></div>
       <div class="field-group"><label>Payment method / notes</label><input class="field" name="notes" placeholder="Bank transfer · reference…"></div>
       <button type="submit" class="btn primary block">Record pack</button>
     </form>
