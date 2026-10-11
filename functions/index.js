@@ -211,6 +211,13 @@ async function runInvoicing(reason, apiKey) {
       meta.invoicesSent = meta.invoicesSent || [];
       sent.forEach(({ inv, id }) => {
         inv.bookingIds.forEach(bid => { meta.billed[bid] = inv.number; });
+        /* Consume the payments this invoice credited. Without this the same
+           money comes off every future invoice for that client. */
+        if (inv.creditPaymentIds && inv.creditPaymentIds.length) {
+          for (const pay of (state.payments || [])) {
+            if (inv.creditPaymentIds.includes(pay.id)) pay.appliedTo = inv.number;
+          }
+        }
         meta.invoicesSent.push({
           number: inv.number, ownerId: inv.owner.id, ownerName: inv.owner.name,
           /* The reference is what the client types into their bank, so it is

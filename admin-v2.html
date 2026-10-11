@@ -2684,6 +2684,46 @@ async function queueInvoice(ownerId) {
   toast(`Sending ${inv.owner.name}'s invoice — $${inv.total.toFixed(2)}`, 'ok');
 }
 
+/* Invoice this client now, from the booking sheet.
+
+   The week-complete rule stops a client being invoiced twice in a week, which
+   is right nearly always and wrong when someone asks for their invoice on a
+   Wednesday. This is the deliberate way round it: it shows her the total and
+   what is on it, and only the week rule is waived — a missing email or a line
+   that needs checking still stops it, because those produce a wrong invoice
+   rather than an early one. */
+async function invoiceNow(bookingId) {
+  const b = DB.bookings.find(x => x.id === bookingId);
+  const owner = b && ownerOf(b.dogId);
+  if (!owner) return toast('No client on this booking');
+
+  const today = todayISO();
+  const inv = buildInvoice(DB, owner.id, { asAt: today });
+  if (!inv) return toast('Nothing left to bill for ' + owner.name);
+
+  /* Everything except the week rule. */
+  const hard = blockers(DB, inv, BIZ, today, { ignoreWeekRun: true });
+  if (hard.length) return toast(hard[0]);
+
+  if ((DB.meta.sendQueue || []).some(q => q.ownerId === owner.id))
+    return toast(owner.name + "'s invoice is already queued");
+
+  const midWeek = !weekRunComplete(DB, owner.id, today);
+  const lines = inv.lines.map(l => `  ${fmtDateShort(l.date)}  ${l.what}  $${l.amt.toFixed(2)}`).join('\n');
+  const ask = `Send ${owner.name}'s invoice now?\n\n${lines}\n\nTotal $${inv.total.toFixed(2)}\n\n`
+            + (midWeek ? `${inv.owner.name} still has a booking later this week — those days will go on a separate invoice.`
+                       : 'This week is complete.');
+  if (!confirm(ask)) return;
+
+  DB.meta.sendQueue = DB.meta.sendQueue || [];
+  DB.meta.sendQueue.push({ ownerId: owner.id, asAt: today, number: inv.number,
+                           bookingIds: inv.bookingIds, total: inv.total,
+                           sendNow: true, queuedAt: new Date().toISOString() });
+  await save(DB);
+  closeSheet();
+  toast(`Sending ${owner.name}'s invoice — $${inv.total.toFixed(2)}`, 'ok');
+}
+
 async function queueAllReady() {
   const S = invSettings();
   const ready = invBuckets().ready;
@@ -2790,9 +2830,18 @@ async function markInvoiceSent(ownerId) {
   if (!confirm(`Mark ${inv.lines.length} line${inv.lines.length===1?'':'s'} for ${inv.owner.name} as dealt with?\n\nThey won't appear again and no email is sent.`)) return;
   DB.meta.billed = DB.meta.billed || {};
   inv.bookingIds.forEach(id => { DB.meta.billed[id] = inv.number; });
+  /* Consume any payments this credited, or the same money comes off the next
+     invoice too. */
+  (inv.creditPaymentIds || []).forEach(pid => {
+    const pay = (DB.payments || []).find(x => x.id === pid);
+    if (pay) pay.appliedTo = inv.number;
+  });
   DB.meta.invoicesSent = DB.meta.invoicesSent || [];
   DB.meta.invoicesSent.push({ number: inv.number, ownerId, ownerName: inv.owner.name, asAt: today,
-    total: inv.total, bookingIds: inv.bookingIds, sentAt: new Date().toISOString(), mode: 'by hand' });
+    total: inv.total, bookingIds: inv.bookingIds, sentAt: new Date().toISOString(), mode: 'by hand',
+    /* A fully-credited period is a receipt, not a debt — don't let the Money
+       view show it as owing. */
+    ...(inv.nothingDue ? { paidAmount: 0, paidAt: new Date().toISOString() } : {}) });
   await save(DB);
   toast('Closed off — no email sent', 'ok');
   renderInvoices();
@@ -3529,6 +3578,7 @@ function openBookingSheet(bookingId, prefillDate) {
             <option value="paid" ${b.paymentStatus==='paid'?'selected':''}>Paid</option>
           </select></div>` : ''}
       <button type="submit" class="btn primary block">${isNew?'Add booking':'Save'}</button>
+      ${!isNew ? `<button type="button" class="btn block" onclick="invoiceNow('${b.id}')">Invoice this client now</button>` : ''}
       ${!isNew ? `<button type="button" class="btn danger block" onclick="deleteBooking('${b.id}')">Delete booking</button>` : ''}
     </form>`);
   updateBookingPrice();
@@ -4881,7 +4931,7 @@ function photoOrGlyph(dog) {
 
 Object.assign(window, {
   doSignIn, signOutAdmin, switchTab,
-  openAddMenuSheet, openBookingSheet, saveBookingForm, deleteBooking,
+  openAddMenuSheet, openBookingSheet, saveBookingForm, deleteBooking, invoiceNow,
   openStaySheet,
   openDogSheet, openDogEditSheet, saveDogForm, deleteDog,
   openMergeDogSheet, applyMergeDog,

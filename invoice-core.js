@@ -484,6 +484,25 @@ export function stayIdsAcrossFloor(db, floorISO) {
   return keep;
 }
 
+/* Money received that no invoice has claimed yet.
+
+   A client often transfers before the invoice runs. Those payments were
+   invisible here, so the invoice billed the full amount and asked them a
+   second time. A payment counts as unapplied when nothing has consumed it:
+   `invoices` is what the bank-statement matcher settled at the time, and
+   `appliedTo` is stamped on when an invoice that credited it is sent.
+   Payments dated before meta.settledBefore are history and stay out. */
+export function unappliedPayments(db, ownerId) {
+  const floor = (db.meta && db.meta.settledBefore) || '0000-01-01';
+  return (db.payments || [])
+    .filter(p => p.ownerId === ownerId
+              && Number(p.amount) > 0
+              && String(p.date || '') >= floor
+              && !p.appliedTo
+              && !(p.invoices && p.invoices.length))
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+}
+
 /* Everything billable that hasn't been billed yet.
    opts: { asAt = today, from = meta.invoicingGoLive, includeBilled = false } */
 export function buildInvoice(db, ownerId, opts = {}) {
@@ -725,11 +744,32 @@ export function buildInvoice(db, ownerId, opts = {}) {
   }
 
   if (!lines.length) return null;
+
+  /* Credit anything already paid, oldest first, the same way a deposit is
+     credited above. Capped at the total so an overpayment never produces a
+     negative invoice; the remainder is flagged rather than silently kept.
+     The ids ride on the invoice so whoever sends it can stamp them consumed —
+     without that the same payment would come off every future invoice. */
+  const creditPaymentIds = [];
+  for (const pay of unappliedPayments(db, ownerId)) {
+    if (totalC <= 0) break;
+    const availC = cents(pay.amount);
+    const useC   = Math.min(availC, totalC);
+    if (useC <= 0) break;
+    push({ date: dates0(lines), dog: '', what: 'Payment received',
+           note: pay.date ? `received ${fmtDay(String(pay.date).slice(0, 10))}` : '',
+           credit: true }, -useC, null);
+    creditPaymentIds.push(pay.id);
+    if (availC > useC) {
+      warnings.push(`${owner.name} paid $${(availC / 100).toFixed(2)} but this invoice only came to $${(useC / 100).toFixed(2)} — $${((availC - useC) / 100).toFixed(2)} is still theirs.`);
+    }
+  }
+
   const total = totalC / 100;
   const dates = lines.map(l => l.date).sort();
   const seq   = opts.seq || invoiceSeq(db, ownerId, asAt);
   return {
-    owner, asAt, bookingIds, lines, packNotes, warnings,
+    owner, asAt, bookingIds, lines, packNotes, warnings, creditPaymentIds,
     periodFrom: dates[0], periodTo: dates[dates.length - 1],
     total, ref: payRef(db, owner, asAt), number: invoiceNumber(owner, asAt, seq),
     dueISO: addDaysISO(asAt, INVOICE_TERMS_DAYS),
@@ -764,13 +804,20 @@ export function sendableInvoices(db, biz, opts = {}) {
 }
 
 /* Why an invoice isn't going out. Empty array means it is. */
-export function blockers(db, inv, biz, asAt) {
+/* opts.ignoreWeekRun — Andressa deliberately invoicing mid-week from the
+   booking sheet. It waives ONLY the week-complete rule: a client with a
+   booking still to come gets this invoice now and another one later, which
+   is her call to make. Nothing else here can be waived — no email, a line
+   that needs checking, or missing bank details are faults, not preferences,
+   and sending anyway produces a wrong or undeliverable invoice. */
+export function blockers(db, inv, biz, asAt, opts = {}) {
   const out = [];
   if (!biz || !biz.bsb || !biz.acct) out.push('No bank details on file');
   if (!inv.owner.email)              out.push('No email address for this client');
   if (inv.warnings.length)           out.push(inv.warnings.length + ' line needs checking');
   if (inv.nothingDue)                out.push('Nothing to pay — this is a summary, not an invoice');
-  if (!weekRunComplete(db, inv.owner.id, asAt || localISO(new Date())))
+  if (!opts.ignoreWeekRun &&
+      !weekRunComplete(db, inv.owner.id, asAt || localISO(new Date())))
                                      out.push('Still has a booking to come this week');
   return out;
 }
@@ -1015,7 +1062,9 @@ export function planRun(db, biz, cfg = {}, today) {
       refused.push({ ownerId: q.ownerId, who: o?.name || q.ownerId, why: 'nothing left to bill — already invoiced?' });
       continue;
     }
-    const why = blockers(db, inv, biz, asAt);
+    /* An entry queued from the booking sheet carries sendNow: she has already
+       seen the total and chosen to send mid-week. */
+    const why = blockers(db, inv, biz, asAt, { ignoreWeekRun: !!q.sendNow });
     if (why.length) { refused.push({ ownerId: q.ownerId, who: inv.owner.name, why: why.join('; ') }); continue; }
     if (q.total != null && Math.abs(q.total - inv.total) > 0.005) {
       refused.push({ ownerId: q.ownerId, who: inv.owner.name,

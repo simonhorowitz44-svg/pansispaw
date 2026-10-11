@@ -1395,5 +1395,141 @@ console.log('\nA stay held with a deposit');
      C.stayIdsAcrossFloor(nofloor, '').size, 0);
 }
 
+/* ---------- invoicing mid-week, deliberately ---------- */
+{
+  /* Elvis had a full day booked for the Monday inside the current week, so
+     the invoice built fine and refused to send: "Still has a booking to come
+     this week". Right by default, but Andressa needs to override it. */
+  const mk = () => ({
+    meta: { billed:{}, invoicesSent:[], sendQueue:[],
+            invoicing:{ mode:'approve', goLive:'2026-09-28', batchCap:8 },
+            biz:{ bsb:'062-000', acct:'12345678' } },
+    owners: [{ id:'o1', name:'Therese Burke', email:'t@x.com' }],
+    dogs:   [{ id:'d1', ownerId:'o1', name:'Elvis', size:'medium' }],
+    packs: [], bookings: [
+      { id:'b1', dogId:'d1', date:'2026-10-06', session:'half' },
+      { id:'b2', dogId:'d1', date:'2026-10-13', session:'full' }   // still to come
+    ]
+  });
+  const BZ = { bsb:'062-000', acct:'12345678' };
+
+  const d = mk();
+  const inv = C.buildInvoice(d, 'o1', { asAt:'2026-10-11', from:'2026-09-28' });
+  t('the invoice itself builds', !!inv);
+  eq('and the week rule blocks it by default',
+     C.blockers(d, inv, BZ, '2026-10-11'), ['Still has a booking to come this week']);
+  eq('ignoreWeekRun waives exactly that one',
+     C.blockers(d, inv, BZ, '2026-10-11', { ignoreWeekRun:true }), []);
+
+  /* The override must not wave through the faults. */
+  const noMail = mk(); noMail.owners[0] = { id:'o1', name:'Therese Burke' };
+  const inv2 = C.buildInvoice(noMail, 'o1', { asAt:'2026-10-11', from:'2026-09-28' });
+  t('a missing email still blocks, override or not',
+    C.blockers(noMail, inv2, BZ, '2026-10-11', { ignoreWeekRun:true })
+      .some(w => /No email/.test(w)));
+  t('missing bank details still block',
+    C.blockers(d, inv, {}, '2026-10-11', { ignoreWeekRun:true })
+      .some(w => /bank details/.test(w)));
+
+  /* planRun honours sendNow on the queue entry. */
+  const q = mk();
+  const qi = C.buildInvoice(q, 'o1', { asAt:'2026-10-11', from:'2026-09-28' });
+  q.meta.sendQueue = [{ ownerId:'o1', asAt:'2026-10-11', total: qi.total }];
+  eq('queued without sendNow, planRun refuses it',
+     C.planRun(q, BZ, q.meta.invoicing, '2026-10-11').jobs.length, 0);
+  q.meta.sendQueue = [{ ownerId:'o1', asAt:'2026-10-11', total: qi.total, sendNow:true }];
+  eq('queued with sendNow, planRun sends it',
+     C.planRun(q, BZ, q.meta.invoicing, '2026-10-11').jobs.length, 1);
+
+  /* A week with nothing left to come needs no override at all. */
+  const done = mk();
+  done.bookings = [{ id:'b1', dogId:'d1', date:'2026-10-06', session:'half' }];
+  const inv3 = C.buildInvoice(done, 'o1', { asAt:'2026-10-11', from:'2026-09-28' });
+  eq('a complete week is unblocked anyway',
+     C.blockers(done, inv3, BZ, '2026-10-11'), []);
+}
+
+/* ---------- money already received before the invoice goes out ---------- */
+{
+  /* A client transfers on Tuesday; the invoice runs on Friday. Before this,
+     payments were invisible to buildInvoice and the client was asked twice. */
+  const mk = () => ({
+    meta: { billed:{}, invoicesSent:[], sendQueue:[], settledBefore:'2026-09-01',
+            invoicing:{ mode:'approve', goLive:'2026-09-01', batchCap:8 },
+            biz:{ bsb:'062-000', acct:'12345678' } },
+    owners: [{ id:'o1', name:'Therese Burke', email:'t@x.com' }],
+    dogs:   [{ id:'d1', ownerId:'o1', name:'Elvis', size:'medium' }],
+    packs: [], deposits: [], payments: [],
+    bookings: [
+      { id:'b1', dogId:'d1', date:'2026-09-29', session:'half' },   // 65
+      { id:'b2', dogId:'d1', date:'2026-10-06', session:'half' }    // 65
+    ]
+  });
+  const BZ = { bsb:'062-000', acct:'12345678' };
+  const at = { asAt:'2026-10-09', from:'2026-09-01' };
+
+  eq('with no payment it is a normal invoice',
+     C.buildInvoice(mk(), 'o1', at).total, 130);
+
+  /* Paid in full → nothing to pay, and it becomes a summary. */
+  const full = mk();
+  full.payments = [{ id:'p1', ownerId:'o1', amount:130, date:'2026-10-07' }];
+  const invF = C.buildInvoice(full, 'o1', at);
+  eq('paid in full comes to zero', invF.total, 0);
+  t('and is flagged as a summary, not an invoice', invF.nothingDue === true);
+  t('the payment shows as a credit line',
+    invF.lines.some(l => l.credit && l.amt === -130));
+  eq('and the payment is named for consuming', invF.creditPaymentIds, ['p1']);
+
+  /* Part paid → an invoice for the balance. */
+  const part = mk();
+  part.payments = [{ id:'p1', ownerId:'o1', amount:50, date:'2026-10-07' }];
+  const invP = C.buildInvoice(part, 'o1', at);
+  eq('part paid bills the balance', invP.total, 80);
+  t('and is still a real invoice', invP.nothingDue === false);
+
+  /* Overpaid → capped at the total, and she is told. */
+  const over = mk();
+  over.payments = [{ id:'p1', ownerId:'o1', amount:200, date:'2026-10-07' }];
+  const invO = C.buildInvoice(over, 'o1', at);
+  eq('an overpayment cannot make the total negative', invO.total, 0);
+  t('and the remainder is flagged as still theirs',
+    invO.warnings.some(w => /still theirs/.test(w)));
+
+  /* A payment already allocated to a sent invoice is not credited again. */
+  const spent = mk();
+  spent.payments = [{ id:'p1', ownerId:'o1', amount:130, date:'2026-10-07',
+                      invoices:['PP-20261002-AAAA'] }];
+  eq('a payment that settled an earlier invoice is not reused',
+     C.buildInvoice(spent, 'o1', at).total, 130);
+
+  const consumed = mk();
+  consumed.payments = [{ id:'p1', ownerId:'o1', amount:130, date:'2026-10-07',
+                         appliedTo:'PP-20261009-BBBB' }];
+  eq('a payment already applied to an invoice is not reused',
+     C.buildInvoice(consumed, 'o1', at).total, 130);
+
+  /* Historical payments from before the books were settled stay out. */
+  const old = mk();
+  old.payments = [{ id:'p1', ownerId:'o1', amount:130, date:'2026-08-01' }];
+  eq('payments before settledBefore are ignored',
+     C.buildInvoice(old, 'o1', at).total, 130);
+
+  /* Someone else's payment never touches this invoice. */
+  const other = mk();
+  other.owners.push({ id:'o2', name:'Someone Else', email:'s@x.com' });
+  other.payments = [{ id:'p1', ownerId:'o2', amount:130, date:'2026-10-07' }];
+  eq("another client's payment is not credited here",
+     C.buildInvoice(other, 'o1', at).total, 130);
+
+  /* A summary must not auto-send, but the days must still be closed out. */
+  const sum = mk();
+  sum.payments = [{ id:'p1', ownerId:'o1', amount:130, date:'2026-10-07' }];
+  const invS = C.buildInvoice(sum, 'o1', at);
+  t('a summary is blocked from sending',
+    C.blockers(sum, invS, BZ, '2026-10-09').some(w => /summary/.test(w)));
+  eq('but it still names the days it covers', invS.bookingIds.length, 2);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
