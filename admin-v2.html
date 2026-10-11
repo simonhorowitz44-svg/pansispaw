@@ -812,6 +812,11 @@ function dedupeById(db) {
 function normalizeDb(db) {
   if (!db || typeof db !== 'object') return emptyDb();
   db.owners ||= []; db.dogs ||= []; db.bookings ||= []; db.packs ||= []; db.deposits ||= []; db.meta ||= {};
+  /* Every collection the panel keeps MUST be read back in all three places
+     that build DB from Firestore — loadFromFirestore, the snapshot handler
+     and the save guard. payments was added here but to none of them, so it
+     loaded as [] on every page view and the next save wrote that empty array
+     back. Every payment ever recorded was destroyed by the next page load. */
   db.payments ||= [];                      // money received, as records
   db.meta.settledBefore ||= '';            // everything before this date is done with
   db.meta.biz ||= { acctName:'', bsb:'', acct:'', abn:'', stripeLink:'', email:'' };
@@ -930,7 +935,7 @@ async function loadFromFirestore() {
     const snap = await getDoc(STATE_DOC);
     if (snap.exists()) {
       const r = snap.data();
-      DB = normalizeDb({ owners: r.owners||[], dogs: r.dogs||[], bookings: r.bookings||[], packs: r.packs||[], deposits: r.deposits||[], meta: r.meta });
+      DB = normalizeDb({ owners: r.owners||[], dogs: r.dogs||[], bookings: r.bookings||[], packs: r.packs||[], deposits: r.deposits||[], payments: r.payments||[], meta: r.meta });
       knownRemoteMs = r._updatedAtMs || 0;
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); } catch (e) { console.warn('LS write failed', e); }
       return true;
@@ -1062,7 +1067,8 @@ async function save(db) {
         const movedOn = (r._updatedAtMs || 0) > knownRemoteMs || sig(r) !== sig(db);
         if (foreign && movedOn) {
           const remoteDb = normalizeDb({ owners: r.owners||[], dogs: r.dogs||[],
-            bookings: r.bookings||[], packs: r.packs||[], deposits: r.deposits||[], meta: r.meta });
+            bookings: r.bookings||[], packs: r.packs||[], deposits: r.deposits||[],
+            payments: r.payments||[], meta: r.meta });
           /* reconcileWithPending keeps this tab's edits and carries over
              everything the other device added or changed that we didn't touch. */
           pendingRemoteDb = remoteDb;
@@ -1113,7 +1119,7 @@ function startRealtimeSync() {
     // Reliable dedup: skip ONLY writes from this exact browser tab
     knownRemoteMs = r._updatedAtMs || knownRemoteMs;
     if (r._updatedByClientId === CLIENT_ID) return;
-    const nextDb = normalizeDb({ owners: r.owners||[], dogs: r.dogs||[], bookings: r.bookings||[], packs: r.packs||[], deposits: r.deposits||[], meta: r.meta });
+    const nextDb = normalizeDb({ owners: r.owners||[], dogs: r.dogs||[], bookings: r.bookings||[], packs: r.packs||[], deposits: r.deposits||[], payments: r.payments||[], meta: r.meta });
     // If a modal is open, buffer the remote update so we don't wipe the in-progress form
     if (modalIsOpen()) {
       pendingRemoteDb = nextDb;
