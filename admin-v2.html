@@ -5754,6 +5754,26 @@ async function askRunTool(name, a) {
     const today = todayISO();
     const inv = buildInvoice(DB, a.ownerId, { asAt: today });
     if (!inv) return { say: `${o.name} has nothing to invoice.`, card: '' };
+
+    /* Asking for a receipt does not make the document a receipt. It is one
+       only when a recorded payment has brought the total to zero — which is
+       what nothingDue means. Without that, buildInvoice correctly produces a
+       bill, and sending it labelled "receipt" puts a demand for money in
+       front of a client who has already paid. Refuse, and say what is
+       missing: it is almost always that the payment was never recorded. */
+    if (receipt && !inv.nothingDue) return {
+      say: `Cannot send ${o.name} a receipt: their week still shows ${aMoney(inv.total)} outstanding, `
+         + `because no payment has been recorded against it. Record the payment with record_payment `
+         + `and the same document becomes a receipt by itself. Do not send an invoice instead — `
+         + `they have already paid.`,
+      card: aCard('stop', `<div class="ask-ttl">⛔ Not a receipt yet · ${escapeHtml(o.name)}</div>`
+        + aRow('Still showing', `<b>${escapeHtml(aMoney(inv.total))}</b> due`)
+        + aNote('Nothing is recorded as paid, so this would go out as an invoice. '
+              + 'Record the payment and it turns into a receipt on its own.')
+        + `<div class="ask-acts"><button class="btn tiny" onclick="askEg('record a payment of ${inv.total} from ${String(o.name).replace(/'/g,"")}')">Record the payment</button></div>`),
+      halt: true
+    };
+
     const why = blockers(DB, inv, BIZ, today, { allowSummary: receipt, ignoreWeekRun: !!a.now });
     if (why.length) return {
       say: `Cannot send ${o.name}'s ${receipt ? 'receipt' : 'invoice'}: ${why.join('; ')}. `
@@ -5765,14 +5785,19 @@ async function askRunTool(name, a) {
       halt: true
     };
     const id = 'p' + uid();
+    /* What it IS, not what was asked for. */
+    const isReceipt = inv.nothingDue;
+    const word = isReceipt ? 'receipt' : 'invoice';
     ASK.undo.set(id, { kind: 'invoice', ownerId: o.id, receipt, now: !!a.now });
     return {
-      say: `Prepared ${o.name}'s ${receipt ? 'receipt' : 'invoice'} ${inv.number} for ${aMoney(inv.total)} and shown it to Andressa for confirmation. `
+      say: `Prepared ${o.name}'s ${word} ${inv.number} for ${aMoney(inv.total)} and shown it to Andressa for confirmation. `
+         + `This document is ${isReceipt ? 'a receipt — nothing is owing' : 'an invoice asking for ' + aMoney(inv.total)}. `
          + `It has NOT been sent and you cannot send it. Do not call this tool again — say nothing further about sending.`,
-      card: aCard('send', `<div class="ask-ttl"><span class="ask-tag send">Will send</span></div>`
+      card: aCard('send', `<div class="ask-ttl"><span class="ask-tag send">Will send</span>${isReceipt ? ' &nbsp;receipt' : ' &nbsp;asks for money'}</div>`
         + aRow('To', escapeHtml(o.email || '—'))
-        + aRow(receipt ? 'Receipt' : 'Invoice', escapeHtml(inv.number))
-        + aRow(`${fmtDateShort(inv.periodFrom)} – ${fmtDateShort(inv.periodTo)}`, `<b>${escapeHtml(aMoney(inv.total))}</b>`)
+        + aRow(isReceipt ? 'Receipt' : 'Invoice', escapeHtml(inv.number))
+        + aRow(`${fmtDateShort(inv.periodFrom)} – ${fmtDateShort(inv.periodTo)}`,
+               isReceipt ? '<b>paid in full</b>' : `<b>${escapeHtml(aMoney(inv.total))}</b> due`)
         + (a.now ? aNote('Mid-week override — her week is not finished.') : '')
         + `<div class="ask-acts">
              <button class="btn night" onclick="askConfirmSend('${id}', this)">Send it</button>
@@ -5788,7 +5813,17 @@ async function askRunTool(name, a) {
     if (!dep) return { say: 'No deposit with that id.', card: '' };
     const dog = dogById(dep.dogId); const o = dog && ownerById(dog.ownerId);
     if (!o) return { say: 'No client on that stay.', card: '' };
-    const receipt = !!a.receipt || !!dep.paidAt;
+    /* Same rule as above: the money being in is what makes it a receipt, not
+       having been asked for one. */
+    const receipt = !!dep.paidAt;
+    if (a.receipt && !dep.paidAt) return {
+      say: `That deposit is not recorded as paid, so there is no receipt to send — only the original `
+         + `request for ${aMoney(dep.amount)}. Record it with deposit_received first.`,
+      card: aCard('stop', `<div class="ask-ttl">⛔ Not a receipt yet</div>`
+        + aRow('Deposit asked for', escapeHtml(aMoney(dep.amount)))
+        + aNote('Nothing recorded as received. Mark it received and it becomes a receipt.')),
+      halt: true
+    };
     const today = todayISO();
     const req = buildDepositRequest(DB, dep.id, { asAt: today });
     if (!req) return { say: "Couldn't build that deposit request.", card: '' };

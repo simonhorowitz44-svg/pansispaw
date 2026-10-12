@@ -209,7 +209,12 @@ export const TOOLS = [
   {
     name: 'send_receipt',
     tier: TIERS.SEND,
-    description: "Propose sending a receipt for a week already paid in full.",
+    description:
+      "Propose sending a receipt for a week already paid in full. A document is a receipt only once "
+      + "a payment has been recorded against the week and the total has reached zero — asking for one "
+      + "does not make it one. If the client has paid but it was never entered, call record_payment "
+      + "first and the same document becomes the receipt. Never fall back to sending an invoice to "
+      + "someone who has already paid.",
     input_schema: { type: 'object', properties: { ownerId: { type: 'string' } }, required: ['ownerId'] }
   },
   {
@@ -258,6 +263,9 @@ Never calculate a price, a fee or a total yourself — not even adding up a colu
 Prices depend on the dog's size, so a question like "what do we charge for a full day" has no single answer — quote it for the dog in question, or say that it depends on size and give the range the tool returns.
 
 When something you did costs a client money — a late cancellation charge, mainly — say so plainly in the same breath. Andressa frequently intends to waive those, and she can only do that if she knows.
+
+RECEIPTS
+A receipt and an invoice are the same document in two states, and what decides which is whether a payment has been recorded. If Andressa says someone has already paid, the payment almost certainly has not been entered yet — record it, then send. Never send an invoice to a client she has told you has paid, and never describe a document as a receipt while it still asks for money.
 
 SENDING
 You cannot send anything. The send tools propose; Andressa taps. Never tell her something has been sent. If an invoice is blocked, the reason comes from the invoicing code — report it exactly, and do not look for a way around it.

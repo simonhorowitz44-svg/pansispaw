@@ -75,6 +75,7 @@ const keys=Object.keys(deps);
 const make=new Function(...keys, src + '\n; return { askRunTool, ASK, askTrim, ASK_KEEP };');
 const { askRunTool, ASK, askTrim, ASK_KEEP } = make(...keys.map(k=>deps[k]));
 const run=(n,a)=>askRunTool(n,a);
+const dogOwner=id=>(DB.dogs.find(d=>d.id===id)||{}).ownerId;
 
 console.log('\n--- find_dogs must not pick one ---');
 {
@@ -211,6 +212,46 @@ console.log('\n--- send tools propose and stop ---');
   ok('and the reason is the real blockers string', /No email address for this client/.test(noEmail.say));
   ok('it halts rather than hunting for a way round', noEmail.halt===true);
   eq('still nothing queued', DB.meta.sendQueue.length, 0);
+}
+
+console.log('\n--- a receipt is only a receipt once the money is in ---');
+{
+  /* Asking for a receipt used to only waive the "nothing to pay" blocker. The
+     document was still an unpaid invoice, the card labelled it "Receipt"
+     because that is what was asked for, and a client who had already paid got
+     a bill for $90 with bank details on it. */
+  reset();
+  const unpaid = await run('send_receipt',{ownerId:'o1'});
+  ok('a receipt on an unpaid week is refused', /Cannot send .* a receipt/.test(unpaid.say));
+  ok('the reason given is the missing payment', /no payment has been recorded/.test(unpaid.say));
+  ok('the model is told not to send a bill instead', /already paid/.test(unpaid.say));
+  ok('Andressa is shown what is outstanding', /Not a receipt yet/.test(unpaid.card));
+  ok('and offered the fix', /Record the payment/.test(unpaid.card));
+  ok('it halts', unpaid.halt===true);
+  eq('nothing queued', DB.meta.sendQueue.length, 0);
+
+  /* Record the payment and the same request now works. Drop the owner's
+     later booking first, or the week-not-finished rule blocks it for an
+     unrelated and entirely correct reason. */
+  DB.bookings = DB.bookings.filter(b => b.date <= '2026-10-12' || dogOwner(b.dogId) !== 'o1');
+  const inv = C.buildInvoice(DB,'o1',{asAt:'2026-10-12'});
+  await run('record_payment',{ownerId:'o1',amount:inv.total});
+  const paid = await run('send_receipt',{ownerId:'o1'});
+  ok('once paid it is proposed', /Prepared/.test(paid.say));
+  ok('and the document knows it is a receipt', /is a receipt/.test(paid.say));
+  ok('the card says receipt', /Receipt/.test(paid.card));
+  ok('and shows paid in full rather than an amount due', /paid in full/.test(paid.card));
+  ok('it never says money is due', !/due<\/b>|<b>\$[0-9]/.test(paid.card.replace(/paid in full/,'')));
+}
+
+console.log('\n--- an invoice never calls itself a receipt ---');
+{
+  reset();
+  const inv = await run('send_invoice',{ownerId:'o1',now:true});
+  ok('an unpaid week is labelled an invoice', /Invoice/.test(inv.card));
+  ok('and warns it asks for money', /asks for money/.test(inv.card));
+  ok('the model is told what it is', /an invoice asking for/.test(inv.say));
+  ok('the card never says receipt', !/Receipt/.test(inv.card));
 }
 
 console.log('\n--- invoice_state explains rather than fails ---');
