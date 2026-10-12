@@ -313,6 +313,62 @@ export function packCoversDate(pack, isoDate) {
    actually asked for. */
 export const DEPOSIT_RATE = 0.5;
 
+/* ---------- boarding deposits and cancellation ---------- */
+
+/* Under three nights a stay is a long daycare day, not a booking worth
+   turning others away for. No deposit, and the ordinary cancellation rule
+   applies: free beyond 24 hours, half the rate inside it. */
+export const MIN_DEPOSIT_NIGHTS = 3;
+
+/* Notice required equals the nights booked — you lose exactly as many nights
+   as were held, so the notice is a genuine estimate of the loss rather than a
+   flat penalty, which is what makes it defensible. Capped at 28 days, where
+   the Australian operators sit for every booking. */
+export const CANCEL_NOTICE_CAP_DAYS = 28;
+/* Peak dates cannot be refilled at any notice: by late November everyone who
+   needs Christmas care has found it. So peak raises the floor to a month
+   whatever the length, and a longer stay still keeps its own longer notice. */
+export const PEAK_NOTICE_MIN_DAYS = 28;
+
+function easterSundayUTC(year) {
+  const a = year % 19, b = Math.floor(year / 100), c = year % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+/* Good Friday to Easter Monday, and 14 Dec to 14 Jan. */
+export function isPeakDate(iso) {
+  if (!iso) return false;
+  const d = new Date(iso + 'T00:00:00Z');
+  const mo = d.getUTCMonth() + 1, day = d.getUTCDate();
+  if (mo === 12 && day >= 14) return true;
+  if (mo === 1 && day <= 14) return true;
+  const es = easterSundayUTC(d.getUTCFullYear());
+  const good = new Date(es); good.setUTCDate(es.getUTCDate() - 2);
+  const mon  = new Date(es); mon.setUTCDate(es.getUTCDate() + 1);
+  return d >= good && d <= mon;
+}
+
+/* A stay is peak if any night of it falls in a peak window. */
+export function isPeakStay(bookings) {
+  return (bookings || []).some(b => isPeakDate(b.date));
+}
+
+/* The last day the stay can be cancelled with the deposit returned. */
+export function cancelDeadline(bookings) {
+  const nights = (bookings || []).map(b => b.date).filter(Boolean).sort();
+  if (!nights.length) return null;
+  let days = Math.min(nights.length, CANCEL_NOTICE_CAP_DAYS);
+  if (isPeakStay(bookings)) days = Math.max(days, PEAK_NOTICE_MIN_DAYS);
+  return addDaysISO(nights[0], -days);
+}
+
 export function depositFor(db, bookingId) {
   return (db.deposits || []).find(d => (d.bookingIds || []).includes(bookingId)) || null;
 }
@@ -320,6 +376,8 @@ export function depositFor(db, bookingId) {
 /* What half of a stay comes to, rounded to whole dollars — nobody asks for
    $162.50 over the phone. */
 export function depositDue(bookings, dog, rate = DEPOSIT_RATE) {
+  const nights = (bookings || []).filter(b => b.session === 'overnight');
+  if (nights.length < MIN_DEPOSIT_NIGHTS) return 0;
   const full = (bookings || []).reduce((t, b) => t + calcTotal(b, dog), 0);
   return Math.round(full * rate);
 }
@@ -367,6 +425,9 @@ export function buildDepositRequest(db, depositId, opts = {}) {
 
   return {
     kind: 'deposit', owner, asAt, lines, bookingIds: [], packNotes: [], warnings: [],
+    /* A date is unarguable in a way a formula is not, and it is the thing the
+       client has in their inbox when they come to cancel. */
+    cancelBy: cancelDeadline(nights), peak: isPeakStay(nights),
     periodFrom: from, periodTo: to, total, nothingDue: total <= 0,
     ref: payRef(db, owner, asAt),
     number: invoiceNumber(owner, asAt, opts.seq || 1).replace(/^PP-/, 'PPD-'),
@@ -850,6 +911,17 @@ export function blockers(db, inv, biz, asAt, opts = {}) {
 
 /* ---------- rendering ---------- */
 
+/* What the client reads about cancelling. A date, not a rule: they can act on
+   a date without working anything out, and it is unarguable later. */
+export function cancelLine(inv) {
+  if (!inv || inv.kind !== 'deposit' || !inv.cancelBy) return '';
+  return `Free to cancel up to ${fmtDayWk(inv.cancelBy)}, with your deposit refunded in full. `
+       + `After that it is kept, as those dates can rarely be refilled.`
+       + (inv.peak ? ' Christmas and Easter stays need a month\u2019s notice.' : '')
+       + ' If we have to cancel, you are refunded in full.';
+}
+
+
 export function renderInvoiceHTML(inv, biz, o = {}) {
   /* A credit reads as −$115.00, not $-115.00 — the minus belongs to the money,
      not to the dollar sign. */
@@ -912,7 +984,8 @@ export function renderInvoiceHTML(inv, biz, o = {}) {
     <div class="inv-foot">
       Thank you — ${escapeHtml(biz.person)} 🐾 · ${escapeHtml(biz.site)}<br>
       <span>${isInv ? `Payment within ${INVOICE_TERMS_DAYS} days. ` : ''}
-      Cancellations are free with more than 24 hours' notice, and half the day's rate inside 24 hours.${
+      ${isDep ? escapeHtml(cancelLine(inv))
+              : "Cancellations are free with more than 24 hours' notice, and half the day's rate inside 24 hours."}${
         inv.lines.some(l => l.what === 'Late pickup')
           ? ` Pickup after ${friendlyTime(LATE_CUTOFF)} is $${LATE_PER_30} per 30 minutes once a ${LATE_GRACE_MIN} minute grace period has passed, capped at $${LATE_CAP} a day.` : ''}${
         /* The check-in line used to arrive with no rate, no grace and no cap
@@ -953,7 +1026,9 @@ export function invoiceText(inv, biz) {
   /* The plain-text invoice carried no terms at all — not the cancellation
      rule, not the late fee, nothing. Some clients only ever read this version,
      and a charge they cannot find an explanation for is the one they query. */
-  L.push('', "Cancellations are free with more than 24 hours' notice, and half the day's rate inside 24 hours.");
+  L.push('', inv.kind === 'deposit'
+    ? cancelLine(inv)
+    : "Cancellations are free with more than 24 hours' notice, and half the day's rate inside 24 hours.");
   if (inv.lines.some(l => l.what === 'Late pickup'))
     L.push(`Pickup after ${friendlyTime(LATE_CUTOFF)} is $${LATE_PER_30} per 30 minutes once a ${LATE_GRACE_MIN} minute grace period has passed, capped at $${LATE_CAP} a day.`);
   if (inv.lines.some(l => l.what === 'Outside check-in hours'))
@@ -1041,7 +1116,8 @@ export function renderInvoiceEmail(inv, biz, o = {}) {
     <span style="font-family:Georgia,'Times New Roman',serif;font-size:14px;color:${ink}">${escapeHtml(biz.name)}</span><br>
     <span style="font-size:12px;color:${ink2}">${escapeHtml(biz.suburb || '')}${biz.suburb && biz.phone ? ' · ' : ''}${escapeHtml(biz.phone || '')}</span><br>
     <span style="font-size:11px;color:${ink3}">${escapeHtml(biz.site)}<br>
-    Cancellations are free with more than 24 hours' notice, and half the day's rate inside 24 hours.${
+    ${inv.kind === 'deposit' ? escapeHtml(cancelLine(inv))
+        : "Cancellations are free with more than 24 hours' notice, and half the day's rate inside 24 hours."}${
       inv.lines.some(l => l.what === 'Late pickup')
         ? ` Pickup after ${friendlyTime(LATE_CUTOFF)} is $${LATE_PER_30} per 30 minutes after a ${LATE_GRACE_MIN} minute grace period, capped at $${LATE_CAP} a day.` : ''}${
       inv.lines.some(l => l.what === 'Outside check-in hours')

@@ -726,7 +726,8 @@ import {
   calcTotal, latePickupFee, boardingHoursFee,
   buildInvoice, invoicesDue, sendableInvoices, blockers, orphanBookings,
   weekRunComplete, renderInvoiceHTML, invoiceText, payRef, invoiceNumber,
-  depositFor, depositDue, DEPOSIT_RATE, buildDepositRequest
+  depositFor, depositDue, DEPOSIT_RATE, buildDepositRequest,
+  cancelDeadline, isPeakStay, MIN_DEPOSIT_NIGHTS
 } from './invoice-core.js';
 
 const firebaseConfig = {
@@ -3647,10 +3648,22 @@ function openBookingSheet(bookingId, prefillDate) {
             <button type="button" class="btn tiny ghost" onclick="clearDeposit('${dep.id}')">Remove</button>
           </div>`;
         }
+        /* Under three nights there is no deposit — it is a long daycare day
+           and the ordinary 24-hour rule covers it. Offering one anyway was
+           how a $60 deposit got attached to a $120 night. */
+        if (!due) {
+          return `<div class="extras-box">
+            <div class="extras-head">Deposit</div>
+            <div class="extras-row"><span>${nights.length} night${nights.length===1?'':'s'} — too short for a deposit</span><b>—</b></div>
+            <div class="extras-note">Stays under ${MIN_DEPOSIT_NIGHTS} nights are billed like any other day: free to cancel beyond 24 hours, half the rate inside.</div>
+          </div>`;
+        }
+        const by = cancelDeadline(nights);
         return `<div class="extras-box">
           <div class="extras-head">Deposit</div>
           <div class="extras-row"><span>${nights.length} night${nights.length===1?'':'s'} · half of $${nights.reduce((t,x)=>t+calcTotal(x,dog),0)}</span><b>$${due}</b></div>
-          <div class="extras-note">Holds the stay. Billed in full at the end with this taken off.</div>
+          <div class="extras-note">Holds the stay. Billed in full at the end with this taken off.<br>
+            Free to cancel up to <b>${fmtDateShort(by)}</b>${isPeakStay(nights) ? ' (a month, as it falls over Christmas or Easter)' : ''}.</div>
           <button type="button" class="btn tiny primary mt-2" onclick="recordDeposit('${b.id}', ${due})">Ask for $${due}</button>
         </div>`;
       })()}

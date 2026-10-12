@@ -1663,5 +1663,67 @@ console.log('\nA stay held with a deposit');
   t('and one is the ordinary invoice', plan.jobs.some(j => j.kind !== 'deposit'));
 }
 
+/* ---------- boarding deposits and the cancellation deadline ---------- */
+{
+  const mk = (from, nights, price = 120) => {
+    const bk = [];
+    const d = new Date(from + 'T00:00:00Z');
+    for (let i = 0; i < nights; i++) {
+      bk.push({ id:'n'+i, dogId:'d1', date:d.toISOString().slice(0,10),
+                session:'overnight', customPrice:price });
+      d.setUTCDate(d.getUTCDate() + 1);
+    }
+    return bk;
+  };
+  const dog = { id:'d1', ownerId:'o1', name:'Celine', size:'medium' };
+
+  /* Under three nights is a long daycare day, not a booking worth holding
+     dates for. No deposit, and the ordinary 24-hour rule applies. */
+  eq('one night takes no deposit',  C.depositDue(mk('2026-11-20', 1), dog), 0);
+  eq('two nights takes no deposit', C.depositDue(mk('2026-11-20', 2), dog), 0);
+  eq('three nights does',           C.depositDue(mk('2026-11-20', 3), dog), 180);
+  eq('and it is half the stay',     C.depositDue(mk('2026-11-20', 17), dog), 1020);
+
+  /* Notice equals the nights booked, capped at 28. */
+  eq('three nights needs three days',
+     C.cancelDeadline(mk('2026-11-20', 3)), '2026-11-17');
+  eq('seventeen nights needs seventeen days',
+     C.cancelDeadline(mk('2026-11-20', 17)), '2026-11-03');
+  eq('twenty-three nights needs twenty-three',
+     C.cancelDeadline(mk('2026-11-20', 23)), '2026-10-28');
+  eq('forty nights is capped at twenty-eight',
+     C.cancelDeadline(mk('2026-11-20', 40)), '2026-10-23');
+
+  /* Christmas and Easter raise the floor to a month however short the stay. */
+  eq('a four-night Christmas stay still needs a month',
+     C.cancelDeadline(mk('2026-12-24', 4)), '2026-11-26');
+  /* The 28-day cap applies in peak too — four weeks is already a lot of
+     notice to ask, and an uncapped rule would mean a two-month stay needed
+     two months. */
+  eq('a long Christmas stay is still capped at twenty-eight days',
+     C.cancelDeadline(mk('2026-12-20', 30)), '2026-11-22');
+  eq('a stay starting in the peak window counts as peak',
+     C.cancelDeadline(mk('2027-01-10', 3)), '2026-12-13');
+  eq('a stay in early December is not peak',
+     C.cancelDeadline(mk('2026-12-01', 3)), '2026-11-28');
+  t('Easter 2027 (28 Mar) falls in the peak window',
+    C.isPeakStay(mk('2027-03-26', 3)));
+  t('mid-March is not peak', !C.isPeakStay(mk('2027-03-10', 3)));
+
+  /* The deposit document states the date rather than the rule. */
+  const db = {
+    meta:{ billed:{}, invoicesSent:[], invoicing:{ goLive:'2026-09-01' },
+           biz:{ bsb:'062-000', acct:'12345678' } },
+    owners:[{ id:'o1', name:'Emma Ferguson', email:'e@x.com' }],
+    dogs:[dog], packs:[], payments:[], bookings: mk('2026-11-20', 17),
+    deposits:[{ id:'dep1', dogId:'d1', bookingIds: mk('2026-11-20',17).map((_,i)=>'n'+i),
+                amount:1020, rate:0.5, requestedAt:'2026-10-12T00:00:00.000Z',
+                paidAt:null, paidAmount:null }]
+  };
+  const req = C.buildDepositRequest(db, 'dep1', { asAt:'2026-10-12' });
+  t('the request carries the cancellation date', !!req.cancelBy);
+  eq('and it is the right one', req.cancelBy, '2026-11-03');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
