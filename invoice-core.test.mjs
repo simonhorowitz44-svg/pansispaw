@@ -1556,5 +1556,112 @@ console.log('\nA stay held with a deposit');
       .some(w => /No email/.test(w)));
 }
 
+/* ---------- the boarding deposit, asked for and receipted ---------- */
+{
+  /* Celine's shape: a long stay booked weeks out, half up front. The request
+     document existed but nothing ever called it, so it could not be sent. */
+  const mk = () => {
+    const nights = [];
+    for (let d = 20; d <= 24; d++)
+      nights.push({ id:'n'+d, dogId:'d1', date:`2026-11-${d}`, session:'overnight', customPrice:120 });
+    return {
+      meta: { billed:{}, invoicesSent:[], sendQueue:[],
+              invoicing:{ mode:'approve', goLive:'2026-09-01', batchCap:8 },
+              biz:{ bsb:'062-000', acct:'12345678' } },
+      owners:[{ id:'o1', name:'Emma Ferguson', email:'e@x.com' }],
+      dogs:[{ id:'d1', ownerId:'o1', name:'Celine', size:'medium' }],
+      packs:[], payments:[], bookings:nights,
+      deposits:[{ id:'dep1', dogId:'d1', bookingIds:nights.map(n=>n.id),
+                  amount:300, rate:0.5, requestedAt:'2026-10-12T00:00:00.000Z',
+                  paidAt:null, paidAmount:null }]
+    };
+  };
+  const BZ = { bsb:'062-000', acct:'12345678' };
+  const at = '2026-10-12';
+
+  const d = mk();
+  const req = C.buildDepositRequest(d, 'dep1', { asAt: at });
+  t('a deposit request can be built', !!req);
+  eq('it asks for the deposit, not the stay', req.total, 300);
+  eq('and is marked as a deposit', req.kind, 'deposit');
+  t('its number is distinguishable from an invoice', /^PPD-/.test(req.number));
+  t('the stay is shown but not charged',
+    req.lines[0].amt === 0 && /5 nights/.test(req.lines[0].what));
+  t('the full price is stated so nobody pays the wrong number',
+    /600/.test(req.lines[0].note));
+
+  /* It must be sendable. A stay weeks away always has bookings still to come,
+     so the week rule has to be waived for deposits or it can never go. */
+  eq('a deposit request is not blocked by the week rule',
+     C.blockers(d, req, BZ, at), []);
+  t('but a missing email still blocks it',
+    C.blockers({...d, owners:[{id:'o1',name:'Emma Ferguson'}]},
+               C.buildDepositRequest({...d, owners:[{id:'o1',name:'Emma Ferguson'}]}, 'dep1', {asAt:at}),
+               BZ, at).some(w=>/No email/.test(w)));
+
+  /* Once paid, the same document becomes the receipt. */
+  const paid = mk();
+  paid.deposits[0].paidAt = '2026-10-14T00:00:00.000Z';
+  paid.deposits[0].paidAmount = 300;
+  const rec = C.buildDepositRequest(paid, 'dep1', { asAt:'2026-10-15' });
+  eq('a paid deposit comes to nothing owed', rec.total, 0);
+  t('and reads as a receipt', rec.nothingDue === true);
+  t('showing the money received', rec.lines.some(l => l.credit && l.amt === -300));
+
+  /* Part paid — still owed the rest. */
+  const part = mk();
+  part.deposits[0].paidAt = '2026-10-14T00:00:00.000Z';
+  part.deposits[0].paidAmount = 100;
+  eq('a part-paid deposit asks for the balance',
+     C.buildDepositRequest(part, 'dep1', { asAt:'2026-10-15' }).total, 200);
+
+  /* planRun must send it when queued. */
+  const q = mk();
+  q.meta.sendQueue = [{ ownerId:'o1', depositId:'dep1', asAt:at, total:300 }];
+  const plan = C.planRun(q, BZ, q.meta.invoicing, at);
+  eq('a queued deposit reaches the sender', plan.jobs.length, 1);
+  eq('and it is the deposit, not a normal invoice', plan.jobs[0].kind, 'deposit');
+  eq('for the deposit amount', plan.jobs[0].total, 300);
+
+  /* And the stay itself still bills properly afterwards, net of the deposit. */
+  const after = mk();
+  after.deposits[0].paidAt = '2026-10-14T00:00:00.000Z';
+  after.deposits[0].paidAmount = 300;
+  const stay = C.buildInvoice(after, 'o1', { asAt:'2026-11-25', from:'2026-09-01' });
+  eq('the final invoice is the stay less the deposit', stay.total, 300);
+  t('with the deposit shown as a credit',
+    stay.lines.some(l => l.credit && /Deposit/.test(l.what)));
+}
+
+/* ---------- a deposit and an invoice waiting for the same client ---------- */
+{
+  /* Removing from the queue by ownerId sent one and silently dropped the
+     other — the client would never get the second. */
+  const d = {
+    meta: { billed:{}, invoicesSent:[], sendQueue:[],
+            invoicing:{ mode:'approve', goLive:'2026-09-01', batchCap:8 },
+            biz:{ bsb:'062-000', acct:'12345678' } },
+    owners:[{ id:'o1', name:'Emma Ferguson', email:'e@x.com' }],
+    dogs:[{ id:'d1', ownerId:'o1', name:'Celine', size:'medium' }],
+    packs:[], payments:[],
+    bookings:[
+      { id:'past', dogId:'d1', date:'2026-10-06', session:'full', customPrice:90 },
+      { id:'n20',  dogId:'d1', date:'2026-11-20', session:'overnight', customPrice:120 },
+      { id:'n21',  dogId:'d1', date:'2026-11-21', session:'overnight', customPrice:120 }
+    ],
+    deposits:[{ id:'dep1', dogId:'d1', bookingIds:['n20','n21'], amount:120, rate:0.5,
+                requestedAt:'2026-10-12T00:00:00.000Z', paidAt:null, paidAmount:null }]
+  };
+  const BZ = { bsb:'062-000', acct:'12345678' };
+  d.meta.sendQueue = [
+    { ownerId:'o1', depositId:'dep1', asAt:'2026-10-12', total:120 },
+    { ownerId:'o1', asAt:'2026-10-12', total:90 }
+  ];
+  const plan = C.planRun(d, BZ, d.meta.invoicing, '2026-10-12');
+  eq('both the deposit and the invoice go', plan.jobs.length, 2);
+  t('one of them is the deposit', plan.jobs.some(j => j.kind === 'deposit'));
+  t('and one is the ordinary invoice', plan.jobs.some(j => j.kind !== 'deposit'));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

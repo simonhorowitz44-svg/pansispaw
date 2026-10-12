@@ -202,7 +202,12 @@ async function runInvoicing(reason, apiKey) {
      round again next run rather than disappearing. */
   // A send that threw stays in the queue so it is tried again. Only what
   // actually went, or what a person has to deal with, leaves the queue.
-  const dealtWith = new Set([...sent.map(x => x.inv.owner.id), ...refused.map(r => r.ownerId)]);
+  /* Key by the queue entry, not the client: a deposit request and a normal
+     invoice can both be waiting for the same person, and removing by owner
+     dropped the unsent one. */
+  const keyOf = x => (x.depositId || x.inv?.kind === 'deposit')
+    ? 'dep:' + (x.depositId || x.inv.number) : 'inv:' + (x.ownerId || x.inv.owner.id);
+  const dealtWith = new Set([...sent.map(x => keyOf(x)), ...refused.map(r => keyOf(r))]);
   if (dealtWith.size) {
     await fs.runTransaction(async tx => {
       const cur = (await tx.get(fs.doc(STATE))).data();
@@ -233,7 +238,8 @@ async function runInvoicing(reason, apiKey) {
       });
       // Clear the queue entries we dealt with, either way — a refusal that stays
       // queued would be retried on every single write.
-      meta.sendQueue = (meta.sendQueue || []).filter(q => !dealtWith.has(q.ownerId));
+      meta.sendQueue = (meta.sendQueue || []).filter(q =>
+        !dealtWith.has(q.depositId ? 'dep:' + q.depositId : 'inv:' + q.ownerId));
       /* Let go of the claims. A send that went is protected by invoicesSent
          from here on; one that threw should be free to try again next run. */
       meta.sending = meta.sending || {};

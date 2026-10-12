@@ -353,9 +353,21 @@ export function buildDepositRequest(db, depositId, opts = {}) {
       amt: dep.amount }
   ];
 
+  /* Once the money is in, this same document is the receipt — the client
+     already has the request, so sending them a different-looking page for
+     the same transaction invites "is this a second charge?". */
+  let total = dep.amount;
+  if (dep.paidAt) {
+    const paid = Number(dep.paidAmount != null ? dep.paidAmount : dep.amount);
+    lines.push({ date: from, dog: '', what: 'Deposit received',
+                 note: `received ${fmtDay(String(dep.paidAt).slice(0, 10))}`,
+                 credit: true, amt: -paid });
+    total = Math.max(0, dep.amount - paid);
+  }
+
   return {
     kind: 'deposit', owner, asAt, lines, bookingIds: [], packNotes: [], warnings: [],
-    periodFrom: from, periodTo: to, total: dep.amount, nothingDue: false,
+    periodFrom: from, periodTo: to, total, nothingDue: total <= 0,
     ref: payRef(db, owner, asAt),
     number: invoiceNumber(owner, asAt, opts.seq || 1).replace(/^PP-/, 'PPD-'),
     dueISO: addDaysISO(asAt, INVOICE_TERMS_DAYS)
@@ -828,7 +840,9 @@ export function blockers(db, inv, biz, asAt, opts = {}) {
   if (inv.warnings.length)           out.push(inv.warnings.length + ' line needs checking');
   if (inv.nothingDue && !opts.allowSummary)
                                      out.push('Nothing to pay — this is a summary, not an invoice');
-  if (!opts.ignoreWeekRun &&
+  /* A deposit is asked for before the stay by definition, so "still has a
+     booking to come" is always true and would block it forever. */
+  if (inv.kind !== 'deposit' && !opts.ignoreWeekRun &&
       !weekRunComplete(db, inv.owner.id, asAt || localISO(new Date())))
                                      out.push('Still has a booking to come this week');
   return out;
@@ -1067,8 +1081,14 @@ export function planRun(db, biz, cfg = {}, today) {
   const opts = { asAt, from: cfg.goLive || undefined };
 
   for (const q of (db.meta?.sendQueue || [])) {
-    if (seen.has(q.ownerId)) continue;
-    const inv = buildInvoice(db, q.ownerId, opts);
+    /* A client can legitimately have a deposit request AND a normal invoice
+       waiting. Keying on owner alone sent one and silently dropped the other. */
+    const key = q.depositId ? 'dep:' + q.depositId : 'inv:' + q.ownerId;
+    if (seen.has(key)) continue;
+    /* A queue entry carrying a depositId is a request for the deposit, not
+       for the stay. */
+    const inv = q.depositId ? buildDepositRequest(db, q.depositId, { asAt })
+                            : buildInvoice(db, q.ownerId, opts);
     if (!inv) {
       const o = ownerById(db, q.ownerId);
       refused.push({ ownerId: q.ownerId, who: o?.name || q.ownerId, why: 'nothing left to bill — already invoiced?' });
@@ -1084,12 +1104,13 @@ export function planRun(db, biz, cfg = {}, today) {
         why: `the bookings changed after this was approved — was $${Number(q.total).toFixed(2)}, now $${inv.total.toFixed(2)}. Approve it again.` });
       continue;
     }
-    seen.add(q.ownerId); jobs.push(inv);
+    seen.add(key); jobs.push(inv);
   }
 
   if (mode === 'auto') {
     for (const inv of sendableInvoices(db, biz, opts)) {
-      if (!seen.has(inv.owner.id)) { seen.add(inv.owner.id); jobs.push(inv); }
+      const k = 'inv:' + inv.owner.id;
+      if (!seen.has(k)) { seen.add(k); jobs.push(inv); }
     }
   }
 

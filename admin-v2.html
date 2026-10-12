@@ -726,7 +726,7 @@ import {
   calcTotal, latePickupFee, boardingHoursFee,
   buildInvoice, invoicesDue, sendableInvoices, blockers, orphanBookings,
   weekRunComplete, renderInvoiceHTML, invoiceText, payRef, invoiceNumber,
-  depositFor, depositDue, DEPOSIT_RATE
+  depositFor, depositDue, DEPOSIT_RATE, buildDepositRequest
 } from './invoice-core.js';
 
 const firebaseConfig = {
@@ -2831,6 +2831,34 @@ async function payThenReceipt(ownerId, suggested) {
   openOneInvoice(ownerId);
 }
 
+/* Send the client the deposit request — or, once it's paid, the receipt for
+   it. buildDepositRequest has existed since deposits were built and was never
+   imported, so the deposit could be recorded but never asked for. */
+async function queueDeposit(depositId, opts = {}) {
+  const dep = (DB.deposits || []).find(d => d.id === depositId); if (!dep) return;
+  const dog = dogById(dep.dogId); const owner = dog && ownerById(dog.ownerId);
+  if (!owner) return toast('No client on this stay');
+  const today = todayISO();
+  const req = buildDepositRequest(DB, depositId, { asAt: today });
+  if (!req) return toast("Couldn't build the deposit request");
+  const why = blockers(DB, req, BIZ, today, { allowSummary: !!opts.receipt });
+  if (why.length) return toast(why[0]);
+  if ((DB.meta.sendQueue || []).some(q => q.depositId === depositId))
+    return toast('That deposit is already queued');
+  const what = opts.receipt ? 'receipt' : 'request';
+  if (!confirm(`Send ${owner.name} the deposit ${what}?\n\n`
+    + `${dog.name} · ${fmtDateShort(req.periodFrom)} – ${fmtDateShort(req.periodTo)}\n`
+    + (opts.receipt ? `Received $${(dep.paidAmount ?? dep.amount).toFixed(2)} — nothing to pay.`
+                    : `Deposit $${req.total.toFixed(2)} of the full stay.`))) return;
+  DB.meta.sendQueue = DB.meta.sendQueue || [];
+  DB.meta.sendQueue.push({ ownerId: owner.id, depositId, asAt: today,
+                           number: req.number, bookingIds: [], total: req.total,
+                           ...(opts.receipt ? { sendReceipt: true } : {}),
+                           queuedAt: new Date().toISOString() });
+  await save(DB); closeSheet();
+  toast(`Sending ${owner.name} the deposit ${what}`, 'ok');
+}
+
 async function queueAllReady() {
   const S = invSettings();
   const ready = invBuckets().ready;
@@ -3606,14 +3634,16 @@ function openBookingSheet(bookingId, prefillDate) {
             <div class="extras-head">Deposit</div>
             <div class="extras-row"><span>Received ${fmtDateShort(dep.paidAt.slice(0,10))}, covering ${dep.bookingIds.length} night${dep.bookingIds.length===1?'':'s'}</span><b>$${dep.paidAmount ?? dep.amount}</b></div>
             <div class="extras-note">Credited on the invoice when the stay is billed.</div>
-            <button type="button" class="btn tiny ghost mt-2" onclick="clearDeposit('${dep.id}')">Remove</button>
+            <button type="button" class="btn tiny primary mt-2" onclick="queueDeposit('${dep.id}', { receipt: true })">Send receipt</button>
+            <button type="button" class="btn tiny ghost" onclick="clearDeposit('${dep.id}')">Remove</button>
           </div>`;
         }
         if (dep) {
           return `<div class="extras-box">
             <div class="extras-head">Deposit</div>
             <div class="extras-row"><span>Asked for ${fmtDateShort(dep.requestedAt.slice(0,10))} · not received yet</span><b>$${dep.amount}</b></div>
-            <button type="button" class="btn tiny primary mt-2" onclick="markDepositPaid('${dep.id}')">Mark received</button>
+            <button type="button" class="btn tiny primary mt-2" onclick="queueDeposit('${dep.id}')">Send request</button>
+            <button type="button" class="btn tiny" onclick="markDepositPaid('${dep.id}')">Mark received</button>
             <button type="button" class="btn tiny ghost" onclick="clearDeposit('${dep.id}')">Remove</button>
           </div>`;
         }
@@ -5054,7 +5084,7 @@ Object.assign(window, {
   confirmAllCertain, notAClient, undoRecorded,
   openInvoicesSheet, renderInvoices, openOneInvoice, printInvoice,
   markInvoicePaid, reopenInvoice,
-  recordDeposit, markDepositPaid, clearDeposit,
+  recordDeposit, markDepositPaid, clearDeposit, queueDeposit,
   copyInvoiceText, emailInvoice, openBizSettings, saveBizSettings,
   openInvoiceSettings, saveInvoiceSettings, queueInvoice, queueAllReady, markInvoiceSent,
   openClientMoney, addPayment, removePayment,
