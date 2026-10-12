@@ -320,53 +320,29 @@ export const DEPOSIT_RATE = 0.5;
    applies: free beyond 24 hours, half the rate inside it. */
 export const MIN_DEPOSIT_NIGHTS = 3;
 
-/* Notice required equals the nights booked — you lose exactly as many nights
-   as were held, so the notice is a genuine estimate of the loss rather than a
-   flat penalty, which is what makes it defensible. Capped at 28 days, where
-   the Australian operators sit for every booking. */
-export const CANCEL_NOTICE_CAP_DAYS = 28;
-/* Peak dates cannot be refilled at any notice: by late November everyone who
-   needs Christmas care has found it. So peak raises the floor to a month
-   whatever the length, and a longer stay still keeps its own longer notice. */
-export const PEAK_NOTICE_MIN_DAYS = 28;
+/* Three fixed bands, counted back from the first night:
 
-function easterSundayUTC(year) {
-  const a = year % 19, b = Math.floor(year / 100), c = year % 100;
-  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
-  const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
-  const i = Math.floor(c / 4), k = c % 4;
-  const l = (32 + 2 * e + 2 * i - h - k) % 7;
-  const m = Math.floor((a + 11 * h + 22 * l) / 451);
-  const month = Math.floor((h + l - 7 * m + 114) / 31);
-  const day = ((h + l - 7 * m + 114) % 31) + 1;
-  return new Date(Date.UTC(year, month - 1, day));
-}
+     more than 4 weeks  — deposit refunded in full
+     2 to 4 weeks       — deposit held as credit against a future stay
+     under 2 weeks      — deposit kept
 
-/* Good Friday to Easter Monday, and 14 Dec to 14 Jan. */
-export function isPeakDate(iso) {
-  if (!iso) return false;
-  const d = new Date(iso + 'T00:00:00Z');
-  const mo = d.getUTCMonth() + 1, day = d.getUTCDate();
-  if (mo === 12 && day >= 14) return true;
-  if (mo === 1 && day <= 14) return true;
-  const es = easterSundayUTC(d.getUTCFullYear());
-  const good = new Date(es); good.setUTCDate(es.getUTCDate() - 2);
-  const mon  = new Date(es); mon.setUTCDate(es.getUTCDate() + 1);
-  return d >= good && d <= mon;
-}
+   Fixed bands rather than notice scaled to the stay: four weeks is the
+   Australian benchmark (Dogs' Home uses exactly that), it is one sentence to
+   say on the phone, and the middle band means almost nobody loses money
+   outright — which is both kinder and much easier to defend than a flat
+   forfeit. */
+export const CANCEL_FULL_REFUND_DAYS = 28;
+export const CANCEL_CREDIT_DAYS      = 14;
 
-/* A stay is peak if any night of it falls in a peak window. */
-export function isPeakStay(bookings) {
-  return (bookings || []).some(b => isPeakDate(b.date));
-}
-
-/* The last day the stay can be cancelled with the deposit returned. */
-export function cancelDeadline(bookings) {
+/* The two dates a client needs: refund by, and credit by. */
+export function cancelBands(bookings) {
   const nights = (bookings || []).map(b => b.date).filter(Boolean).sort();
   if (!nights.length) return null;
-  let days = Math.min(nights.length, CANCEL_NOTICE_CAP_DAYS);
-  if (isPeakStay(bookings)) days = Math.max(days, PEAK_NOTICE_MIN_DAYS);
-  return addDaysISO(nights[0], -days);
+  return {
+    start:    nights[0],
+    refundBy: addDaysISO(nights[0], -CANCEL_FULL_REFUND_DAYS),
+    creditBy: addDaysISO(nights[0], -CANCEL_CREDIT_DAYS)
+  };
 }
 
 export function depositFor(db, bookingId) {
@@ -427,7 +403,7 @@ export function buildDepositRequest(db, depositId, opts = {}) {
     kind: 'deposit', owner, asAt, lines, bookingIds: [], packNotes: [], warnings: [],
     /* A date is unarguable in a way a formula is not, and it is the thing the
        client has in their inbox when they come to cancel. */
-    cancelBy: cancelDeadline(nights), peak: isPeakStay(nights),
+    cancelBands: cancelBands(nights),
     periodFrom: from, periodTo: to, total, nothingDue: total <= 0,
     ref: payRef(db, owner, asAt),
     number: invoiceNumber(owner, asAt, opts.seq || 1).replace(/^PP-/, 'PPD-'),
@@ -914,11 +890,12 @@ export function blockers(db, inv, biz, asAt, opts = {}) {
 /* What the client reads about cancelling. A date, not a rule: they can act on
    a date without working anything out, and it is unarguable later. */
 export function cancelLine(inv) {
-  if (!inv || inv.kind !== 'deposit' || !inv.cancelBy) return '';
-  return `Free to cancel up to ${fmtDayWk(inv.cancelBy)}, with your deposit refunded in full. `
-       + `After that it is kept, as those dates can rarely be refilled.`
-       + (inv.peak ? ' Christmas and Easter stays need a month\u2019s notice.' : '')
-       + ' If we have to cancel, you are refunded in full.';
+  if (!inv || inv.kind !== 'deposit' || !inv.cancelBands) return '';
+  const b = inv.cancelBands;
+  return `Cancelling: before ${fmtDayWk(b.refundBy)} your deposit is refunded in full. `
+       + `Between then and ${fmtDayWk(b.creditBy)} it is held as credit towards another stay. `
+       + `After ${fmtDayWk(b.creditBy)} it is kept, as those dates can rarely be refilled. `
+       + `If we have to cancel, you are refunded in full.`;
 }
 
 

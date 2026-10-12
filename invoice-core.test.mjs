@@ -1684,31 +1684,18 @@ console.log('\nA stay held with a deposit');
   eq('three nights does',           C.depositDue(mk('2026-11-20', 3), dog), 180);
   eq('and it is half the stay',     C.depositDue(mk('2026-11-20', 17), dog), 1020);
 
-  /* Notice equals the nights booked, capped at 28. */
-  eq('three nights needs three days',
-     C.cancelDeadline(mk('2026-11-20', 3)), '2026-11-17');
-  eq('seventeen nights needs seventeen days',
-     C.cancelDeadline(mk('2026-11-20', 17)), '2026-11-03');
-  eq('twenty-three nights needs twenty-three',
-     C.cancelDeadline(mk('2026-11-20', 23)), '2026-10-28');
-  eq('forty nights is capped at twenty-eight',
-     C.cancelDeadline(mk('2026-11-20', 40)), '2026-10-23');
-
-  /* Christmas and Easter raise the floor to a month however short the stay. */
-  eq('a four-night Christmas stay still needs a month',
-     C.cancelDeadline(mk('2026-12-24', 4)), '2026-11-26');
-  /* The 28-day cap applies in peak too — four weeks is already a lot of
-     notice to ask, and an uncapped rule would mean a two-month stay needed
-     two months. */
-  eq('a long Christmas stay is still capped at twenty-eight days',
-     C.cancelDeadline(mk('2026-12-20', 30)), '2026-11-22');
-  eq('a stay starting in the peak window counts as peak',
-     C.cancelDeadline(mk('2027-01-10', 3)), '2026-12-13');
-  eq('a stay in early December is not peak',
-     C.cancelDeadline(mk('2026-12-01', 3)), '2026-11-28');
-  t('Easter 2027 (28 Mar) falls in the peak window',
-    C.isPeakStay(mk('2027-03-26', 3)));
-  t('mid-March is not peak', !C.isPeakStay(mk('2027-03-10', 3)));
+  /* Three fixed bands counted back from the first night, whatever the
+     length of the stay. */
+  eq('full refund up to four weeks before',
+     C.cancelBands(mk('2026-11-20', 17)).refundBy, '2026-10-23');
+  eq('credit up to two weeks before',
+     C.cancelBands(mk('2026-11-20', 17)).creditBy, '2026-11-06');
+  eq('a three-night stay gets the same bands',
+     C.cancelBands(mk('2026-11-20', 3)).refundBy, '2026-10-23');
+  eq('and a Christmas stay gets them too',
+     C.cancelBands(mk('2026-12-24', 4)).creditBy, '2026-12-10');
+  eq('the bands count from the first night, not the booking date',
+     C.cancelBands(mk('2027-01-10', 3)).refundBy, '2026-12-13');
 
   /* The deposit document states the date rather than the rule. */
   const db = {
@@ -1721,8 +1708,11 @@ console.log('\nA stay held with a deposit');
                 paidAt:null, paidAmount:null }]
   };
   const req = C.buildDepositRequest(db, 'dep1', { asAt:'2026-10-12' });
-  t('the request carries the cancellation date', !!req.cancelBy);
-  eq('and it is the right one', req.cancelBy, '2026-11-03');
+  t('the request carries the cancellation bands', !!req.cancelBands);
+  eq('refund deadline', req.cancelBands.refundBy, '2026-10-23');
+  eq('credit deadline', req.cancelBands.creditBy, '2026-11-06');
+  t('and the wording names both dates',
+    /refunded in full/.test(C.cancelLine(req)) && /held as credit/.test(C.cancelLine(req)));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
