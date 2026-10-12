@@ -320,6 +320,62 @@ body.modal-open { overflow: hidden; }
 .inv-foot span { font-size:10.5px; color:var(--ink-3); }
 .inv-kind { margin-left:auto; align-self:flex-start; font-family:var(--font-serif); font-size:13px;
   letter-spacing:.12em; text-transform:uppercase; color:var(--ink-3); }
+
+/* ---------- Ask · the assistant thread ----------
+   Its own host rather than the shared modal, because openSheet() replaces
+   innerHTML and the conversation has to survive Andressa opening a booking
+   from inside it and coming back. */
+.ask-pill { display:flex; align-items:center; gap:6px; background:var(--night); color:#fff; border:none;
+  border-radius:999px; padding:7px 13px; font:500 13px var(--font-sans); cursor:pointer;
+  transition:transform var(--dur) var(--ease-spring); }
+.ask-pill:active { transform:scale(0.95); }
+#askHost { position:fixed; inset:0; z-index:70; display:none; }
+#askHost.on { display:block; }
+.ask-back { position:absolute; inset:0; background:rgba(43,26,16,.38); backdrop-filter:blur(2px); }
+.ask-panel { position:absolute; left:0; right:0; bottom:0; top:0; background:var(--paper);
+  display:flex; flex-direction:column; animation:askUp var(--dur) var(--ease-out); }
+@keyframes askUp { from { transform:translateY(14px); opacity:0 } to { transform:none; opacity:1 } }
+@media (min-width:640px) { .ask-panel { left:auto; width:460px; border-left:1px solid var(--edge); box-shadow:var(--shadow-lg); } }
+.ask-head { display:flex; align-items:center; justify-content:space-between; padding:var(--s3) var(--s4);
+  border-bottom:1px solid var(--edge); background:var(--paper-2); flex:none; }
+.ask-head h2 { margin:0; font:600 16px var(--font-serif); }
+.ask-thread { flex:1; overflow-y:auto; padding:var(--s4); display:flex; flex-direction:column; gap:var(--s3);
+  -webkit-overflow-scrolling:touch; }
+.ask-u { align-self:flex-end; max-width:84%; background:var(--night); color:#fff; padding:10px 14px;
+  border-radius:var(--r3) var(--r3) 4px var(--r3); font-size:14px; line-height:1.45; white-space:pre-wrap; }
+.ask-a { align-self:flex-start; max-width:94%; font-size:14px; line-height:1.5; color:var(--ink-2); }
+.ask-a b { color:var(--ink); font-weight:600; }
+.ask-card { background:var(--paper-2); border:1px solid var(--edge); border-radius:var(--r3);
+  padding:12px 14px; margin-top:7px; box-shadow:var(--shadow-sm); }
+.ask-card.did  { border-left:3px solid var(--action);    background:#f1f6ec; }
+.ask-card.warn { border-left:3px solid var(--highlight); background:#fdf6e4; }
+.ask-card.stop { border-left:3px solid var(--owe);       background:var(--owe-2); }
+.ask-card.send { border-left:3px solid var(--night);     background:#f3f1f8; }
+.ask-row { display:flex; justify-content:space-between; gap:10px; font-size:13px; padding:3px 0; }
+.ask-row > :first-child { color:var(--ink-3); }
+.ask-row > :last-child { font-weight:500; text-align:right; }
+.ask-ttl { font:600 14px var(--font-serif); margin:0 0 6px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.ask-note { font-size:11.5px; color:var(--ink-3); margin-top:5px; line-height:1.45; }
+.ask-acts { display:flex; gap:7px; margin-top:10px; flex-wrap:wrap; }
+.ask-tag { font:600 9.5px var(--font-sans); letter-spacing:.09em; text-transform:uppercase; padding:2.5px 7px; border-radius:999px; }
+.ask-tag.do   { background:#e4efd9; color:var(--action-dark); }
+.ask-tag.send { background:var(--highlight-2); color:var(--highlight-ink); }
+.ask-bar { display:flex; gap:8px; padding:10px var(--s4) calc(10px + env(safe-area-inset-bottom));
+  border-top:1px solid var(--edge); background:var(--paper-2); align-items:flex-end; flex:none; }
+.ask-inp { flex:1; padding:11px 14px; border:1px solid var(--edge); border-radius:var(--r4); background:#fff;
+  font:400 16px var(--font-sans); color:var(--ink); resize:none; max-height:120px; line-height:1.4; }
+.ask-inp:focus { outline:none; border-color:var(--ink); box-shadow:0 0 0 3px rgba(43,26,16,.08); }
+.ask-go { width:40px; height:40px; flex:none; border-radius:50%; background:var(--action); color:#fff;
+  border:none; display:grid; place-items:center; font-size:17px; box-shadow:0 2px 0 var(--action-dark); cursor:pointer; }
+.ask-go:disabled { opacity:.4; box-shadow:none; }
+.ask-dots { display:inline-flex; gap:4px; align-items:center; padding:4px 0; }
+.ask-dots i { width:6px; height:6px; border-radius:50%; background:var(--ink-3); animation:askBlink 1.2s infinite; }
+.ask-dots i:nth-child(2){animation-delay:.2s} .ask-dots i:nth-child(3){animation-delay:.4s}
+@keyframes askBlink { 0%,80%,100%{opacity:.25} 40%{opacity:1} }
+.ask-empty { text-align:center; color:var(--ink-3); font-size:13px; padding:var(--s6) var(--s4); line-height:1.6; }
+.ask-eg { display:inline-block; background:var(--paper-2); border:1px solid var(--edge); border-radius:999px;
+  padding:6px 12px; margin:4px 3px; font-size:12.5px; color:var(--ink-2); cursor:pointer; }
+
 @media print {
   @page { margin: 14mm; }
   body > *:not(#modalHost) { display:none !important; }
@@ -680,6 +736,8 @@ body.modal-open { overflow: hidden; }
 <div id="app">
   <header class="appbar">
     <div class="brand" onclick="switchTab('day')" role="button" tabindex="0">Pansi's</div>
+    <div style="flex:1"></div>
+    <button class="ask-pill" onclick="openAsk()" aria-label="Ask">✦ Ask</button>
     <div class="avatar" id="avatarBtn" role="button" aria-label="Menu" tabindex="0"></div>
     <div class="avatar-menu" id="avatarMenu">
       <button onclick="openMoneySheet()">💳 Money — who owes what</button>
@@ -704,6 +762,7 @@ body.modal-open { overflow: hidden; }
 </div>
 
 <div id="modalHost"></div>
+<div id="askHost"></div>
 <div id="ritualOverlay" class="ritual-overlay" role="dialog" aria-modal="true"></div>
 <div id="toast-host" role="status" aria-live="polite"></div>
 <div id="sync-banner" style="display:none;" role="alert"></div>
@@ -712,6 +771,7 @@ body.modal-open { overflow: hidden; }
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-functions.js";
 
 // Pricing, policy and invoice generation live in one file so the panel and the
 // Cloud Function that sends invoices bill from identical code. Don't reimplement
@@ -725,10 +785,15 @@ import {
   weekEndingSunday, invoiceWeek, weekOf,
   calcTotal, latePickupFee, boardingHoursFee,
   buildInvoice, invoicesDue, sendableInvoices, blockers, orphanBookings,
-  weekRunComplete, renderInvoiceHTML, invoiceText, payRef, invoiceNumber,
+  weekRunComplete, renderInvoiceHTML, invoiceText, invoiceSubject, payRef, invoiceNumber,
   depositFor, depositDue, DEPOSIT_RATE, buildDepositRequest,
   cancelBands, MIN_DEPOSIT_NIGHTS
 } from './invoice-core.js';
+
+/* What Andressa may ask for in plain English, and which tier each request
+   falls into. Shared with the Cloud Function so the model's description of a
+   tool and the code that runs it cannot drift apart. */
+import { TOOLS, TIERS, tierOf } from './assistant-tools.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDAptLVEs0P5yto1ia_BzvuZqpGwT5kbXo",
@@ -2771,11 +2836,15 @@ async function queueInvoice(ownerId, opts = {}) {
   const today = todayISO();
   const inv = buildInvoice(DB, ownerId, { asAt: today });
   if (!inv) return;
-  const why = blockers(DB, inv, BIZ, today, { allowSummary: !!opts.receipt });
-  if (why.length) return toast(why[0]);
+  /* opts.now is the mid-week override — the same waiver the booking sheet's
+     "Invoice this client now" uses. Without it here, asking for an invoice
+     early is refused by a rule that was only ever meant to batch emails. */
+  const why = blockers(DB, inv, BIZ, today, { allowSummary: !!opts.receipt, ignoreWeekRun: !!opts.now });
+  if (why.length) { toast(why[0]); throw new Error(why[0]); }
   DB.meta.sendQueue = DB.meta.sendQueue || [];
   DB.meta.sendQueue.push({ ownerId, asAt: today, number: inv.number,
                            bookingIds: inv.bookingIds, total: inv.total,
+                           ...(opts.now ? { sendNow: true } : {}),
                            ...(opts.receipt ? { sendReceipt: true } : {}),
                            queuedAt: new Date().toISOString() });
   await save(DB);
@@ -5081,6 +5150,655 @@ function photoOrGlyph(dog) {
   return glyphs[idx];
 }
 
+/* ---------- Ask · plain-English control of the panel -------------------
+ *
+ * Andressa types "book Pepperoni in Thursday" or "who hasn't paid" and this
+ * turns it into the same operations the buttons perform. Three rules decide
+ * everything here, and they come from assistant-tools.js:
+ *
+ *   read   answer, change nothing
+ *   write  do it now, and put Undo in the card — if it cannot be undone in
+ *          one tap it does not belong in this tier
+ *   send   never executed. Render what would go, wait for a tap.
+ *
+ * The model never sees Firestore and never computes money. Every figure in
+ * every card comes back from invoice-core, and every write goes through the
+ * panel's own save(), so the merge guard still stands between the assistant
+ * and a stale overwrite.
+ */
+
+const ASK_FN   = httpsCallable(getFunctions(fbApp, 'australia-southeast1'), 'assistant');
+const ASK_MAX_TURNS = 8;
+
+const ASK = {
+  api:  [],          /* the Anthropic message array */
+  log:  [],          /* what Andressa sees: {who:'u'|'a', html} */
+  busy: false,
+  undo: new Map()    /* undoId -> async fn, for the Undo buttons on write cards */
+};
+
+/* ---- little renderers, all escaping ---- */
+/* The key is plain text and is escaped here; the value is trusted HTML, so
+   callers can pass <b>. Pass a pre-escaped key and it is escaped twice, and a
+   dog called O'Malley renders as O&#39;Malley. */
+const aRow  = (k, v) => `<div class="ask-row"><span>${escapeHtml(String(k))}</span><span>${v}</span></div>`;
+const aNote = t => `<div class="ask-note">${escapeHtml(String(t))}</div>`;
+const aCard = (kind, inner) => `<div class="ask-card${kind ? ' ' + kind : ''}">${inner}</div>`;
+const aMoney = n => '$' + Number(n).toFixed(2).replace(/\.00$/, '');
+
+/* Plain text, for an aRow key — aRow does the escaping. */
+function askDogLabel(d) {
+  const o = ownerById(d.ownerId);
+  return `${d.name}${o ? ` · ${o.name}` : ''}`;
+}
+
+/* ---- the sheet ---- */
+function openAsk() {
+  let host = document.getElementById('askHost');
+  if (!host) { host = document.createElement('div'); host.id = 'askHost'; document.body.appendChild(host); }
+  host.innerHTML = `
+    <div class="ask-back" onclick="closeAsk()"></div>
+    <div class="ask-panel" role="dialog" aria-modal="true" aria-label="Ask">
+      <div class="ask-head">
+        <h2>✦ Ask</h2>
+        <div style="display:flex;gap:6px">
+          <button class="btn tiny ghost" onclick="askReset()">Clear</button>
+          <button class="btn tiny ghost" onclick="closeAsk()">Close</button>
+        </div>
+      </div>
+      <div class="ask-thread" id="askThread"></div>
+      <div class="ask-bar">
+        <textarea class="ask-inp" id="askInp" rows="1" placeholder="Ask or tell me something…"
+                  onkeydown="askKey(event)" oninput="askGrow(this)"></textarea>
+        <button class="ask-go" id="askGo" onclick="askSubmit()" aria-label="Send">↑</button>
+      </div>
+    </div>`;
+  host.classList.add('on');
+  document.body.classList.add('modal-open');
+  askPaint();
+  /* Not on a phone: a keyboard springing up over the thread the moment it
+     opens hides the thing she came back to read. */
+  if (window.matchMedia('(min-width:640px)').matches) document.getElementById('askInp').focus();
+}
+function closeAsk() {
+  const h = document.getElementById('askHost');
+  if (h) { h.classList.remove('on'); }
+  document.body.classList.remove('modal-open');
+  drainPendingRemote();
+}
+function askReset() { ASK.api = []; ASK.log = []; ASK.undo.clear(); askPaint(); }
+function askGrow(el) { el.style.height = 'auto'; el.style.height = Math.min(120, el.scrollHeight) + 'px'; }
+function askKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); askSubmit(); }
+}
+function askEg(t) { const i = document.getElementById('askInp'); if (i) { i.value = t; askSubmit(); } }
+
+function askPaint() {
+  const el = document.getElementById('askThread'); if (!el) return;
+  if (!ASK.log.length) {
+    el.innerHTML = `<div class="ask-empty">
+      <div style="font:600 15px var(--font-serif);color:var(--ink-2);margin-bottom:10px">What do you need?</div>
+      ${['who hasn\'t paid', 'what\'s on Thursday', 'book Enzo in Monday for Scouts', 'why isn\'t Louie\'s invoice ready']
+        .map(t => `<span class="ask-eg" onclick="askEg(${JSON.stringify(t).replace(/"/g,'&quot;')})">${escapeHtml(t)}</span>`).join('')}
+      <div style="margin-top:14px;font-size:11.5px">I'll do bookings and payments straight away — there's an Undo on each one.
+      Nothing is emailed without you tapping Send.</div>
+    </div>`;
+    return;
+  }
+  el.innerHTML = ASK.log.map(m => m.who === 'u'
+    ? `<div class="ask-u">${escapeHtml(m.text)}</div>`
+    : `<div class="ask-a">${m.html}</div>`).join('')
+    + (ASK.busy ? `<div class="ask-a"><span class="ask-dots"><i></i><i></i><i></i></span></div>` : '');
+  el.scrollTop = el.scrollHeight;
+}
+function askSay(html) { ASK.log.push({ who: 'a', html }); askPaint(); }
+
+/* ---- the loop ---- */
+async function askSubmit() {
+  const inp = document.getElementById('askInp');
+  const text = (inp?.value || '').trim();
+  if (!text || ASK.busy) return;
+  inp.value = ''; askGrow(inp);
+  ASK.log.push({ who: 'u', text });
+  ASK.api.push({ role: 'user', content: text });
+  await askRun();
+}
+
+async function askRun() {
+  ASK.busy = true; askPaint();
+  const go = document.getElementById('askGo'); if (go) go.disabled = true;
+  try {
+    for (let turn = 0; turn < ASK_MAX_TURNS; turn++) {
+      let res;
+      try {
+        res = (await ASK_FN({ messages: ASK.api, turn,
+                              context: { today: todayISO(),
+                                         weekday: new Date().toLocaleDateString('en-AU', { weekday: 'long' }) } })).data;
+      } catch (e) {
+        /* The function returns a reason for the things Andressa can act on;
+           anything else is Simon's problem, not hers, so say so and stop. */
+        askSay(aCard('stop', `<div class="ask-ttl">⛔ ${escapeHtml(e?.message || 'The assistant is unavailable')}</div>`
+                           + aNote('Nothing was changed.')));
+        break;
+      }
+
+      const content = res.content || [];
+      ASK.api.push({ role: 'assistant', content });
+
+      const text = content.filter(c => c.type === 'text').map(c => c.text).join('\n').trim();
+      const calls = content.filter(c => c.type === 'tool_use');
+      if (text) askSay(escapeHtml(text).replace(/\n/g, '<br>'));
+      if (!calls.length) break;
+
+      const results = [];
+      let halt = false;
+      for (const call of calls) {
+        let out;
+        try { out = await askRunTool(call.name, call.input || {}); }
+        catch (e) {
+          console.error('ask tool', call.name, e);
+          out = { say: `The tool failed: ${e?.message || e}. Tell Andressa it did not work and nothing changed.`,
+                  card: aCard('stop', `<div class="ask-ttl">⛔ That didn't work</div>` + aNote(e?.message || 'Nothing was changed.')) };
+        }
+        if (out.card) askSay(out.card);
+        if (out.halt) halt = true;
+        results.push({ type: 'tool_result', tool_use_id: call.id, content: out.say });
+      }
+      ASK.api.push({ role: 'user', content: results });
+      /* A send has been put in front of her. Going round again would only
+         produce chatter under a card that is already waiting for a tap. */
+      if (halt) break;
+    }
+  } finally {
+    ASK.busy = false;
+    const g = document.getElementById('askGo'); if (g) g.disabled = false;
+    askPaint();
+  }
+}
+
+/* ---- undo ---- */
+function askRegisterUndo(fn, label) {
+  const id = 'u' + uid();
+  ASK.undo.set(id, fn);
+  return `<button class="btn tiny ghost" onclick="askUndo('${id}', this)">${escapeHtml(label || 'Undo')}</button>`;
+}
+async function askUndo(id, btn) {
+  const fn = ASK.undo.get(id);
+  if (!fn) return toast('Already undone');
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    await fn();
+    ASK.undo.delete(id);
+    btn.textContent = 'Undone';
+    /* The model's picture of the data is now wrong. Tell it, so a follow-up
+       like "and send her invoice" doesn't act on something that no longer
+       exists. */
+    ASK.api.push({ role: 'user', content: '[Andressa tapped Undo on that last change. It has been reversed.]' });
+    render();
+    toast('Undone', 'ok');
+  } catch (e) { btn.disabled = false; btn.textContent = 'Undo'; toast('Could not undo', 'warn'); }
+}
+
+/* ---- the tools ----
+   Each returns { say, card, halt? }. `say` is what the model reads back and
+   is deliberately factual and complete; `card` is what Andressa sees. They
+   are separate because the model needs ids and the human needs names. */
+async function askRunTool(name, a) {
+  const tier = tierOf(name);
+  if (!tier) return { say: `No such tool: ${name}.`, card: '' };
+
+  switch (name) {
+
+  /* ======== read ======== */
+  case 'find_dogs': {
+    const q = String(a.query || '').toLowerCase().trim();
+    if (!q) return { say: 'Empty query.', card: '' };
+    const hits = DB.dogs.filter(d => {
+      const o = ownerById(d.ownerId);
+      return [d.name, d.breed, o?.name].filter(Boolean).join(' ').toLowerCase().includes(q);
+    }).slice(0, 12);
+    if (!hits.length) return { say: `No dog or client matching "${a.query}".`, card: '' };
+    /* The card only appears when it is a question for her. One clean match is
+       a step on the way to the real answer, not something to show. */
+    const card = hits.length > 1
+      ? aCard('stop', `<div class="ask-ttl">Which one?</div>`
+          + hits.map(d => aRow(askDogLabel(d), escapeHtml(d.breed || d.size || ''))).join('')
+          + aNote('Nothing saved yet.'))
+      : '';
+    return {
+      say: hits.map(d => {
+        const o = ownerById(d.ownerId);
+        return `${d.name} (dogId ${d.id}, ${d.size || 'size unknown'}${d.breed ? ', ' + d.breed : ''}) `
+             + `owner ${o ? o.name + ' (ownerId ' + o.id + ', ' + (o.email || 'NO EMAIL') + ')' : 'none'}`;
+      }).join('\n') + (hits.length > 1 ? '\nSeveral matches — ask which, do not pick one.' : ''),
+      card
+    };
+  }
+
+  case 'day': {
+    const from = a.from, to = a.to || a.from;
+    const bks = DB.bookings.filter(b => b.date >= from && b.date <= to && !b.cancelled)
+                           .sort((x, y) => (x.date + (x.arrivalTime || '')).localeCompare(y.date + (y.arrivalTime || '')));
+    if (!bks.length) return { say: `Nothing booked ${from}${to !== from ? ' to ' + to : ''}.`,
+                              card: aCard('', `<div class="ask-ttl">${escapeHtml(fmtDateShort(from))}</div>` + aNote('Nothing booked.')) };
+    const line = b => {
+      const d = dogById(b.dogId);
+      return { b, d, label: d ? d.name : '(deleted dog)', sess: SESSION_LABELS[b.session] || b.session };
+    };
+    const rows = bks.map(line);
+    const scoutsAm = rows.filter(r => r.b.session === 'scouts' && (r.b.scoutsTrip || 'am') === 'am').length;
+    const scoutsPm = rows.filter(r => r.b.session === 'scouts' && r.b.scoutsTrip === 'pm').length;
+    const capNote = [scoutsAm >= 4 ? 'morning Scouts is full (4 of 4)' : scoutsAm ? `morning Scouts ${scoutsAm} of 4` : '',
+                     scoutsPm >= 4 ? 'afternoon Scouts is full (4 of 4)' : scoutsPm ? `afternoon Scouts ${scoutsPm} of 4` : '']
+                    .filter(Boolean).join(' · ');
+    return {
+      say: `${rows.length} booking(s) ${from}${to !== from ? ' to ' + to : ''}:\n`
+         + rows.map(r => `${r.b.date} ${r.label} (bookingId ${r.b.id}) ${r.sess}`
+                       + (r.b.session === 'scouts' ? ` ${r.b.scoutsTrip || 'am'}` : '')
+                       + (r.b.arrivalTime ? ' from ' + r.b.arrivalTime : '')).join('\n')
+         + (capNote ? `\nScouts capacity: ${capNote}. The four-dog cap is law and cannot be exceeded.` : ''),
+      card: aCard('', `<div class="ask-ttl">${escapeHtml(fmtDateShort(from))}${to !== from ? ' – ' + escapeHtml(fmtDateShort(to)) : ''} · ${rows.length} booked</div>`
+        + rows.map(r => aRow(`${to !== from ? fmtDateShort(r.b.date) + ' · ' : ''}${r.label}`,
+                             escapeHtml(r.sess + (r.b.session === 'scouts' ? ' ' + (r.b.scoutsTrip || 'am') : '')))).join('')
+        + (capNote ? aNote(capNote) : ''))
+    };
+  }
+
+  case 'owes': {
+    const due = invoicesDue(DB, { asAt: todayISO() }).filter(i => i.total > 0);
+    if (!due.length) return { say: 'Nobody owes anything.', card: aCard('did', `<div class="ask-ttl">All square</div>` + aNote('Nothing outstanding.')) };
+    const total = due.reduce((t, i) => t + i.total, 0);
+    return {
+      say: `${due.length} client(s) owing ${aMoney(total)} in total:\n`
+         + due.map(i => `${i.owner.name} (ownerId ${i.owner.id}) ${aMoney(i.total)}, period to ${i.periodTo}`
+                      + (i.owner.email ? '' : ' — NO EMAIL ON FILE')).join('\n'),
+      card: aCard('', `<div class="ask-ttl">${due.length} owing · ${escapeHtml(aMoney(total))}</div>`
+        + due.map(i => aRow(i.owner.name, escapeHtml(aMoney(i.total) + ' · to ' + fmtDateShort(i.periodTo)))).join(''))
+    };
+  }
+
+  case 'invoice_state': {
+    const o = ownerById(a.ownerId);
+    if (!o) return { say: 'No client with that id.', card: '' };
+    const today = todayISO();
+    const inv = buildInvoice(DB, a.ownerId, { asAt: today });
+    if (!inv) return { say: `${o.name} has nothing to invoice.`, card: aCard('', `<div class="ask-ttl">${escapeHtml(o.name)}</div>` + aNote('Nothing to invoice.')) };
+    const why = blockers(DB, inv, BIZ, today);
+    const waiting = why.includes('Still has a booking to come this week');
+    const hard = why.filter(w => w !== 'Still has a booking to come this week');
+    if (!why.length) return {
+      say: `${o.name}'s invoice is READY: ${aMoney(inv.total)}, ${inv.lines.length} line(s), number ${inv.number}.`,
+      card: aCard('did', `<div class="ask-ttl">Ready · ${escapeHtml(o.name)}</div>`
+        + aRow('Total', escapeHtml(aMoney(inv.total))) + aRow('To', escapeHtml(o.email || '—')))
+    };
+    if (waiting && !hard.length) {
+      const next = DB.bookings.filter(b => { const d = dogById(b.dogId); return d && d.ownerId === o.id && !b.cancelled && b.date >= today; })
+                              .sort((x, y) => x.date.localeCompare(y.date))[0];
+      return {
+        say: `${o.name}'s invoice is WAITING, not broken: they still have a booking to come this week`
+           + (next ? ` (${next.date})` : '') + `. Invoices hold until the week's last booking so the client gets one email. `
+           + `Current total would be ${aMoney(inv.total)}. Andressa can override with send_invoice now=true.`,
+        card: aCard('warn', `<div class="ask-ttl">⏳ ${escapeHtml(o.name)} · waiting, not blocked</div>`
+          + (next ? aRow('Next booking', escapeHtml(fmtDateShort(next.date))) : '')
+          + aRow('Would be', escapeHtml(aMoney(inv.total)))
+          + aNote("Invoices wait for the week's last booking so a client gets one email instead of three."))
+      };
+    }
+    return {
+      say: `${o.name}'s invoice is BLOCKED: ${hard.join('; ')}. These come from the invoicing code and must be fixed by a person.`,
+      card: aCard('stop', `<div class="ask-ttl">⛔ Blocked · ${escapeHtml(o.name)}</div>`
+        + hard.map(w => aRow(w, '')).join('') + aNote('Same checks the Send button runs.'))
+    };
+  }
+
+  case 'stay': {
+    const dog = dogById(a.dogId);
+    if (!dog) return { say: 'No dog with that id.', card: '' };
+    const nights = DB.bookings.filter(b => b.dogId === dog.id && b.session === 'overnight' && !b.cancelled)
+                              .sort((x, y) => x.date.localeCompare(y.date));
+    if (!nights.length) return { say: `${dog.name} has no boarding nights booked.`, card: '' };
+    const dep = (DB.deposits || []).find(d => (d.bookingIds || []).some(id => nights.some(n => n.id === id)));
+    const full = nights.reduce((t, b) => t + calcTotal(b, dog), 0);
+    const bands = cancelBands(nights);
+    const would = depositDue(nights, dog);
+    return {
+      say: `${dog.name}: ${nights.length} night(s) ${nights[0].date} to ${nights[nights.length-1].date}, full stay ${aMoney(full)}. `
+         + (dep ? `Deposit ${aMoney(dep.amount)} (depositId ${dep.id}), ${dep.paidAt ? 'PAID ' + String(dep.paidAt).slice(0,10) + ' — the document is now a receipt' : 'not yet paid'}.`
+                : would > 0 ? `No deposit recorded yet; half the stay would be ${aMoney(would)}.`
+                            : `Under ${MIN_DEPOSIT_NIGHTS} nights, so no deposit is taken.`)
+         + ` Cancellation: full refund before ${bands.refundBy}, credit until ${bands.creditBy}, kept after.`,
+      card: aCard(dep?.paidAt ? 'did' : '', `<div class="ask-ttl">${escapeHtml(dog.name)} · ${nights.length} night${nights.length===1?'':'s'}</div>`
+        + aRow(`${fmtDateShort(nights[0].date)} – ${fmtDateShort(nights[nights.length-1].date)}`, escapeHtml(aMoney(full)))
+        + (dep ? aRow(dep.paidAt ? 'Deposit received' : 'Deposit due', escapeHtml(aMoney(dep.paidAmount ?? dep.amount)))
+               : would > 0 ? aRow('Deposit would be', escapeHtml(aMoney(would)))
+                           : aRow('No deposit', `under ${MIN_DEPOSIT_NIGHTS} nights`))
+        + aNote(`Full refund before ${fmtDateShort(bands.refundBy)} · credit until ${fmtDateShort(bands.creditBy)} · kept after`))
+    };
+  }
+
+  /* ======== write · each one undoable ======== */
+  case 'book': {
+    const dog = dogById(a.dogId);
+    if (!dog) return { say: 'No dog with that id — call find_dogs first.', card: '' };
+    const dates = (a.dates || []).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d));
+    if (!dates.length) return { say: 'No valid dates given.', card: '' };
+    const session = a.session || 'full';
+
+    /* Refusals first, before anything is written. A duplicate is a mis-parse,
+       and a fifth Scouts dog is illegal, not merely inconvenient. */
+    const clashes = [], capped = [];
+    for (const date of dates) {
+      if (DB.bookings.some(b => b.dogId === dog.id && b.date === date && (b.session || 'full') === session && !b.cancelled))
+        clashes.push(date);
+      if (session === 'scouts') {
+        const trip = a.scoutsTrip || 'am';
+        const n = DB.bookings.filter(b => b.date === date && b.session === 'scouts'
+                                       && (b.scoutsTrip || 'am') === trip && !b.cancelled).length;
+        if (n >= 4) capped.push(`${date} ${trip}`);
+      }
+    }
+    const usable = dates.filter(d => !clashes.includes(d)
+      && !capped.some(c => c.startsWith(d)));
+    if (!usable.length) return {
+      say: `Nothing booked. ${clashes.length ? 'Already booked: ' + clashes.join(', ') + '. ' : ''}`
+         + `${capped.length ? 'Scouts already at the four-dog cap: ' + capped.join(', ') + '.' : ''}`,
+      card: aCard('stop', `<div class="ask-ttl">⛔ Nothing booked</div>`
+        + (clashes.length ? aRow('Already booked', escapeHtml(clashes.map(fmtDateShort).join(', '))) : '')
+        + (capped.length ? aRow('Scouts full · 4 of 4', escapeHtml(capped.join(', '))) : ''))
+    };
+
+    const made = [];
+    for (const date of usable) {
+      const bk = {
+        id: uid(), dogId: dog.id, date, session,
+        scoutsTrip: session === 'scouts' ? (a.scoutsTrip || 'am') : null,
+        arrivalTime: a.arrivalTime || '', departureTime: a.departureTime || '',
+        arrivalLogged: null, departureLogged: null, lateFeeWaived: false,
+        addOns: { senior:false, puppy:false, med:false, diet:false, taxi:false },
+        surcharges: { publicHoliday:false, xmas:false, xmasPeak:false },
+        customPrice: null, packId: null, cancelled: false,
+        notes: a.note || '', createdAt: new Date().toISOString()
+      };
+      bk.total = calcTotal(bk, dog);
+      DB.bookings.push(bk);
+      made.push(bk);
+    }
+    await save(DB); render();
+    const sum = made.reduce((t, b) => t + (b.total || 0), 0);
+    const ids = made.map(b => b.id);
+    const undo = askRegisterUndo(async () => {
+      DB.bookings = DB.bookings.filter(b => !ids.includes(b.id));
+      await save(DB);
+    }, made.length > 1 ? `Undo all ${made.length}` : 'Undo');
+    return {
+      say: `Booked ${dog.name} for ${made.length} day(s): ${made.map(b => b.date + ' ' + b.session).join(', ')}. `
+         + `Total ${aMoney(sum)}. bookingIds ${ids.join(',')}.`
+         + (clashes.length ? ` Skipped ${clashes.join(', ')} — already booked.` : '')
+         + (capped.length ? ` Skipped ${capped.join(', ')} — Scouts at the four-dog cap.` : ''),
+      card: aCard('did', `<div class="ask-ttl"><span class="ask-tag do">Done</span></div>`
+        + aRow(askDogLabel(dog), escapeHtml(SESSION_LABELS[session] || session))
+        + made.map(b => aRow(fmtDateShort(b.date), escapeHtml(aMoney(b.total || 0)))).join('')
+        + (made.length > 1 ? aRow('Total', `<b>${escapeHtml(aMoney(sum))}</b>`) : '')
+        + (clashes.length ? aNote('Skipped ' + clashes.map(fmtDateShort).join(', ') + ' — already booked.') : '')
+        + (capped.length ? aNote('Skipped ' + capped.join(', ') + ' — Scouts is at the four-dog cap.') : '')
+        + `<div class="ask-acts">${undo}<button class="btn tiny ghost" onclick="closeAsk();openBookingSheet('${ids[0]}')">Open</button></div>`)
+    };
+  }
+
+  case 'cancel': {
+    const bk = DB.bookings.find(b => b.id === a.bookingId);
+    if (!bk) return { say: 'No booking with that id.', card: '' };
+    if (bk.cancelled) return { say: 'That booking is already cancelled.', card: '' };
+    const dog = dogById(bk.dogId);
+    const q = cancelQuote(bk);
+    const charge = a.waive ? 0 : q.charge;
+
+    const before = { total: bk.total, packId: bk.packId, customPrice: bk.customPrice,
+                     arrivalLogged: bk.arrivalLogged, departureLogged: bk.departureLogged };
+    bk.cancelled = true;
+    bk.cancelledAt = new Date().toISOString();
+    bk.cancelCharge = charge;
+    bk.total = charge;
+    bk.arrivalLogged = null; bk.departureLogged = null;
+    /* A cancelled day goes back to the pack, and the zero price goes with it —
+       same reasoning as applyCancel, and it has to match or restoring the
+       booking leaves a day that is free forever. */
+    let packReturned = null;
+    if (bk.packId) {
+      const pk = DB.packs.find(x => x.id === bk.packId);
+      if (pk && pk.daysUsed > 0) { pk.daysUsed -= 1; packReturned = pk.id; }
+      bk.packId = null;
+      if (bk.customPrice === 0) bk.customPrice = null;
+    }
+    await save(DB); render();
+    const undo = askRegisterUndo(async () => {
+      bk.cancelled = false; bk.cancelledAt = null; bk.cancelCharge = null;
+      bk.packId = before.packId; bk.customPrice = before.customPrice;
+      bk.arrivalLogged = before.arrivalLogged; bk.departureLogged = before.departureLogged;
+      if (packReturned) { const pk = DB.packs.find(x => x.id === packReturned); if (pk) pk.daysUsed += 1; }
+      bk.total = calcTotal(bk, dogById(bk.dogId));
+      await save(DB);
+    });
+    /* The rest of a repeating series is deliberately left alone: cancelling
+       twelve bookings off one sentence is not something to do without being
+       asked. Say it is there instead. */
+    const rest = bk.seriesId ? DB.bookings.filter(b => b.seriesId === bk.seriesId && b.id !== bk.id
+                                && !b.cancelled && b.date > bk.date).length : 0;
+    return {
+      say: `Cancelled ${dog?.name} on ${bk.date}. Charge ${aMoney(charge)}`
+         + (charge > 0 ? ` — inside ${CANCEL_NOTICE_HOURS} hours, so half the rate per the terms. Tell Andressa plainly that she has been charged; she often means to waive it.` : ' — free, more than 24 hours notice.')
+         + (packReturned ? ' A pack day was returned.' : '')
+         + (rest ? ` This is part of a repeat and ${rest} later booking(s) in the series are untouched — ask if she wants those cancelled too.` : ''),
+      card: aCard(charge > 0 ? 'warn' : 'did',
+        `<div class="ask-ttl"><span class="ask-tag do">Done</span>${charge > 0 ? ' &nbsp;charged' : ''}</div>`
+        + aRow(`${dog?.name || 'Booking'} · ${fmtDateShort(bk.date)}`, 'cancelled')
+        + (charge > 0 ? aRow(`Inside ${CANCEL_NOTICE_HOURS} hours`, `<b>${escapeHtml(aMoney(charge))}</b> · half the rate`)
+                      : aRow('More than 24 hours', 'no charge'))
+        + (packReturned ? aNote('A pack day went back on her pack.') : '')
+        + (rest ? aNote(`${rest} more in this repeat are still booked.`) : '')
+        + `<div class="ask-acts">${undo}${charge > 0 ? `<button class="btn tiny ghost" onclick="askEg('waive the charge on that cancellation')">Waive the charge</button>` : ''}</div>`)
+    };
+  }
+
+  case 'uncancel': {
+    const bk = DB.bookings.find(b => b.id === a.bookingId);
+    if (!bk) return { say: 'No booking with that id.', card: '' };
+    if (!bk.cancelled) return { say: 'That booking is not cancelled.', card: '' };
+    bk.cancelled = false; bk.cancelledAt = null; bk.cancelCharge = null;
+    bk.total = calcTotal(bk, dogById(bk.dogId));
+    bk.lateFee = latePickupFee(bk).fee;
+    await save(DB); render();
+    const dog = dogById(bk.dogId);
+    return {
+      say: `Restored ${dog?.name} on ${bk.date}, ${aMoney(bk.total)}, and any cancellation charge is gone.`,
+      card: aCard('did', `<div class="ask-ttl"><span class="ask-tag do">Done</span></div>`
+        + aRow(`${dog?.name || 'Booking'} · ${fmtDateShort(bk.date)}`, 'back on')
+        + aRow('Charge removed', escapeHtml(aMoney(bk.total))))
+    };
+  }
+
+  case 'record_payment': {
+    const o = ownerById(a.ownerId);
+    if (!o) return { say: 'No client with that id.', card: '' };
+    const amount = Number(a.amount);
+    if (!(amount > 0)) return { say: 'Amount must be a positive number.', card: '' };
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(a.date || '') ? a.date : todayISO();
+    const pay = { id: uid(), ownerId: o.id, amount, date,
+                  method: (a.method || 'bank').slice(0, 30), note: '', createdAt: new Date().toISOString() };
+    DB.payments.push(pay);
+    await save(DB); render();
+    const undo = askRegisterUndo(async () => {
+      DB.payments = DB.payments.filter(p => p.id !== pay.id);
+      await save(DB);
+    });
+    /* What this leaves them owing comes from buildInvoice, which has already
+       credited the payment — never from arithmetic here. */
+    const inv = buildInvoice(DB, o.id, { asAt: todayISO() });
+    const left = inv ? inv.total : 0;
+    return {
+      say: `Recorded ${aMoney(amount)} from ${o.name} on ${date} by ${pay.method}. `
+         + (left > 0 ? `They still owe ${aMoney(left)}.` : `That clears them — a receipt is available via send_receipt.`),
+      card: aCard('did', `<div class="ask-ttl"><span class="ask-tag do">Done</span></div>`
+        + aRow('Payment recorded', `<b>${escapeHtml(aMoney(amount))}</b>`)
+        + aRow(o.name, escapeHtml(fmtDateShort(date) + ' · ' + pay.method))
+        + (left > 0 ? aRow('Still owing', escapeHtml(aMoney(left))) : aNote('That clears them. A receipt is ready whenever you want it sent.'))
+        + `<div class="ask-acts">${undo}</div>`)
+    };
+  }
+
+  case 'deposit_received': {
+    const dep = (DB.deposits || []).find(d => d.id === a.depositId);
+    if (!dep) return { say: 'No deposit with that id.', card: '' };
+    const dog = dogById(dep.dogId); const o = dog && ownerById(dog.ownerId);
+    const amt = a.amount != null ? Math.round(Number(a.amount)) : dep.amount;
+    if (!(amt >= 0)) return { say: 'Amount must be a number.', card: '' };
+    const before = { paidAt: dep.paidAt, paidAmount: dep.paidAmount };
+    dep.paidAt = new Date().toISOString();
+    dep.paidAmount = amt;
+    await save(DB); render();
+    const undo = askRegisterUndo(async () => {
+      dep.paidAt = before.paidAt; dep.paidAmount = before.paidAmount;
+      await save(DB);
+    });
+    const short = dep.amount - amt;
+    return {
+      say: `Deposit of ${aMoney(amt)} recorded for ${dog?.name}${short > 0 ? `, which is ${aMoney(short)} short of the ${aMoney(dep.amount)} asked for` : ''}. `
+         + (short > 0 ? 'The document still reads as a request for the balance.' : 'The deposit document is now a receipt and can be sent with send_deposit receipt=true.'),
+      card: aCard(short > 0 ? 'warn' : 'did', `<div class="ask-ttl"><span class="ask-tag do">Done</span></div>`
+        + aRow('Deposit received', `<b>${escapeHtml(aMoney(amt))}</b>`)
+        + aRow((dog?.name || '') + (o ? ' · ' + o.name : ''), escapeHtml(short > 0 ? aMoney(short) + ' short' : 'paid in full'))
+        + (short > 0 ? aNote('Still reads as a request for the balance.') : aNote('Now a receipt — send it whenever you like.'))
+        + `<div class="ask-acts">${undo}</div>`)
+    };
+  }
+
+  /* ======== send · proposed, never executed ========
+     These build the real document and run the real blockers, then stop. The
+     only thing that puts anything in the send queue is Andressa's thumb. */
+  case 'send_invoice':
+  case 'send_receipt': {
+    const receipt = name === 'send_receipt';
+    const o = ownerById(a.ownerId);
+    if (!o) return { say: 'No client with that id.', card: '' };
+    const today = todayISO();
+    const inv = buildInvoice(DB, a.ownerId, { asAt: today });
+    if (!inv) return { say: `${o.name} has nothing to invoice.`, card: '' };
+    const why = blockers(DB, inv, BIZ, today, { allowSummary: receipt, ignoreWeekRun: !!a.now });
+    if (why.length) return {
+      say: `Cannot send ${o.name}'s ${receipt ? 'receipt' : 'invoice'}: ${why.join('; ')}. `
+         + `These come from the invoicing code — report them and do not try to work around them.`,
+      card: aCard('stop', `<div class="ask-ttl">⛔ Blocked · ${escapeHtml(o.name)}</div>`
+        + why.map(w => aRow(w, '')).join('')
+        + aNote('Same checks the Send button runs.')
+        + `<div class="ask-acts"><button class="btn tiny ghost" onclick="closeAsk();openClientMoney('${o.id}')">Open the client</button></div>`),
+      halt: true
+    };
+    const id = 'p' + uid();
+    ASK.undo.set(id, { kind: 'invoice', ownerId: o.id, receipt, now: !!a.now });
+    return {
+      say: `Prepared ${o.name}'s ${receipt ? 'receipt' : 'invoice'} ${inv.number} for ${aMoney(inv.total)} and shown it to Andressa for confirmation. `
+         + `It has NOT been sent and you cannot send it. Do not call this tool again — say nothing further about sending.`,
+      card: aCard('send', `<div class="ask-ttl"><span class="ask-tag send">Will send</span></div>`
+        + aRow('To', escapeHtml(o.email || '—'))
+        + aRow(receipt ? 'Receipt' : 'Invoice', escapeHtml(inv.number))
+        + aRow(`${fmtDateShort(inv.periodFrom)} – ${fmtDateShort(inv.periodTo)}`, `<b>${escapeHtml(aMoney(inv.total))}</b>`)
+        + (a.now ? aNote('Mid-week override — her week is not finished.') : '')
+        + `<div class="ask-acts">
+             <button class="btn night" onclick="askConfirmSend('${id}', this)">Send it</button>
+             <button class="btn ghost" onclick="closeAsk();openOneInvoice('${o.id}')">Read it</button>
+             <button class="btn ghost" onclick="askDrop('${id}', this)">Not yet</button>
+           </div>`),
+      halt: true
+    };
+  }
+
+  case 'send_deposit': {
+    const dep = (DB.deposits || []).find(d => d.id === a.depositId);
+    if (!dep) return { say: 'No deposit with that id.', card: '' };
+    const dog = dogById(dep.dogId); const o = dog && ownerById(dog.ownerId);
+    if (!o) return { say: 'No client on that stay.', card: '' };
+    const receipt = !!a.receipt || !!dep.paidAt;
+    const today = todayISO();
+    const req = buildDepositRequest(DB, dep.id, { asAt: today });
+    if (!req) return { say: "Couldn't build that deposit request.", card: '' };
+    const why = blockers(DB, req, BIZ, today, { allowSummary: receipt });
+    if (why.length) return {
+      say: `Cannot send that deposit ${receipt ? 'receipt' : 'request'}: ${why.join('; ')}.`,
+      card: aCard('stop', `<div class="ask-ttl">⛔ Blocked · ${escapeHtml(o.name)}</div>` + why.map(w => aRow(w, '')).join('')),
+      halt: true
+    };
+    if ((DB.meta.sendQueue || []).some(q => q.depositId === dep.id))
+      return { say: 'That deposit is already queued to send.', card: aCard('warn', `<div class="ask-ttl">Already queued</div>`), halt: true };
+    const id = 'p' + uid();
+    ASK.undo.set(id, { kind: 'deposit', depositId: dep.id, receipt });
+    return {
+      say: `Prepared the deposit ${receipt ? 'receipt' : 'request'} for ${dog.name} (${aMoney(req.total)}) and shown it to Andressa. `
+         + `NOT sent. Do not call this tool again.`,
+      card: aCard('send', `<div class="ask-ttl"><span class="ask-tag send">Will send</span></div>`
+        + aRow('To', escapeHtml(o.email || '—'))
+        + aRow('Subject', `<span style="font-size:12px">${escapeHtml(invoiceSubject(req, BIZ).replace(BIZ.name + ' — ', ''))}</span>`)
+        + aRow(`${req.lines[0]?.what || 'Stay'}`, escapeHtml(fmtDateShort(req.periodFrom) + ' – ' + fmtDateShort(req.periodTo)))
+        + aRow(receipt ? 'Received' : 'Deposit now', `<b>${escapeHtml(aMoney(receipt ? (dep.paidAmount ?? dep.amount) : req.total))}</b>`)
+        + (req.cancelBands ? aNote(`Cancellation dates are on it: full refund before ${fmtDateShort(req.cancelBands.refundBy)}, credit until ${fmtDateShort(req.cancelBands.creditBy)}.`) : '')
+        + `<div class="ask-acts">
+             <button class="btn night" onclick="askConfirmSend('${id}', this)">Send it</button>
+             <button class="btn ghost" onclick="askDrop('${id}', this)">Not yet</button>
+           </div>`),
+      halt: true
+    };
+  }
+
+  default:
+    return { say: `Tool ${name} is not implemented.`, card: '' };
+  }
+}
+
+/* ---- the tap ----
+   Nothing above this line can queue an email. These two can, and they are
+   only reachable from a button Andressa pressed. */
+async function askConfirmSend(id, btn) {
+  const p = ASK.undo.get(id);
+  if (!p) return toast('That one has gone — ask again');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    if (p.kind === 'invoice') await queueInvoice(p.ownerId, { receipt: p.receipt, now: p.now });
+    else                      await askQueueDepositNoPrompt(p.depositId, p.receipt);
+    ASK.undo.delete(id);
+    btn.closest('.ask-acts').innerHTML = '<span style="font-size:12.5px;color:var(--action-dark);font-weight:500">✓ Sent</span>';
+    ASK.api.push({ role: 'user', content: '[Andressa tapped Send. It has gone.]' });
+  } catch (e) {
+    btn.disabled = false; btn.textContent = 'Send it';
+    toast('Could not send — ' + (e?.message || 'try the Invoices screen'), 'warn');
+  }
+}
+function askDrop(id, btn) {
+  ASK.undo.delete(id);
+  btn.closest('.ask-acts').innerHTML = '<span style="font-size:12.5px;color:var(--ink-3)">Left alone</span>';
+  ASK.api.push({ role: 'user', content: '[Andressa declined to send that.]' });
+}
+
+/* queueDeposit asks for confirmation with a browser confirm(). She has just
+   confirmed, on a card showing more than that dialog ever did, so this is the
+   same queue write without asking her twice. */
+async function askQueueDepositNoPrompt(depositId, receipt) {
+  const dep = (DB.deposits || []).find(d => d.id === depositId); if (!dep) throw new Error('deposit gone');
+  const dog = dogById(dep.dogId); const owner = dog && ownerById(dog.ownerId);
+  if (!owner) throw new Error('no client on this stay');
+  const today = todayISO();
+  const req = buildDepositRequest(DB, depositId, { asAt: today });
+  if (!req) throw new Error("couldn't build the request");
+  const why = blockers(DB, req, BIZ, today, { allowSummary: !!receipt });
+  if (why.length) throw new Error(why[0]);
+  DB.meta.sendQueue = DB.meta.sendQueue || [];
+  DB.meta.sendQueue.push({ ownerId: owner.id, depositId, asAt: today,
+                           number: req.number, bookingIds: [], total: req.total,
+                           ...(receipt ? { sendReceipt: true } : {}),
+                           queuedAt: new Date().toISOString() });
+  await save(DB);
+  toast(`Sending ${owner.name} the deposit ${receipt ? 'receipt' : 'request'}`, 'ok');
+}
+
+
 Object.assign(window, {
   doSignIn, signOutAdmin, switchTab,
   openAddMenuSheet, openBookingSheet, saveBookingForm, deleteBooking, invoiceNow,
@@ -5110,6 +5828,8 @@ Object.assign(window, {
   scoutsTripLoad, scoutsCapNote,
   openSellPackSheet, savePackForm,
   hideSyncBanner, retryPendingSave,
+  openAsk, closeAsk, askSubmit, askKey, askGrow, askReset, askEg, askUndo,
+  askConfirmSend, askDrop,
   // These three are wired to onclick but were never exported — cancelling a
   // booking silently did nothing. Module scope isn't on window.
   openCancelSheet, applyCancel, uncancelBooking

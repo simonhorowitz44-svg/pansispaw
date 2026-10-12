@@ -1,8 +1,11 @@
 {
   "functions": {
     "source": "functions",
-    "runtime": "nodejs20",
-    "predeploy": ["cp \"$PWD/invoice-core.js\" \"$PWD/functions/invoice-core.js\""],
+    "runtime": "nodejs22",
+    "predeploy": [
+      "cp \"$PWD/invoice-core.js\" \"$PWD/functions/invoice-core.js\"",
+      "cp \"$PWD/assistant-tools.js\" \"$PWD/functions/assistant-tools.js\""
+    ],
     "ignore": ["node_modules", ".git", "*.log"]
   }
 }

@@ -383,7 +383,9 @@ export function buildDepositRequest(db, depositId, opts = {}) {
     { date: from, dog: dog.name, what: `${nights.length} night${nights.length === 1 ? '' : 's'}`,
       note: `${fmtDay(from)} to ${fmtDay(to)} · $${full.toFixed(2)} in total`, amt: 0, free: true },
     { date: from, dog: dog.name, what: 'Deposit to hold the stay',
-      note: `${Math.round((dep.rate || DEPOSIT_RATE) * 100)}% now, the rest invoiced after they go home`,
+      note: dep.paidAt
+        ? `${Math.round((dep.rate || DEPOSIT_RATE) * 100)} per cent of the stay · the rest is invoiced after they go home`
+        : `${Math.round((dep.rate || DEPOSIT_RATE) * 100)}% now, the rest invoiced after they go home`,
       amt: dep.amount }
   ];
 
@@ -907,6 +909,7 @@ export function renderInvoiceHTML(inv, biz, o = {}) {
   const bankOff = bank && biz.bankDiscount > 0 ? biz.bankDiscount : 0;
   const isInv = !inv.nothingDue;
   const isDep = inv.kind === 'deposit';
+  const isRcpt = isDep && !isInv;   /* a paid deposit is the receipt, not a summary */
   const period = inv.periodFrom === inv.periodTo
     ? fmtDayY(inv.periodTo)
     : `${fmtDay(inv.periodFrom)} – ${fmtDayY(inv.periodTo)}`;
@@ -921,13 +924,14 @@ export function renderInvoiceHTML(inv, biz, o = {}) {
         <div>${escapeHtml(biz.phone)}${biz.email ? ' · ' + escapeHtml(biz.email) : ''}</div>
         ${biz.abn ? `<div>ABN ${escapeHtml(biz.abn)}</div>` : ''}
       </div>
-      <div class="inv-kind">${isDep ? 'Deposit' : isInv ? 'Invoice' : 'Summary'}</div>
+      <div class="inv-kind">${isRcpt ? 'Receipt' : isDep ? 'Deposit' : isInv ? 'Invoice' : 'Summary'}</div>
     </div>
 
     <div class="inv-meta">
-      <div><span>${isDep ? 'Deposit for' : isInv ? 'Invoice for' : 'Summary for'}</span><b>${escapeHtml(inv.owner.name)}</b></div>
+      <div><span>${isRcpt ? 'Receipt for' : isDep ? 'Deposit for' : isInv ? 'Invoice for' : 'Summary for'}</span><b>${escapeHtml(inv.owner.name)}</b></div>
       <div><span>Covering</span><b>${period}</b></div>
-      ${isInv ? `<div><span>Invoice no.</span><b>${escapeHtml(inv.number)}</b></div>
+      ${isRcpt ? `<div><span>Receipt no.</span><b>${escapeHtml(inv.number)}</b></div>`
+        : isInv ? `<div><span>${isDep ? 'Deposit no.' : 'Invoice no.'}</span><b>${escapeHtml(inv.number)}</b></div>
       <div><span>Due</span><b>${fmtDayY(inv.dueISO)}</b></div>` : ''}
     </div>
 
@@ -941,7 +945,7 @@ export function renderInvoiceHTML(inv, biz, o = {}) {
           <td class="r">${l.amt ? m(l.amt) : '—'}</td>
         </tr>`).join('')}
       </tbody>
-      <tfoot><tr><td colspan="3">${isDep ? 'Deposit due' : isInv ? 'Total due' : 'Nothing to pay'}</td>
+      <tfoot><tr><td colspan="3">${isRcpt ? 'Paid in full — thank you' : isDep ? 'Deposit due' : isInv ? 'Total due' : 'Nothing to pay'}</td>
         <td class="r">${m(inv.total)}</td></tr></tfoot>
     </table>
 
@@ -980,8 +984,11 @@ export function invoiceText(inv, biz) {
   const first = String(inv.owner.name || '').trim().split(/\s+/)[0] || 'there';
   const period = inv.periodFrom === inv.periodTo
     ? fmtDayY(inv.periodTo) : `${fmtDay(inv.periodFrom)} – ${fmtDayY(inv.periodTo)}`;
+  const isRcpt = inv.kind === 'deposit' && inv.nothingDue;
   const L = [`Hi ${first},`, ''];
-  L.push(inv.nothingDue
+  L.push(isRcpt
+    ? `Thank you — your deposit has come through, and ${inv.lines[0].dog}'s stay is held for ${period}. Keep this as your receipt.`
+    : inv.nothingDue
     ? `Here's a summary of your time with us, ${period}.`
     : inv.kind === 'deposit' ? `Here's the deposit to hold ${inv.lines[0].dog}'s stay, ${period}.`
     : `Here's your invoice for ${period}.`);
@@ -990,7 +997,8 @@ export function invoiceText(inv, biz) {
     `${fmtDay(l.date)}  ${l.dog ? l.dog + ' · ' : ''}${l.what}${l.note ? ' (' + l.note + ')' : ''}  ${
        l.amt ? (l.amt < 0 ? '-$' + Math.abs(l.amt).toFixed(2) : '$' + l.amt.toFixed(2)) : '—'}`));
   L.push('');
-  L.push(inv.nothingDue ? 'Nothing to pay.'
+  L.push(isRcpt ? 'Paid in full — thank you.'
+    : inv.nothingDue ? 'Nothing to pay.'
     : inv.kind === 'deposit' ? `Deposit due: $${inv.total.toFixed(2)} to hold the dates`
     : `Total due: $${inv.total.toFixed(2)} by ${fmtDayY(inv.dueISO)}`);
   inv.packNotes.forEach(p => L.push(`${p.dog}'s pack — ${p.left} of ${p.size} still to use${p.expires ? ', up to ' + fmtDayWk(p.expires) : ''}.`));
@@ -1030,6 +1038,9 @@ export function renderInvoiceEmail(inv, biz, o = {}) {
   const bank = biz.bsb && biz.acct;
   const isInv = !inv.nothingDue;
   const isDep = inv.kind === 'deposit';
+  /* A fully-paid deposit is the receipt. It must not render as the generic
+     "nothing to pay" summary, which is what a daycare client gets. */
+  const isRcpt = isDep && !isInv;
   const first = String(inv.owner.name || '').trim().split(/\s+/)[0] || 'there';
   const period = inv.periodFrom === inv.periodTo
     ? fmtDayY(inv.periodTo) : `${fmtDay(inv.periodFrom)} – ${fmtDayY(inv.periodTo)}`;
@@ -1043,7 +1054,13 @@ export function renderInvoiceEmail(inv, biz, o = {}) {
     <td style="${cell}">${escapeHtml(l.what)}${l.note ? `<div style="font-size:12px;color:${ink3};margin-top:2px">${escapeHtml(l.note)}</div>` : ''}</td>
     <td style="${cell};text-align:right;white-space:nowrap">${l.amt ? m(l.amt) : '—'}</td></tr>`).join('');
 
-  return `<!doctype html><html><body style="margin:0;padding:0;background:${paper}">
+  /* The em-dashes, the −$ sign and the 🐾 are all multi-byte. Resend happens to
+     set charset=utf-8 on the MIME header, but this document is also previewed,
+     saved and printed from the panel, where nothing else declares it — and a
+     receipt that reads "Paid in fullâ€" thank you" is not one to send. */
+  return `<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:${paper}">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${paper};padding:24px 12px">
 <tr><td align="center">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border:1px solid ${edge};border-radius:10px;padding:26px 24px;font-family:Georgia,'Times New Roman',serif">
@@ -1055,22 +1072,26 @@ export function renderInvoiceEmail(inv, biz, o = {}) {
         <div style="font-size:17px;color:${ink};font-weight:bold;font-family:Georgia,serif">${escapeHtml(biz.name)}</div>
         <div style="font-size:12px;color:${ink2};line-height:1.5">${escapeHtml(biz.suburb)}<br>
         ${escapeHtml(biz.phone)}${biz.email ? ' · ' + escapeHtml(biz.email) : ''}${biz.abn ? `<br>ABN ${escapeHtml(biz.abn)}` : ''}</div></td>
-      <td align="right" style="vertical-align:top;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:${ink3}">${isDep ? 'Deposit' : isInv ? 'Invoice' : 'Summary'}</td>
+      <td align="right" style="vertical-align:top;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:${ink3}">${isRcpt ? 'Receipt' : isDep ? 'Deposit' : isInv ? 'Invoice' : 'Summary'}</td>
     </tr></table></td></tr>
 
   <tr><td style="padding:18px 0 4px;font-family:Helvetica,Arial,sans-serif;font-size:15px;color:${ink2};line-height:1.6">
     Hi ${escapeHtml(first)},<br>
-    ${isDep ? `Here's the deposit to hold ${escapeHtml(inv.lines[0].dog)}'s stay, ${period}.` : isInv ? `Here's your invoice for ${period}.` : `Here's a summary of your time with us, ${period}.`}
+    ${isRcpt ? `Thank you — your deposit has come through, and ${escapeHtml(inv.lines[0].dog)}'s stay is held for ${period}. Keep this as your receipt.`
+      : isDep ? `Here's the deposit to hold ${escapeHtml(inv.lines[0].dog)}'s stay, ${period}.`
+      : isInv ? `Here's your invoice for ${period}.` : `Here's a summary of your time with us, ${period}.`}
   </td></tr>
 
-  ${isInv ? `<tr><td style="padding:12px 0 4px;font-family:Helvetica,Arial,sans-serif;font-size:12px;color:${ink3}">
-    Invoice ${escapeHtml(inv.number)} · for ${escapeHtml(inv.owner.name)} · due ${fmtDayY(inv.dueISO)}</td></tr>` : ''}
+  ${isRcpt ? `<tr><td style="padding:12px 0 4px;font-family:Helvetica,Arial,sans-serif;font-size:12px;color:${ink3}">
+    Receipt ${escapeHtml(inv.number)} · for ${escapeHtml(inv.owner.name)}</td></tr>`
+    : isInv ? `<tr><td style="padding:12px 0 4px;font-family:Helvetica,Arial,sans-serif;font-size:12px;color:${ink3}">
+    ${isDep ? 'Deposit' : 'Invoice'} ${escapeHtml(inv.number)} · for ${escapeHtml(inv.owner.name)} · due ${fmtDayY(inv.dueISO)}</td></tr>` : ''}
 
   <tr><td style="padding-top:12px">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-family:Helvetica,Arial,sans-serif;border-collapse:collapse">
       <tr>${['Date','Dog','Service','Amount'].map((h, i) => `<th align="${i===3?'right':'left'}" style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:${ink3};border-bottom:1px solid ${edge};padding:0 8px 6px 0">${h}</th>`).join('')}</tr>
       ${rows}
-      <tr><td colspan="3" style="padding:12px 8px 0 0;border-top:2px solid ${edge};font-family:Georgia,serif;font-size:16px;color:${ink}">${isInv ? 'Total due' : 'Nothing to pay'}</td>
+      <tr><td colspan="3" style="padding:12px 8px 0 0;border-top:2px solid ${edge};font-family:Georgia,serif;font-size:16px;color:${ink}">${isRcpt ? 'Paid in full — thank you' : isDep ? 'Deposit due' : isInv ? 'Total due' : 'Nothing to pay'}</td>
           <td style="padding:12px 0 0;border-top:2px solid ${edge};text-align:right;font-family:Georgia,serif;font-size:16px;color:${ink}">${m(inv.total)}</td></tr>
     </table></td></tr>
 
@@ -1105,6 +1126,16 @@ export function renderInvoiceEmail(inv, biz, o = {}) {
 }
 
 export function invoiceSubject(inv, biz) {
+  /* A deposit request is not an invoice and must not arrive calling itself one;
+     once it is paid the same document is a receipt, and "your visits" — the
+     daycare summary subject — tells a client who just sent $805 nothing at all. */
+  if (inv.kind === 'deposit') {
+    const dog = (inv.lines[0] && inv.lines[0].dog) || '';
+    const paid = inv.lines.filter(l => l.credit).reduce((t, l) => t - Number(l.amt), 0);
+    return inv.nothingDue
+      ? `${biz.name} — deposit received, $${paid.toFixed(2)} · ${dog}'s stay is held`
+      : `${biz.name} — deposit to hold ${dog}'s stay · $${inv.total.toFixed(2)}`;
+  }
   return inv.nothingDue
     ? `${biz.name} — your visits`
     : `${biz.name} — invoice ${inv.number} · $${inv.total.toFixed(2)}`;

@@ -24,6 +24,9 @@
 # Invoicing: shared by the panel and the Cloud Function that sends invoices
 !/invoice-core.js
 !/invoice-core.test.mjs
+!/assistant-tools.js
+!/assistant-tools.test.mjs
+!/assistant-behaviour.test.mjs
 !/firebase.json
 !/functions/
 !/functions/index.js

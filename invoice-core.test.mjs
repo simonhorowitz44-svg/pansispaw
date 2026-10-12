@@ -1715,5 +1715,84 @@ console.log('\nA stay held with a deposit');
     /refunded in full/.test(C.cancelLine(req)) && /held as credit/.test(C.cancelLine(req)));
 }
 
+/* ---------- a paid deposit is a receipt, not a summary ----------
+   buildDepositRequest reuses one document for the request and the receipt, so
+   once the money is in, inv.total is 0 and nothingDue is true. Every renderer
+   keyed off nothingDue alone, which meant a client who had just sent $1,020
+   received an email titled "your visits" with "Nothing to pay" at the bottom
+   and no document number on it at all. These pin the receipt wording. */
+{
+  const BIZ = { name:"Pansi's Paws Home Daycare", person:'Andressa Ubida Fernandes',
+                suburb:'Annandale, Sydney', phone:'0410 151 509', site:'pansispaws.com.au',
+                bsb:'062-000', acct:'12345678' };
+  const dog = { id:'d1', ownerId:'o1', name:'Waffles', size:'medium' };
+  const nights = Array.from({ length: 17 }, (_, i) => {
+    const d = new Date(Date.UTC(2026, 10, 20 + i));
+    return { id:'n'+i, dogId:'d1', date: d.toISOString().slice(0,10), session:'overnight' };
+  });
+  const mkdb = (paidAt, paidAmount) => ({
+    meta:{ billed:{}, invoicesSent:[], invoicing:{ goLive:'2026-09-01' }, biz:BIZ },
+    owners:[{ id:'o1', name:'Harriet Vane', email:'e@x.com' }],
+    dogs:[dog], packs:[], payments:[], bookings: nights,
+    deposits:[{ id:'dep1', dogId:'d1', bookingIds: nights.map(n=>n.id),
+                amount:1020, rate:0.5, requestedAt:'2026-10-12T00:00:00.000Z',
+                paidAt, paidAmount }]
+  });
+
+  const req  = C.buildDepositRequest(mkdb(null, null),        'dep1', { asAt:'2026-10-12' });
+  const rcpt = C.buildDepositRequest(mkdb('2026-10-14', 1020),'dep1', { asAt:'2026-10-12' });
+  const part = C.buildDepositRequest(mkdb('2026-10-14', 400), 'dep1', { asAt:'2026-10-12' });
+
+  /* amounts first — these are what the client pays */
+  eq('request asks for the deposit',      req.total,  1020);
+  eq('a paid deposit owes nothing',       rcpt.total, 0);
+  eq('a part payment leaves the balance', part.total, 620);
+
+  /* subject lines */
+  t('the request does not call itself an invoice',
+    !/invoice/i.test(C.invoiceSubject(req, BIZ)));
+  t('the request names the dog and the amount',
+    /Waffles/.test(C.invoiceSubject(req, BIZ)) && /1020\.00/.test(C.invoiceSubject(req, BIZ)));
+  t('the receipt subject says the deposit was received',
+    /received/i.test(C.invoiceSubject(rcpt, BIZ)));
+  t('the receipt subject is never the daycare summary subject',
+    !/your visits/.test(C.invoiceSubject(rcpt, BIZ)));
+  t('the receipt subject carries the amount paid',
+    /1020\.00/.test(C.invoiceSubject(rcpt, BIZ)));
+  t('a part payment still reads as a request for the balance',
+    /620\.00/.test(C.invoiceSubject(part, BIZ)) && !/received/i.test(C.invoiceSubject(part, BIZ)));
+
+  /* the three renderers must agree with each other */
+  for (const [name, render] of [['email', C.renderInvoiceEmail],
+                                ['sheet', C.renderInvoiceHTML],
+                                ['text',  C.invoiceText]]) {
+    const r = render(rcpt, BIZ), q = render(req, BIZ);
+    t(`${name}: the receipt says paid in full`,      /[Pp]aid in full/.test(r));
+    t(`${name}: the receipt never says nothing to pay`, !/Nothing to pay/i.test(r));
+    t(`${name}: the receipt is not a summary of visits`, !/summary of your time/i.test(r));
+    t(`${name}: the receipt shows the deposit coming off`, /1020\.00/.test(r));
+    t(`${name}: the receipt still states the cancellation dates`,
+      /refunded in full/.test(r) && /held as credit/.test(r));
+    t(`${name}: the request still asks for the deposit`, /1020\.00/.test(q));
+    t(`${name}: the request does not claim to be paid`, !/[Pp]aid in full/.test(q));
+  }
+
+  /* the document number is what a client quotes back, so it cannot vanish
+     exactly when the document becomes proof of payment */
+  t('the receipt keeps its number', C.renderInvoiceEmail(rcpt, BIZ).includes(rcpt.number));
+  t('and the sheet labels it a receipt',
+    /Receipt no\./.test(C.renderInvoiceHTML(rcpt, BIZ)));
+
+  /* bank details belong on the request and not on the receipt */
+  t('the request tells them how to pay',  /BSB/.test(C.renderInvoiceEmail(req, BIZ)));
+  t('the receipt does not ask again',    !/BSB/.test(C.renderInvoiceEmail(rcpt, BIZ)));
+
+  /* and the receipt must be sendable, which needs the summary waiver */
+  eq('a receipt is blocked without the waiver',
+     C.blockers(mkdb('2026-10-14',1020), rcpt, BIZ, '2026-10-14').length, 1);
+  eq('and clear with it',
+     C.blockers(mkdb('2026-10-14',1020), rcpt, BIZ, '2026-10-14', { allowSummary:true }).length, 0);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

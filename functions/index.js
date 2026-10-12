@@ -27,8 +27,10 @@ import {
   setPricing, planRun, buildInvoice, renderInvoiceEmail, invoiceText, invoiceSubject,
   orphanBookings, addDaysISO, sendableInvoices
 } from './invoice-core.js';
+import { apiTools, systemPrompt } from './assistant-tools.js';
 
-const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
+const RESEND_API_KEY    = defineSecret('RESEND_API_KEY');
+const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 
 setGlobalOptions({ region: 'australia-southeast1', maxInstances: 2 });
 initializeApp();
@@ -561,5 +563,90 @@ export const sendInvoicingNotice = onCall(
     }
     logger.info('invoicing notice', mode, 'sent', done.length, 'failed', bad.length);
     return { mode, sent: done.length, failed: bad.length, failures: bad };
+  }
+);
+
+
+/* ---------- the assistant ----------
+ *
+ * Andressa types "book Pepperoni in Thursday" and this turns it into tool
+ * calls. It is a proxy and nothing more: it holds no conversation, reads no
+ * Firestore and writes nothing. The panel keeps the message array, executes
+ * the tools against its own already-loaded copy of the data, and posts the
+ * results back for the next turn.
+ *
+ * It exists at all because the panel is a static page in a public repo, so
+ * the API key cannot live there. Everything else stays client-side, which
+ * also means every write still goes through the panel's save() and its merge
+ * guard rather than around them.
+ */
+
+const MODEL          = 'claude-haiku-4-5';
+const MAX_TURNS      = 8;      /* a stuck loop costs money and helps nobody */
+const MAX_MESSAGES   = 40;     /* the panel trims, this is the backstop */
+const MAX_INPUT_CHARS = 120000;
+
+export const assistant = onCall(
+  { secrets: [ANTHROPIC_API_KEY] },
+  async request => {
+    /* Same reasoning as sendTestInvoice: a callable is a public URL, and this
+       one spends money on every call. */
+    if (!request?.auth) throw new HttpsError('unauthenticated', 'Sign in to the panel first.');
+
+    const body = request.data ?? request ?? {};
+    const messages = Array.isArray(body.messages) ? body.messages : null;
+    if (!messages || !messages.length)
+      throw new HttpsError('invalid-argument', 'No messages.');
+    if (messages.length > MAX_MESSAGES)
+      throw new HttpsError('invalid-argument', 'Conversation too long — start a new one.');
+    if (Number(body.turn || 0) >= MAX_TURNS)
+      throw new HttpsError('resource-exhausted', 'Too many steps for one question.');
+
+    const payload = {
+      model: MODEL,
+      max_tokens: 1024,
+      system: systemPrompt(body.context || {}),
+      tools: apiTools(),
+      messages
+    };
+    const sized = JSON.stringify(payload);
+    if (sized.length > MAX_INPUT_CHARS)
+      throw new HttpsError('invalid-argument', 'Too much context for one call.');
+
+    let r;
+    try {
+      r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': ANTHROPIC_API_KEY.value(),
+          'anthropic-version': '2023-06-01'
+        },
+        body: sized
+      });
+    } catch (e) {
+      logger.error('assistant: network', e);
+      throw new HttpsError('unavailable', "Couldn't reach the assistant. Try again.");
+    }
+
+    if (!r.ok) {
+      const detail = (await r.text()).slice(0, 400);
+      logger.error('assistant: api ' + r.status, detail);
+      /* The key being wrong or the account being out of credit are both things
+         Andressa can do nothing about, and "something went wrong" sends her to
+         Simon with no information. Say which it is. */
+      if (r.status === 401) throw new HttpsError('failed-precondition',
+        'The assistant key is not set or has been revoked.');
+      if (r.status === 429) throw new HttpsError('resource-exhausted',
+        'The assistant is rate limited right now — try again in a moment.');
+      throw new HttpsError('internal', `Assistant error ${r.status}.`);
+    }
+
+    const out = await r.json();
+    /* Only what the panel needs to continue the loop. Usage goes to the log so
+       a runaway bill is findable, not to the client. */
+    logger.info('assistant', { uid: request.auth.uid, turn: body.turn || 0,
+                               stop: out.stop_reason, usage: out.usage });
+    return { content: out.content, stop_reason: out.stop_reason };
   }
 );
