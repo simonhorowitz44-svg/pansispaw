@@ -172,6 +172,28 @@ ok('a failed tool tells the model nothing changed', /nothing changed/i.test(tool
 ok('undo tells the model the data moved', /tapped Undo/.test(panel));
 ok('declining a send tells the model too', /declined to send/.test(panel));
 
+console.log('\n--- BIZ is hydrated before anything reads it ---');
+/* The bank details live in the document and BIZ starts empty. hydrateBiz used
+   to run only when the Invoices screen opened, which was invisible until
+   something asked about an invoice without going through that screen — and
+   then blockers() reported "No bank details on file" for a business that has
+   them. Every path that swaps the document in must rehydrate. */
+{
+  const assigns = [...panel.matchAll(/^\s*DB = (?!normalizeDb\(\{ owners: r\.owners\|\|\[\], dogs: r\.dogs\|\|\[\],\n)[^;]+;/gm)];
+  ok('hydrateBiz is called more than once', (panel.match(/hydrateBiz\(\)/g)||[]).length > 4);
+  ok('the assistant hydrates before running any tool',
+     /hydrateBiz\(\);\s*\n\s*const tier = tierOf/.test(panel));
+  for (const [label, anchor] of [
+      ['the first Firestore load',      'knownRemoteMs = r._updatedAtMs || 0;'],
+      ['the offline cache fallback',    "toast('Offline · using local cache', 'warn');"],
+      ['a merge after a conflict',      'DB = merged;'],
+      ['a live update from another tab','DB = nextDb;'],
+      ['a buffered remote update',      'DB = pendingRemoteDb;']]) {
+    const i = panel.indexOf(anchor);
+    ok(`rehydrated on ${label}`, i > 0 && /hydrateBiz\(\)/.test(panel.slice(Math.max(0,i-220), i+220)));
+  }
+}
+
 console.log('\n--- the system prompt says the things that matter ---');
 const sp = T.systemPrompt({ today: '2026-10-12', weekday: 'Monday' });
 ok('it carries today\'s date', sp.includes('2026-10-12'));

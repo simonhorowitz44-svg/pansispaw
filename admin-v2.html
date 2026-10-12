@@ -1002,6 +1002,7 @@ async function loadFromFirestore() {
     if (snap.exists()) {
       const r = snap.data();
       DB = normalizeDb({ owners: r.owners||[], dogs: r.dogs||[], bookings: r.bookings||[], packs: r.packs||[], deposits: r.deposits||[], payments: r.payments||[], meta: r.meta });
+      hydrateBiz();
       knownRemoteMs = r._updatedAtMs || 0;
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); } catch (e) { console.warn('LS write failed', e); }
       return true;
@@ -1009,6 +1010,7 @@ async function loadFromFirestore() {
   } catch (e) {
     console.warn('Firestore load failed, using cache', e);
     DB = loadFromStorage();
+    hydrateBiz();
     toast('Offline · using local cache', 'warn');
     return true;
   }
@@ -1071,6 +1073,7 @@ function reconcileWithPending(db) {
   });
   // The user's in-memory DB now reflects the reconciled state
   DB = merged;
+  hydrateBiz();
   pendingRemoteDb = null;
   return merged;
 }
@@ -1193,6 +1196,7 @@ function startRealtimeSync() {
       return;
     }
     DB = nextDb;
+    hydrateBiz();
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); } catch {}
     render();
     const who = (r._updatedBy || '').split('@')[0];
@@ -1204,6 +1208,7 @@ function startRealtimeSync() {
 function drainPendingRemote() {
   if (!pendingRemoteDb) return;
   DB = pendingRemoteDb;
+  hydrateBiz();
   pendingRemoteDb = null;
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); } catch {}
   render();
@@ -2233,6 +2238,11 @@ function onReconFile(e) {
   r.readAsText(f);
 }
 
+/* BIZ starts empty and the bank details live in the document, so this has to
+   run every time DB is replaced — not just when the Invoices screen opens.
+   It used to run only there, which was invisible while invoicing was reached
+   exclusively through that screen: blockers() saw an empty BSB and reported
+   "No bank details on file" to anything that asked earlier. */
 function hydrateBiz() {
   const b = (DB.meta && DB.meta.biz) || {};
   BIZ.acctName = b.acctName || ''; BIZ.bsb = b.bsb || ''; BIZ.acct = b.acct || ''; BIZ.abn = b.abn || '';
@@ -5344,6 +5354,9 @@ async function askUndo(id, btn) {
    is deliberately factual and complete; `card` is what Andressa sees. They
    are separate because the model needs ids and the human needs names. */
 async function askRunTool(name, a) {
+  /* Cheap and idempotent. The bank details decide whether an invoice can be
+     sent at all, so the assistant never reads them from a half-built BIZ. */
+  hydrateBiz();
   const tier = tierOf(name);
   if (!tier) return { say: `No such tool: ${name}.`, card: '' };
 

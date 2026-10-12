@@ -58,6 +58,10 @@ const deps={
                     const would=C.calcTotal(bk,DB.dogs.find(d=>d.id===bk.dogId));
                     return {hours:hrs,late:hrs<24,wouldHaveBeen:would,charge:hrs<24?Math.round(would*C.CANCEL_CHARGE_RATE):0}; },
   openBookingSheet:()=>{}, openClientMoney:()=>{}, openOneInvoice:()=>{}, closeAsk:()=>{},
+  /* The panel rehydrates BIZ from the document before every tool; mirror that
+     here, so a fixture whose bank details live in meta.biz behaves as the real
+     thing does. */
+  hydrateBiz:()=>{ const b=(DB.meta&&DB.meta.biz)||{}; BIZ.bsb=b.bsb||''; BIZ.acct=b.acct||''; BIZ.acctName=b.acctName||''; BIZ.abn=b.abn||''; },
   drainPendingRemote:()=>{}, document:{getElementById:()=>null}, window:{matchMedia:()=>({matches:false})},
   console
 };
