@@ -5,7 +5,9 @@ import * as C from './invoice-core.js';
 import { tierOf } from './assistant-tools.js';
 
 const panel = readFileSync('./admin-v2.html','utf8').match(/<script type="module">([\s\S]*?)<\/script>/)[1];
-const src = panel.slice(panel.indexOf('const ASK = {'), panel.indexOf('/* ---- the tap ----'));
+/* Start just after ASK_FN, which needs httpsCallable, and take everything
+   up to the send handlers. */
+const src = panel.slice(panel.indexOf('const ASK_KEEP'), panel.indexOf('/* ---- the tap ----'));
 
 let pass=0, fail=0;
 const ok=(n,c)=>{ if(c){pass++;console.log('  ok   '+n);} else {fail++;console.log('  FAIL '+n);} };
@@ -70,8 +72,8 @@ const names=['escapeHtml','SESSION_LABELS','calcTotal','buildInvoice','blockers'
              'CANCEL_NOTICE_HOURS','CANCEL_CHARGE_RATE'];
 names.forEach(n=>deps[n]=C[n]);
 const keys=Object.keys(deps);
-const make=new Function(...keys, src + '\n; return { askRunTool, ASK };');
-const { askRunTool, ASK } = make(...keys.map(k=>deps[k]));
+const make=new Function(...keys, src + '\n; return { askRunTool, ASK, askTrim, ASK_KEEP };');
+const { askRunTool, ASK, askTrim, ASK_KEEP } = make(...keys.map(k=>deps[k]));
 const run=(n,a)=>askRunTool(n,a);
 
 console.log('\n--- find_dogs must not pick one ---');
@@ -266,6 +268,56 @@ console.log('\n--- quoting without booking ---');
   ok('under three nights takes no deposit', /no deposit/i.test(few.say));
   const free=await run('quote',{dogId:'d4',session:'meet'});
   ok('a meet is free', /\$0/.test(free.card));
+}
+
+console.log('\n--- the conversation trims instead of dying ---');
+{
+  /* This started as a hard refusal at 40 messages, which a real session hit
+     after about ten questions and then stopped working entirely. The cut has
+     to land on a real user turn: a tool_result whose tool_use has been
+     trimmed away is rejected by the API, so a careless trim breaks the
+     conversation rather than shortening it. */
+  const exchange = (n) => ([
+    { role:'user', content:'question ' + n },
+    { role:'assistant', content:[{type:'text',text:'ok'},{type:'tool_use',id:'t'+n,name:'day',input:{}}] },
+    { role:'user', content:[{type:'tool_result',tool_use_id:'t'+n,content:'result'}] },
+    { role:'assistant', content:[{type:'text',text:'answer '+n}] }
+  ]);
+  const build = n => Array.from({length:n},(_,i)=>exchange(i)).flat();
+
+  const short = build(3);                       // 12 messages
+  eq('a short conversation is untouched', askTrim(short).length, short.length);
+
+  const long = build(30);                       // 120 messages
+  const cut = askTrim(long);
+  ok('a long one is trimmed', cut.length < long.length);
+  ok('and is within the window', cut.length <= ASK_KEEP);
+  ok('it starts on a real user turn',
+     cut[0].role === 'user' && typeof cut[0].content === 'string');
+
+  /* The invariant that actually matters. */
+  const ids = new Set();
+  for (const m of cut)
+    if (Array.isArray(m.content))
+      for (const c of m.content) if (c.type === 'tool_use') ids.add(c.id);
+  let orphans = 0;
+  for (const m of cut)
+    if (Array.isArray(m.content))
+      for (const c of m.content)
+        if (c.type === 'tool_result' && !ids.has(c.tool_use_id)) orphans++;
+  eq('no tool_result is left without its tool_use', orphans, 0);
+
+  /* The most recent exchange must survive, or the answer loses its question. */
+  ok('the newest turn is kept', JSON.stringify(cut).includes('question 29'));
+
+  /* One enormous exchange with no clean boundary must not return nothing. */
+  const runaway = [{role:'user',content:'go'}].concat(
+    Array.from({length:120},(_,i)=>([
+      {role:'assistant',content:[{type:'tool_use',id:'r'+i,name:'day',input:{}}]},
+      {role:'user',content:[{type:'tool_result',tool_use_id:'r'+i,content:'x'}]}])).flat());
+  const rc = askTrim(runaway);
+  ok('a runaway exchange still returns something valid',
+     rc.length > 0 && rc[0].role === 'user' && typeof rc[0].content === 'string');
 }
 
 console.log('\n--- names render as typed ---');

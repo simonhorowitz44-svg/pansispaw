@@ -583,7 +583,11 @@ export const sendInvoicingNotice = onCall(
 
 const MODEL          = 'claude-haiku-4-5';
 const MAX_TURNS      = 8;      /* a stuck loop costs money and helps nobody */
-const MAX_MESSAGES   = 40;     /* the panel trims, this is the backstop */
+/* The panel trims to a rolling window before it calls, so this is only a
+   backstop against a caller that doesn't. It was 40, which the panel reached
+   after about ten questions — every tool call costs two messages — and then
+   refused the whole conversation instead of shortening it. */
+const MAX_MESSAGES   = 200;
 const MAX_INPUT_CHARS = 120000;
 
 export const assistant = onCall(
@@ -598,7 +602,7 @@ export const assistant = onCall(
     if (!messages || !messages.length)
       throw new HttpsError('invalid-argument', 'No messages.');
     if (messages.length > MAX_MESSAGES)
-      throw new HttpsError('invalid-argument', 'Conversation too long — start a new one.');
+      throw new HttpsError('invalid-argument', 'Conversation too long — tap Clear and ask again.');
     if (Number(body.turn || 0) >= MAX_TURNS)
       throw new HttpsError('resource-exhausted', 'Too many steps for one question.');
 

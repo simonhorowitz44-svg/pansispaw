@@ -5179,6 +5179,26 @@ function photoOrGlyph(dog) {
 
 const ASK_FN   = httpsCallable(getFunctions(fbApp, 'australia-southeast1'), 'assistant');
 const ASK_MAX_TURNS = 8;
+/* How many API messages to carry. Every tool call costs two of them — the
+   tool_use and its result — so a single question is often four. Forty, which
+   is where this started, ran out after about ten questions and then refused
+   to do anything at all, mid-flow. Trimming here is the fix; the cap in the
+   Cloud Function is only a backstop now. */
+const ASK_KEEP = 40;
+
+/* Drop the oldest exchanges, but only ever cut at the start of a real user
+   turn. A tool_result whose tool_use has been trimmed away is rejected by the
+   API outright, so cutting anywhere else would break the conversation rather
+   than shorten it. The visible thread is untouched — Andressa still sees
+   everything she has said. */
+function askTrim(msgs) {
+  if (msgs.length <= ASK_KEEP) return msgs;
+  const starts = msgs.reduce((out, m, i) =>
+    (m.role === 'user' && typeof m.content === 'string') ? (out.push(i), out) : out, []);
+  if (!starts.length) return msgs;
+  const cut = starts.find(i => msgs.length - i <= ASK_KEEP);
+  return msgs.slice(cut !== undefined ? cut : starts[starts.length - 1]);
+}
 
 const ASK = {
   api:  [],          /* the Anthropic message array */
@@ -5281,6 +5301,7 @@ async function askRun() {
     for (let turn = 0; turn < ASK_MAX_TURNS; turn++) {
       let res;
       try {
+        ASK.api = askTrim(ASK.api);
         res = (await ASK_FN({ messages: ASK.api, turn,
                               context: { today: todayISO(),
                                          weekday: new Date().toLocaleDateString('en-AU', { weekday: 'long' }) } })).data;
