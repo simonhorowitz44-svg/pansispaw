@@ -4822,13 +4822,45 @@ async function saveOwnerForm(e, id, isNew) {
   } finally { savingOwner = false; }
   return false;
 }
+/* Deleting a client used to take the owner, their dogs and their bookings and
+   leave everything else pointing at records that no longer exist: payments
+   still counted in the takings, packs and deposits attached to a deleted dog,
+   a queued email that would still have gone out. The money ones matter — an
+   orphan payment inflates a figure nobody can trace back to a client.
+
+   meta.invoicesSent deliberately survives. It is the log of what was actually
+   emailed, and that a client was later removed does not unsend anything. */
 async function deleteOwner(id) {
-  if (!confirm('Delete this client and all their dogs?')) return;
+  const owner = ownerById(id);
   const dogIds = DB.dogs.filter(d => d.ownerId === id).map(d => d.id);
-  DB.owners = DB.owners.filter(o => o.id !== id);
-  DB.dogs = DB.dogs.filter(d => d.ownerId !== id);
+  const bookingIds = DB.bookings.filter(b => dogIds.includes(b.dogId)).map(b => b.id);
+  const pays = DB.payments.filter(p => p.ownerId === id).length;
+  const packs = (DB.packs || []).filter(p => dogIds.includes(p.dogId)).length;
+  const deps  = (DB.deposits || []).filter(p => dogIds.includes(p.dogId)).length;
+
+  /* Say what is actually about to go, with the money spelled out. */
+  const bits = [`${dogIds.length} dog${dogIds.length === 1 ? '' : 's'}`,
+                `${bookingIds.length} booking${bookingIds.length === 1 ? '' : 's'}`];
+  if (pays)  bits.push(`${pays} payment${pays === 1 ? '' : 's'}`);
+  if (packs) bits.push(`${packs} pack${packs === 1 ? '' : 's'}`);
+  if (deps)  bits.push(`${deps} deposit${deps === 1 ? '' : 's'}`);
+  if (!confirm(`Delete ${owner ? owner.name : 'this client'}?\n\n`
+             + `This removes ${bits.join(', ')}.\n\n`
+             + `Invoices already emailed stay in the sending log. This cannot be undone.`)) return;
+
+  DB.owners   = DB.owners.filter(o => o.id !== id);
+  DB.dogs     = DB.dogs.filter(d => d.ownerId !== id);
   DB.bookings = DB.bookings.filter(b => !dogIds.includes(b.dogId));
+  DB.payments = DB.payments.filter(p => p.ownerId !== id);
+  DB.packs    = (DB.packs || []).filter(p => !dogIds.includes(p.dogId));
+  DB.deposits = (DB.deposits || []).filter(p => !dogIds.includes(p.dogId));
+  DB.meta = DB.meta || {};
+  if (DB.meta.billed) bookingIds.forEach(bid => { delete DB.meta.billed[bid]; });
+  /* A queued email to a client who no longer exists would still be sent by the
+     Cloud Function, which reads the queue and not the client list. */
+  if (DB.meta.sendQueue) DB.meta.sendQueue = DB.meta.sendQueue.filter(q => q.ownerId !== id);
   await save(DB); closeSheet(); render();
+  toast(`${owner ? owner.name : 'Client'} removed`, 'ok');
 }
 
 function openCapacitySheet() {
@@ -5425,6 +5457,11 @@ async function askRunTool(name, a) {
        and no money. calcTotal is the same function that bills the day, so the
        figure here and the figure on the invoice cannot disagree. */
     rows.forEach(r => { r.amt = r.d ? calcTotal(r.b, r.d) : 0; });
+    /* "Has everyone arrived" is the other half of "what's on today", and
+       arrivalLogged is already stamped by the Arrived button. */
+    const inNow = rows.filter(r => r.b.arrivalLogged && !r.b.departureLogged).length;
+    const gone  = rows.filter(r => r.b.departureLogged).length;
+    const notYet = rows.filter(r => !r.b.arrivalLogged).length;
     const takings = rows.reduce((t, r) => t + r.amt, 0);
     const freeCount = rows.filter(r => r.amt === 0).length;
     const scoutsAm = rows.filter(r => r.b.session === 'scouts' && (r.b.scoutsTrip || 'am') === 'am').length;
@@ -5437,14 +5474,19 @@ async function askRunTool(name, a) {
          + rows.map(r => `${r.b.date} ${r.label} (bookingId ${r.b.id}) ${r.sess}`
                        + (r.b.session === 'scouts' ? ` ${r.b.scoutsTrip || 'am'}` : '')
                        + (r.b.arrivalTime ? ' from ' + r.b.arrivalTime : '')
-                       + ` — ${r.amt === 0 ? 'free' : aMoney(r.amt)}`).join('\n')
+                       + ` — ${r.amt === 0 ? 'free' : aMoney(r.amt)}`
+                       + (r.b.departureLogged ? ` · collected ${r.b.departureLogged}`
+                          : r.b.arrivalLogged ? ` · arrived ${r.b.arrivalLogged}` : ' · not arrived yet')).join('\n')
          + `\nTotal for the period: ${aMoney(takings)}. This figure is from calcTotal; use it as given.`
+         + `\nArrivals: ${inNow} here now, ${gone} collected, ${notYet} not arrived yet.`
          + (freeCount ? ` ${freeCount} of these are free (meet or trial).` : '')
          + (capNote ? `\nScouts capacity: ${capNote}. The four-dog cap is law and cannot be exceeded.` : ''),
       card: aCard('', `<div class="ask-ttl">${escapeHtml(fmtDateShort(from))}${to !== from ? ' – ' + escapeHtml(fmtDateShort(to)) : ''} · ${rows.length} booked</div>`
         + rows.map(r => aRow(`${to !== from ? fmtDateShort(r.b.date) + ' · ' : ''}${r.label}`,
                              `<span style="color:var(--ink-3);font-weight:400">${escapeHtml(r.sess + (r.b.session === 'scouts' ? ' ' + (r.b.scoutsTrip || 'am') : ''))}</span>&nbsp; ${r.amt === 0 ? '<span style="color:var(--ink-3)">free</span>' : escapeHtml(aMoney(r.amt))}`)).join('')
         + aRow('Total', `<b>${escapeHtml(aMoney(takings))}</b>`)
+        + ((inNow || gone || notYet) && to === from
+            ? aNote(`${inNow} here now · ${gone} collected · ${notYet} not arrived yet`) : '')
         + (capNote ? aNote(capNote) : ''))
     };
   }
@@ -5616,6 +5658,82 @@ async function askRunTool(name, a) {
     };
   }
 
+  case 'check_in':
+  case 'check_out': {
+    const out = name === 'check_out';
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(a.date || '') ? a.date : todayISO();
+    const stamp = /^\d{1,2}:\d{2}$/.test(a.time || '')
+      ? String(a.time).padStart(5, '0') : nowTime();
+
+    let rows = DB.bookings.filter(b => b.date === date && !b.cancelled);
+    if (Array.isArray(a.dogIds) && a.dogIds.length) rows = rows.filter(b => a.dogIds.includes(b.dogId));
+    else if (!a.all) return { say: 'Say which dogs, or pass all:true for everyone booked that day.', card: '' };
+    if (!rows.length) return { say: `Nothing booked on ${date}${a.dogIds ? ' for those dogs' : ''}.`, card: '' };
+
+    /* Already stamped is reported, never stamped again — a second arrival time
+       overwrites the real one and the late fee is worked out from these. */
+    const todo    = rows.filter(b => out ? (b.arrivalLogged && !b.departureLogged) : !b.arrivalLogged);
+    const already = rows.filter(b => out ? b.departureLogged : b.arrivalLogged);
+    const notIn   = out ? rows.filter(b => !b.arrivalLogged) : [];
+
+    if (!todo.length) return {
+      say: `Nothing to do — ${already.length ? `${already.length} already ${out ? 'collected' : 'marked in'}` : 'none of them are here'}`
+         + `${notIn.length ? `, and ${notIn.length} were never marked in` : ''}.`,
+      card: aCard('warn', `<div class="ask-ttl">Nothing to change</div>`
+        + already.map(b => aRow(dogById(b.dogId)?.name || '?',
+            escapeHtml(out ? 'collected ' + b.departureLogged : 'in since ' + b.arrivalLogged))).join('')
+        + notIn.map(b => aRow(dogById(b.dogId)?.name || '?', 'never marked in')).join(''))
+    };
+
+    const before = todo.map(b => ({ id: b.id, a: b.arrivalLogged, d: b.departureLogged,
+                                    lateFee: b.lateFee, waived: b.lateFeeWaived, total: b.total }));
+    const fees = [];
+    for (const b of todo) {
+      if (out) {
+        b.departureLogged = stamp;
+        /* The fee comes from latePickupFee, same as the Picked up button —
+           never worked out here. */
+        const L = latePickupFee({ ...b, lateFeeWaived: false });
+        if (L.fee) {
+          b.lateFeeWaived = !!a.waiveLateFee;
+          if (!a.waiveLateFee) fees.push({ dog: dogById(b.dogId)?.name || '?', fee: L.fee, mins: L.minsLate });
+        }
+        b.lateFee = latePickupFee(b).fee;
+        if (!b.packId && !b.cancelled) b.total = calcTotal(b, dogById(b.dogId));
+      } else {
+        b.arrivalLogged = stamp;
+      }
+    }
+    await save(DB); render();
+    const undo = askRegisterUndo(async () => {
+      before.forEach(p => { const b = DB.bookings.find(x => x.id === p.id); if (!b) return;
+        b.arrivalLogged = p.a; b.departureLogged = p.d;
+        b.lateFee = p.lateFee; b.lateFeeWaived = p.waived; b.total = p.total; });
+      await save(DB);
+    }, todo.length > 1 ? `Undo all ${todo.length}` : 'Undo');
+
+    const feeTotal = fees.reduce((t, f) => t + f.fee, 0);
+    return {
+      say: `${out ? 'Collected' : 'Marked in'} ${todo.length} dog(s) at ${stamp} on ${date}: `
+         + todo.map(b => dogById(b.dogId)?.name || '?').join(', ') + '.'
+         + (already.length ? ` ${already.length} were already done and were left alone.` : '')
+         + (notIn.length ? ` ${notIn.length} were never marked in, so they were skipped.` : '')
+         + (fees.length ? ` LATE FEES ADDED: ${fees.map(f => `${f.dog} ${aMoney(f.fee)} (${f.mins} min late)`).join(', ')}`
+                        + ` — tell Andressa plainly, she often means to waive these.` : ''),
+      card: aCard(fees.length ? 'warn' : 'did',
+        `<div class="ask-ttl"><span class="ask-tag do">Done</span>${fees.length ? ' &nbsp;late fee' : ''}</div>`
+        + todo.map(b => aRow(dogById(b.dogId)?.name || '?',
+            escapeHtml((out ? 'collected ' : 'arrived ') + stamp))).join('')
+        + already.map(b => aRow(dogById(b.dogId)?.name || '?',
+            `<span style="color:var(--ink-3)">already ${out ? 'collected' : 'in'}</span>`)).join('')
+        + notIn.map(b => aRow(dogById(b.dogId)?.name || '?',
+            `<span style="color:var(--ink-3)">never marked in</span>`)).join('')
+        + (fees.length ? aRow('Late fee', `<b>${escapeHtml(aMoney(feeTotal))}</b>`) : '')
+        + (fees.length ? aNote(fees.map(f => `${f.dog} was ${f.mins} min past ${friendlyTime(LATE_CUTOFF)}`).join(' · ')) : '')
+        + `<div class="ask-acts">${undo}${fees.length ? `<button class="btn tiny ghost" onclick="askEg('waive those late fees')">Waive the fee</button>` : ''}</div>`)
+    };
+  }
+
   case 'cancel': {
     const bk = DB.bookings.find(b => b.id === a.bookingId);
     if (!bk) return { say: 'No booking with that id.', card: '' };
@@ -5668,6 +5786,180 @@ async function askRunTool(name, a) {
         + (packReturned ? aNote('A pack day went back on her pack.') : '')
         + (rest ? aNote(`${rest} more in this repeat are still booked.`) : '')
         + `<div class="ask-acts">${undo}${charge > 0 ? `<button class="btn tiny ghost" onclick="askEg('waive the charge on that cancellation')">Waive the charge</button>` : ''}</div>`)
+    };
+  }
+
+  case 'add_dog': {
+    let owner = a.ownerId ? ownerById(a.ownerId) : null;
+    let madeOwner = null;
+    if (!owner) {
+      if (!a.ownerName) return { say: 'Need either an ownerId or the owner\'s name.', card: '' };
+      /* Records are keyed on email for matching payments later, so an owner
+         without one can never be reconciled. Worth one more question. */
+      owner = { id: uid(), name: String(a.ownerName).trim(), phone: a.ownerPhone || '',
+                email: (a.ownerEmail || '').trim(), emergencyContact: '', notes: '',
+                source: 'added by Ask', createdAt: new Date().toISOString() };
+      DB.owners.push(owner); madeOwner = owner.id;
+    }
+    const dog = { id: uid(), ownerId: owner.id, name: String(a.name).trim(),
+                  size: a.size, breed: a.breed || '', sex: '', weight: '', age: '',
+                  vaccinated: '', vaccDate: '', medicalConditions: '', allergies: '',
+                  vetName: '', aggression: '', aggressionExplain: '', separation: '',
+                  feedingSchedule: '', toiletRoutine: '', additionalBehaviours: '',
+                  notes: a.notes || '', friendlyDogs: 'yes', photoUrl: '',
+                  createdAt: new Date().toISOString() };
+    DB.dogs.push(dog);
+    await save(DB); render();
+    const undo = askRegisterUndo(async () => {
+      DB.dogs = DB.dogs.filter(d => d.id !== dog.id);
+      if (madeOwner) DB.owners = DB.owners.filter(o => o.id !== madeOwner);
+      await save(DB);
+    });
+    return {
+      say: `Added ${dog.name} (dogId ${dog.id}, ${dog.size}) for ${owner.name} (ownerId ${owner.id}).`
+         + (madeOwner ? ' The client is new too.' : '')
+         + (owner.email ? '' : ' NO EMAIL on file — they cannot be invoiced or matched to a payment until there is one. Ask for it.'),
+      card: aCard(owner.email ? 'did' : 'warn', `<div class="ask-ttl"><span class="ask-tag do">Done</span></div>`
+        + aRow(dog.name, escapeHtml(dog.size + (dog.breed ? ' · ' + dog.breed : '')))
+        + aRow(owner.name, escapeHtml(owner.email || 'no email yet'))
+        + (owner.email ? '' : aNote('Without an email they cannot be invoiced, and a payment cannot be matched back to them.'))
+        + `<div class="ask-acts">${undo}<button class="btn tiny ghost" onclick="closeAsk();openDogEditSheet('${dog.id}')">Fill in the rest</button></div>`)
+    };
+  }
+
+  case 'sell_pack': {
+    const dog = dogById(a.dogId);
+    if (!dog) return { say: 'No dog with that id.', card: '' };
+    const size = Math.round(Number(a.size));
+    if (!(size > 0)) return { say: 'How many days is the pack?', card: '' };
+    /* calcPackPrice holds the discount, same as the Sell a pack sheet. */
+    const std = calcPackPrice(dog.size, size);
+    const paid = a.paidAmount != null ? Math.round(Number(a.paidAmount)) : std;
+    const pack = { id: uid(), dogId: dog.id, size,
+                   purchaseDate: todayISO(),
+                   expiryDate: a.expiryDate || addDaysISO(todayISO(), 182),
+                   paidAmount: paid, daysUsed: 0, notes: a.notes || '',
+                   createdAt: new Date().toISOString() };
+    DB.packs.push(pack);
+    await save(DB); render();
+    const undo = askRegisterUndo(async () => {
+      DB.packs = DB.packs.filter(x => x.id !== pack.id); await save(DB);
+    });
+    return {
+      say: `Recorded a ${size}-day pack for ${dog.name}, ${aMoney(paid)}`
+         + (paid !== std ? ` (standard is ${aMoney(std)} — a deal of ${aMoney(std - paid)})` : '')
+         + `, expiring ${pack.expiryDate}. Days are used automatically as they are booked.`,
+      card: aCard('did', `<div class="ask-ttl"><span class="ask-tag do">Done</span></div>`
+        + aRow(`${dog.name} · ${size}-day pack`, `<b>${escapeHtml(aMoney(paid))}</b>`)
+        + aRow('Per day', escapeHtml(aMoney(Math.round(paid / size))))
+        + aRow('Expires', escapeHtml(fmtDateShort(pack.expiryDate)))
+        + (paid !== std ? aNote(`Standard price is ${aMoney(std)}.`) : '')
+        + `<div class="ask-acts">${undo}</div>`)
+    };
+  }
+
+  case 'record_deposit': {
+    const dog = dogById(a.dogId);
+    if (!dog) return { say: 'No dog with that id.', card: '' };
+    const nights = DB.bookings.filter(b => b.dogId === dog.id && b.session === 'overnight' && !b.cancelled)
+                              .sort((x, y) => x.date.localeCompare(y.date));
+    if (!nights.length) return { say: `${dog.name} has no boarding nights booked, so there is nothing to hold.`, card: '' };
+    if ((DB.deposits || []).some(d => (d.bookingIds || []).some(id => nights.some(n => n.id === id))))
+      return { say: `${dog.name}'s stay already has a deposit against it — use stay to see it.`, card: '' };
+    const standard = depositDue(nights, dog);
+    if (!standard && a.amount == null) return {
+      say: `That stay is under ${MIN_DEPOSIT_NIGHTS} nights, so no deposit is taken.`,
+      card: aCard('warn', `<div class="ask-ttl">No deposit needed</div>`
+        + aNote(`Under ${MIN_DEPOSIT_NIGHTS} nights — the ordinary cancellation rule applies instead.`))
+    };
+    const amt = a.amount != null ? Math.round(Number(a.amount)) : standard;
+    const dep = { id: uid(), dogId: dog.id, bookingIds: nights.map(n => n.id),
+                  amount: amt, rate: DEPOSIT_RATE, requestedAt: new Date().toISOString(),
+                  paidAt: null, paidAmount: null };
+    DB.deposits = DB.deposits || [];
+    DB.deposits.push(dep);
+    await save(DB); render();
+    const undo = askRegisterUndo(async () => {
+      DB.deposits = DB.deposits.filter(d => d.id !== dep.id); await save(DB);
+    });
+    const full = nights.reduce((t, b) => t + calcTotal(b, dog), 0);
+    const bands = cancelBands(nights);
+    return {
+      say: `Deposit of ${aMoney(amt)} recorded for ${dog.name}'s ${nights.length}-night stay (full stay ${aMoney(full)}), depositId ${dep.id}. `
+         + `Nothing has been sent — use send_deposit to put the request in front of Andressa.`,
+      card: aCard('did', `<div class="ask-ttl"><span class="ask-tag do">Done</span></div>`
+        + aRow(`${dog.name} · ${nights.length} nights`, escapeHtml(aMoney(full)))
+        + aRow('Deposit to hold it', `<b>${escapeHtml(aMoney(amt))}</b>`)
+        + (amt !== standard ? aNote(`Half would be ${aMoney(standard)}.`) : '')
+        + (bands ? aNote(`Full refund before ${fmtDateShort(bands.refundBy)} · credit until ${fmtDateShort(bands.creditBy)}`) : '')
+        + `<div class="ask-acts">${undo}</div>`)
+    };
+  }
+
+  case 'mark_invoice_paid': {
+    const list = (DB.meta && DB.meta.invoicesSent) || [];
+    const inv = list.find(x => x.number === a.number);
+    if (!inv) return { say: `No sent invoice numbered ${a.number}.`, card: '' };
+    if (inv.paidAt) return { say: `${a.number} was already marked paid on ${String(inv.paidAt).slice(0,10)}.`, card: '' };
+    const before = { paidAt: inv.paidAt, paidAmount: inv.paidAmount };
+    inv.paidAt = new Date().toISOString();
+    inv.paidAmount = inv.total;
+    await save(DB); render();
+    const undo = askRegisterUndo(async () => {
+      inv.paidAt = before.paidAt; inv.paidAmount = before.paidAmount; await save(DB);
+    });
+    return {
+      say: `${a.number} (${inv.ownerName}, ${aMoney(inv.total)}) marked paid.`,
+      card: aCard('did', `<div class="ask-ttl"><span class="ask-tag do">Done</span></div>`
+        + aRow(escapeHtml(inv.ownerName || a.number), `<b>${escapeHtml(aMoney(inv.total))}</b> paid`)
+        + aRow('Invoice', escapeHtml(a.number))
+        + `<div class="ask-acts">${undo}</div>`)
+    };
+  }
+
+  case 'set_price': {
+    const bk = DB.bookings.find(b => b.id === a.bookingId);
+    if (!bk) return { say: 'No booking with that id.', card: '' };
+    const dog = dogById(bk.dogId);
+    const before = { customPrice: bk.customPrice, total: bk.total };
+    const was = calcTotal(bk, dog);
+    bk.customPrice = (a.price === null || a.price === undefined) ? null : Number(a.price);
+    bk.total = calcTotal(bk, dog);
+    if (a.reason) bk.notes = ((bk.notes || '') + ' ' + a.reason).trim();
+    await save(DB); render();
+    const undo = askRegisterUndo(async () => {
+      bk.customPrice = before.customPrice; bk.total = before.total; await save(DB);
+    });
+    return {
+      say: `${dog?.name}'s ${bk.date} booking changed from ${aMoney(was)} to ${aMoney(bk.total)}`
+         + (bk.customPrice == null ? ' — back to the standard price for a ' + (dog?.size || 'dog') + '.' : '.'),
+      card: aCard('did', `<div class="ask-ttl"><span class="ask-tag do">Done</span></div>`
+        + aRow(`${dog?.name || 'Booking'} · ${fmtDateShort(bk.date)}`,
+               `<span style="color:var(--ink-3);text-decoration:line-through">${escapeHtml(aMoney(was))}</span> &nbsp;<b>${escapeHtml(aMoney(bk.total))}</b>`)
+        + (bk.customPrice == null ? aNote('Back to the standard price.') : '')
+        + `<div class="ask-acts">${undo}</div>`)
+    };
+  }
+
+  case 'vaccinations_due': {
+    const within = Number(a.withinDays) || 60;
+    const limit = addDaysISO(todayISO(), within);
+    const rows = DB.dogs.map(d => {
+      const exp = d.vaccDate || '';
+      const state = !exp ? 'nothing on file'
+                  : exp < todayISO() ? 'expired ' + fmtDateShort(exp)
+                  : exp <= limit ? 'due ' + fmtDateShort(exp) : null;
+      return state ? { d, state, exp } : null;
+    }).filter(Boolean)
+      .sort((x, y) => (x.exp || '0').localeCompare(y.exp || '0'));
+    if (!rows.length) return { say: `Nothing expiring in the next ${within} days, and nothing missing.`,
+                               card: aCard('did', `<div class="ask-ttl">All current</div>`) };
+    return {
+      say: `${rows.length} dog(s) need attention: `
+         + rows.map(r => `${r.d.name} — ${r.state}`).join('; ') + '.',
+      card: aCard('warn', `<div class="ask-ttl">${rows.length} to chase</div>`
+        + rows.slice(0, 15).map(r => aRow(r.d.name, escapeHtml(r.state))).join('')
+        + (rows.length > 15 ? aNote(`and ${rows.length - 15} more`) : ''))
     };
   }
 
@@ -5808,6 +6100,40 @@ async function askRunTool(name, a) {
     };
   }
 
+  case 'send_all_ready': {
+    const today = todayISO();
+    /* invBuckets is what the Invoices screen itself uses, so the batch here
+       and the batch behind the button are the same set. */
+    const b = invBuckets();
+    const ready = b.ready || [];
+    const held = (b.waiting || []).length, stuck = (b.blocked || []).length;
+    if (!ready.length) return {
+      say: `Nothing is ready. ${held} waiting for their week to finish, ${stuck} blocked.`,
+      card: aCard('warn', `<div class="ask-ttl">Nothing ready yet</div>`
+        + (held ? aRow('Waiting for the week to finish', String(held)) : '')
+        + (stuck ? aRow('Blocked — need a person', String(stuck)) : '')),
+      halt: true
+    };
+    const total = ready.reduce((t, i) => t + i.total, 0);
+    const id = 'p' + uid();
+    ASK.undo.set(id, { kind: 'batch', numbers: ready.map(i => i.number) });
+    return {
+      say: `Prepared ${ready.length} invoice(s) totalling ${aMoney(total)} and shown them to Andressa. `
+         + `NOT sent — she taps. ${held} are still waiting for their week to finish and ${stuck} are blocked; `
+         + `neither is included. Do not call this again.`,
+      card: aCard('send', `<div class="ask-ttl"><span class="ask-tag send">Will send</span> &nbsp;${ready.length} email${ready.length===1?'':'s'} · ${escapeHtml(aMoney(total))}</div>`
+        + ready.slice(0, 12).map(i => aRow(i.owner.name, escapeHtml(aMoney(i.total)))).join('')
+        + (ready.length > 12 ? aNote(`and ${ready.length - 12} more`) : '')
+        + ((held || stuck) ? aNote(`${held} waiting for their week to finish · ${stuck} blocked — not included.`) : '')
+        + `<div class="ask-acts">
+             <button class="btn night" onclick="askConfirmSend('${id}', this)">Send all ${ready.length}</button>
+             <button class="btn ghost" onclick="closeAsk();openInvoicesSheet()">Look through them</button>
+             <button class="btn ghost" onclick="askDrop('${id}', this)">Not yet</button>
+           </div>`),
+      halt: true
+    };
+  }
+
   case 'send_deposit': {
     const dep = (DB.deposits || []).find(d => d.id === a.depositId);
     if (!dep) return { say: 'No deposit with that id.', card: '' };
@@ -5867,8 +6193,9 @@ async function askConfirmSend(id, btn) {
   if (!p) return toast('That one has gone — ask again');
   btn.disabled = true; btn.textContent = 'Sending…';
   try {
-    if (p.kind === 'invoice') await queueInvoice(p.ownerId, { receipt: p.receipt, now: p.now });
-    else                      await askQueueDepositNoPrompt(p.depositId, p.receipt);
+    if (p.kind === 'invoice')     await queueInvoice(p.ownerId, { receipt: p.receipt, now: p.now });
+    else if (p.kind === 'batch')  await askQueueBatchNoPrompt(p.numbers);
+    else                          await askQueueDepositNoPrompt(p.depositId, p.receipt);
     ASK.undo.delete(id);
     btn.closest('.ask-acts').innerHTML = '<span style="font-size:12.5px;color:var(--action-dark);font-weight:500">✓ Sent</span>';
     ASK.api.push({ role: 'user', content: '[Andressa tapped Send. It has gone.]' });
@@ -5881,6 +6208,23 @@ function askDrop(id, btn) {
   ASK.undo.delete(id);
   btn.closest('.ask-acts').innerHTML = '<span style="font-size:12.5px;color:var(--ink-3)">Left alone</span>';
   ASK.api.push({ role: 'user', content: '[Andressa declined to send that.]' });
+}
+
+/* queueAllReady asks twice with confirm(). She has just confirmed on a card
+   that listed every client and the total, which is more than either dialog
+   showed, so this is the same queue write without asking her a third time.
+   The set is rebuilt here rather than trusted from the card, so anything that
+   stopped being ready in between is dropped. */
+async function askQueueBatchNoPrompt(numbers) {
+  const today = todayISO();
+  const ready = (invBuckets().ready || []).filter(i => numbers.includes(i.number));
+  if (!ready.length) throw new Error('none of those are still ready');
+  DB.meta.sendQueue = DB.meta.sendQueue || [];
+  ready.forEach(inv => DB.meta.sendQueue.push({ ownerId: inv.owner.id, asAt: today, number: inv.number,
+    bookingIds: inv.bookingIds, total: inv.total, queuedAt: new Date().toISOString() }));
+  await save(DB);
+  renderInvoices();
+  toast(`Sending ${ready.length} invoice${ready.length===1?'':'s'} — ${aMoney(ready.reduce((t,i)=>t+i.total,0))}`, 'ok');
 }
 
 /* queueDeposit asks for confirmation with a browser confirm(). She has just

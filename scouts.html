@@ -239,7 +239,7 @@
       <p>Every dog wears a GPS tracker for the whole adventure — an extra layer of security. Not a guarantee, but real peace of mind.</p>
     </div>
   </div>
-  <p class="sc-diff-strap">Mon + Fri · morning trip from 7:30, afternoon trip from 1:30 · about 90 minutes off-lead · pickup &amp; drop-off included in every membership.</p>
+  <p class="sc-diff-strap">Mon + Fri · morning trip from 7:30, afternoon trip from 1:30 · about three hours out · pickup &amp; drop-off included in every membership.</p>
 </section>
 
 
@@ -284,7 +284,6 @@
       <div class="sc-rate-row"><span class="sc-rate-label">Second household dog</span><span class="sc-rate-price">$75</span></div>
       <div class="sc-rate-row"><span class="sc-rate-label">Pickup &amp; drop-off <span style="display:block; font-size:11px; color:var(--ink-3); font-weight:400; letter-spacing:0.02em; margin-top:2px;">Inner West run — see below</span></span><span class="sc-rate-price" style="color: var(--sage-dark); font-size: 14px;">included</span></div>
       <div class="sc-rate-row"><span class="sc-rate-label">Just outside the run <span style="display:block; font-size:11px; color:var(--ink-3); font-weight:400; letter-spacing:0.02em; margin-top:2px;">Door-to-door, a little further afield</span></span><span class="sc-rate-price">+$20</span></div>
-      <div class="sc-rate-row"><span class="sc-rate-label">Drop off with us in Annandale <span style="display:block; font-size:11px; color:var(--ink-3); font-weight:400; letter-spacing:0.02em; margin-top:2px;">Anywhere in Sydney — no transport fee</span></span><span class="sc-rate-price" style="color: var(--sage-dark); font-size: 14px;">included</span></div>
       <div class="sc-rate-row"><span class="sc-rate-label">GPS tracker on every Scout</span><span class="sc-rate-price" style="color: var(--sage-dark); font-size: 14px;">included</span></div>
     </div>
     <div class="sc-founding" style="text-align: left;">
@@ -499,14 +498,14 @@
     </details>
     <details>
       <summary>How long will my dog actually be away?</summary>
-      <p><strong>Every dog gets the same time on the trail — about 90 minutes off-lead.</strong> That part never changes, and it's the bit that matters.</p>
+      <p><strong>Every dog gets the same time out — about three hours, door to door.</strong> That part never changes, and it's the bit that matters.</p>
       <p>How long they're away from home does change, because we collect four dogs in a loop and bring them back the same way. If you're the first pickup you're also the last drop-off, so your dog might be away around two and a half to three hours. If you're the last pickup you're the first home again, and it can be as little as an hour and a half. Same walk either way — just a different amount of time in the van.</p>
       <p>We'll tell you which end of the run you're on when we confirm your spot, and give you a drop-off window rather than a single time. And we do rotate the order so the same dog isn't always the long one.</p>
     </details>
 
     <details>
       <summary>What if I live outside your pickup area?</summary>
-      <p>You're still very welcome. We run door-to-door collection across the Inner West — roughly five kilometres around Annandale, which covers Leichhardt, Rozelle, Balmain, Glebe, Petersham, Stanmore, Newtown, Enmore, Erskineville, St Peters, Camperdown, Haberfield and Marrickville. A little further out we can usually still come to you for $20 extra. And wherever you are in Sydney, you're always welcome to drop your dog off with us in Annandale and collect them after the adventure — same $75, nothing extra. The postcode box on the form will tell you which applies to you.</p>
+      <p>You're still very welcome. We run door-to-door collection across the Inner West — roughly five kilometres around Annandale, which covers Leichhardt, Rozelle, Balmain, Glebe, Petersham, Stanmore, Newtown, Enmore, Erskineville, St Peters, Camperdown, Haberfield and Marrickville. A little further out we can usually still come to you for $20 extra. The postcode box on the form will tell you which applies to you, and if you're further afield than that, get in touch anyway — we may be able to work something out.</p>
     </details>
 
     <details>
@@ -523,7 +522,7 @@
     </details>
     <details>
       <summary>What days do adventures actually run?</summary>
-      <p>Mondays and Fridays, with two trips a day — a morning trip with the first pickup at 7:30 AM and dogs home between 10:30 and 11, and an afternoon trip starting at 1:30 PM. Each takes four dogs, and every dog gets about 90 minutes off-lead on the trail. Tell us which suits your routine. If neither day works, get in touch — we may add days as demand grows.</p>
+      <p>Mondays and Fridays, with two trips a day — a morning trip with the first pickup at 7:30 AM and dogs home between 10:30 and 11, and an afternoon trip starting at 1:30 PM. Each takes four dogs, and every dog gets about three hours out, door to door. Tell us which suits your routine. If neither day works, get in touch — we may add days as demand grows.</p>
     </details>
   </div>
 </section>
@@ -553,7 +552,9 @@
   /* Pickup bands. One place to edit if the run changes.
      CORE   ~5km of Annandale — door-to-door included.
      NEAR   ~5-10km          — door-to-door for a small supplement.
-     Beyond — drop off and collect from us in Annandale instead. */
+     Beyond — ask, rather than naming a place for them to come to. The run is
+              door-to-door by design and nothing on the site invites a client
+              to the house. */
   var CORE = ['2037','2038','2039','2040','2041','2042','2043','2044','2045',
               '2048','2049','2050','2204','2007','2008','2009'];
   var NEAR = ['2010','2015','2016','2017','2018','2046','2047',
@@ -579,13 +580,13 @@
     } else if (NEAR.indexOf(v) > -1) {
       zone.value = 'near';
       note.className = 'sc-zone extended';
-      note.textContent = "You're just outside our usual loop. We can still collect from your door for $" + NEAR_FEE
-        + " extra — or you're very welcome to drop off and collect from us in Annandale at no extra cost.";
+      note.textContent = "You're just outside our usual loop, but we can still collect from your door for $"
+        + NEAR_FEE + " extra.";
     } else {
       zone.value = 'outside';
       note.className = 'sc-zone outside';
-      note.textContent = "You're outside our pickup run — but you're still very welcome in the club. "
-        + "Drop off and collect from us in Annandale and it's the standard $75, with nothing extra to pay.";
+      note.textContent = "You're outside our usual pickup run — send your details anyway and we'll see "
+        + "what we can do. We add suburbs as the club grows.";
     }
   }
   pc.addEventListener('input', say);

@@ -136,6 +136,44 @@ export const TOOLS = [
     }
   },
   {
+    name: 'check_in',
+    tier: TIERS.WRITE,
+    description:
+      "Mark dogs as arrived. This is the most frequent thing Andressa does — most mornings she will "
+      + "say something like 'everyone's here' or 'they all arrived at 8'. Pass all:true to do every dog "
+      + "booked that day, or dogIds for specific ones. Dogs already marked in are left alone and reported, "
+      + "not stamped twice.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        all:    { type: 'boolean', description: 'Every dog booked that day.' },
+        dogIds: { type: 'array', items: { type: 'string' }, description: 'Specific dogs, from find_dogs.' },
+        time:   { type: 'string', description: 'HH:MM. Defaults to now.' },
+        date:   { type: 'string', description: 'YYYY-MM-DD. Defaults to today.' }
+      },
+      required: []
+    }
+  },
+  {
+    name: 'check_out',
+    tier: TIERS.WRITE,
+    description:
+      "Mark dogs as collected. A late pickup carries a fee, which is worked out by the invoicing code "
+      + "and must be reported plainly — Andressa often means to waive it. Pass all:true for everyone "
+      + "still here, or dogIds. Dogs not yet marked in are reported rather than guessed at.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        all:    { type: 'boolean', description: 'Every dog still marked as here.' },
+        dogIds: { type: 'array', items: { type: 'string' } },
+        time:   { type: 'string', description: 'HH:MM. Defaults to now.' },
+        date:   { type: 'string', description: 'YYYY-MM-DD. Defaults to today.' },
+        waiveLateFee: { type: 'boolean', description: 'Only if Andressa has actually said to waive it.' }
+      },
+      required: []
+    }
+  },
+  {
     name: 'cancel',
     tier: TIERS.WRITE,
     description:
@@ -149,6 +187,101 @@ export const TOOLS = [
         waive: { type: 'boolean', description: 'Cancel with no charge even inside 24 hours.' }
       },
       required: ['bookingId']
+    }
+  },
+  {
+    name: 'add_dog',
+    tier: TIERS.WRITE,
+    description:
+      "Add a new dog, and its owner if they are new too. Records are matched on email, so a client "
+      + "without one can never be matched to a payment later — ask for it. Check find_dogs first so an "
+      + "existing client does not get a duplicate record.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        name:    { type: 'string' },
+        size:    { type: 'string', enum: ['small','medium','large'], description: 'Decides every price.' },
+        breed:   { type: 'string' },
+        ownerId: { type: 'string', description: 'For an existing client. Otherwise give ownerName.' },
+        ownerName:  { type: 'string' },
+        ownerEmail: { type: 'string' },
+        ownerPhone: { type: 'string' },
+        notes:   { type: 'string', description: 'Allergies, vet, behaviour — anything she says.' }
+      },
+      required: ['name','size']
+    }
+  },
+  {
+    name: 'sell_pack',
+    tier: TIERS.WRITE,
+    description:
+      "Record a prepaid pack of days for a dog. Packs are paid up front and discounted, and the price "
+      + "comes from the pricing code — only pass paidAmount if Andressa agreed a different figure.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        dogId: { type: 'string' },
+        size:  { type: 'number', description: 'How many days, usually 5 or 10.' },
+        paidAmount: { type: 'number', description: 'Only if it differs from the standard price.' },
+        expiryDate: { type: 'string', description: 'YYYY-MM-DD. Defaults to six months out.' },
+        notes: { type: 'string' }
+      },
+      required: ['dogId','size']
+    }
+  },
+  {
+    name: 'record_deposit',
+    tier: TIERS.WRITE,
+    description:
+      "Create the deposit for a boarding stay, so it can then be requested. Half the stay by default, "
+      + "and only on stays of three nights or more. Use deposit_received once the money arrives.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        dogId:  { type: 'string' },
+        amount: { type: 'number', description: 'Only if Andressa agreed something other than half.' }
+      },
+      required: ['dogId']
+    }
+  },
+  {
+    name: 'mark_invoice_paid',
+    tier: TIERS.WRITE,
+    description:
+      "Mark an invoice that was already emailed as paid. This is for reconciling the bank — use "
+      + "record_payment instead when the money is against a week rather than a specific invoice number.",
+    input_schema: {
+      type: 'object',
+      properties: { number: { type: 'string', description: 'The invoice number, e.g. PP-20261012-A7DB.' } },
+      required: ['number']
+    }
+  },
+  {
+    name: 'set_price',
+    tier: TIERS.WRITE,
+    description:
+      "Override what a single booking costs — a deal, a discount, a correction. Pass null to put it back "
+      + "to the standard price for that dog's size. Say the old and new figure plainly.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        bookingId: { type: 'string' },
+        price:     { type: ['number','null'], description: 'Dollars, or null to reset.' },
+        reason:    { type: 'string' }
+      },
+      required: ['bookingId']
+    }
+  },
+  {
+    name: 'vaccinations_due',
+    tier: TIERS.READ,
+    description:
+      "Dogs whose vaccination is missing, expired, or expiring soon. A compliance chore nobody "
+      + "remembers until it matters.",
+    input_schema: {
+      type: 'object',
+      properties: { withinDays: { type: 'number', description: 'Defaults to 60.' } },
+      required: []
     }
   },
   {
@@ -216,6 +349,14 @@ export const TOOLS = [
       + "first and the same document becomes the receipt. Never fall back to sending an invoice to "
       + "someone who has already paid.",
     input_schema: { type: 'object', properties: { ownerId: { type: 'string' } }, required: ['ownerId'] }
+  },
+  {
+    name: 'send_all_ready',
+    tier: TIERS.SEND,
+    description:
+      "Propose sending every invoice that is ready to go — the batch at the end of the week. Clients "
+      + "who are waiting or blocked are excluded automatically and reported, not sent.",
+    input_schema: { type: 'object', properties: {}, required: [] }
   },
   {
     name: 'send_deposit',

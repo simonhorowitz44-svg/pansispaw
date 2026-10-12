@@ -63,12 +63,23 @@ const deps={
   /* The panel rehydrates BIZ from the document before every tool; mirror that
      here, so a fixture whose bank details live in meta.biz behaves as the real
      thing does. */
+  nowTime:()=>'08:00',
+  calcPackPrice:(size,n)=>Math.round((C.PRICES[size]?.full||90)*n*(n===10?0.9:n===5?0.95:1)),
+  addDaysISO:C.addDaysISO,
+  invBuckets:()=>{ const all=C.invoicesDue(DB,{asAt:'2026-10-12'});
+    const out={ready:[],waiting:[],blocked:[],sending:[],receipts:[]};
+    all.forEach(inv=>{ const why=C.blockers(DB,inv,BIZ,'2026-10-12');
+      if(!why.length) out.ready.push(inv);
+      else if(why.length===1&&why[0].startsWith('Still has')) out.waiting.push(inv);
+      else out.blocked.push({inv,why}); });
+    return out; },
+  renderInvoices:()=>{}, openInvoicesSheet:()=>{}, openDogEditSheet:()=>{},
   hydrateBiz:()=>{ const b=(DB.meta&&DB.meta.biz)||{}; BIZ.bsb=b.bsb||''; BIZ.acct=b.acct||''; BIZ.acctName=b.acctName||''; BIZ.abn=b.abn||''; },
   drainPendingRemote:()=>{}, document:{getElementById:()=>null}, window:{matchMedia:()=>({matches:false})},
   console
 };
 const names=['escapeHtml','SESSION_LABELS','calcTotal','buildInvoice','blockers','invoicesDue','depositDue',
-             'cancelBands','MIN_DEPOSIT_NIGHTS','DEPOSIT_RATE','buildDepositRequest','latePickupFee','invoiceSubject',
+             'cancelBands','MIN_DEPOSIT_NIGHTS','DEPOSIT_RATE','PRICES','LATE_CUTOFF','friendlyTime','invoicesDue','buildDepositRequest','latePickupFee','invoiceSubject',
              'CANCEL_NOTICE_HOURS','CANCEL_CHARGE_RATE'];
 names.forEach(n=>deps[n]=C[n]);
 const keys=Object.keys(deps);
@@ -359,6 +370,95 @@ console.log('\n--- the conversation trims instead of dying ---');
   const rc = askTrim(runaway);
   ok('a runaway exchange still returns something valid',
      rc.length > 0 && rc[0].role === 'user' && typeof rc[0].content === 'string');
+}
+
+console.log('\n--- checking dogs in and out ---');
+{
+  reset();
+  const r=await run('check_in',{all:true,date:'2026-10-15',time:'08:00'});
+  ok('everyone booked that day is marked in', /Marked in 4/.test(r.say));
+  eq('and stamped', DB.bookings.filter(b=>b.date==='2026-10-15'&&b.arrivalLogged==='08:00').length, 4);
+  ok('the card shows the time', /arrived 08:00/.test(r.card));
+
+  /* A second arrival time would overwrite the real one, and the late fee is
+     worked out from these stamps. */
+  const again=await run('check_in',{all:true,date:'2026-10-15'});
+  ok('a second check-in changes nothing', /Nothing to do/.test(again.say));
+  eq('times are untouched', DB.bookings.filter(b=>b.arrivalLogged==='08:00').length, 4);
+
+  const out=await run('check_out',{all:true,date:'2026-10-15',time:'16:00'});
+  ok('they can be collected', /Collected 4/.test(out.say));
+  eq('and stamped out', DB.bookings.filter(b=>b.departureLogged==='16:00').length, 4);
+
+  reset();
+  const never=await run('check_out',{all:true,date:'2026-10-15'});
+  ok('dogs never marked in are not collected', /none of them are here/.test(never.say));
+  eq('nothing stamped', DB.bookings.filter(b=>b.departureLogged).length, 0);
+
+  reset();
+  await run('check_in',{all:true,date:'2026-10-15',time:'08:00'});
+  const undoId=[...ASK.undo.keys()].pop();
+  await ASK.undo.get(undoId)();
+  eq('undo clears the stamps', DB.bookings.filter(b=>b.arrivalLogged).length, 0);
+}
+
+console.log('\n--- adding a dog ---');
+{
+  reset();
+  const r=await run('add_dog',{name:'Rufus',size:'large',breed:'ridgeback',ownerName:'Tom Vale'});
+  eq('the dog exists', DB.dogs.filter(d=>d.name==='Rufus').length, 1);
+  eq('and so does the new client', DB.owners.filter(o=>o.name==='Tom Vale').length, 1);
+  ok('a missing email is flagged hard', /NO EMAIL/.test(r.say));
+  ok('and explained on the card', /cannot be invoiced/.test(r.card));
+  const id=[...ASK.undo.keys()].pop();
+  await ASK.undo.get(id)();
+  eq('undo removes the dog', DB.dogs.filter(d=>d.name==='Rufus').length, 0);
+  eq('and the client it created', DB.owners.filter(o=>o.name==='Tom Vale').length, 0);
+
+  const onExisting=await run('add_dog',{name:'Pip',size:'small',ownerId:'o1'});
+  ok('an existing client is reused', !/client is new/.test(onExisting.say));
+  eq('no duplicate owner', DB.owners.filter(o=>o.id==='o1').length, 1);
+}
+
+console.log('\n--- packs, deposits, prices ---');
+{
+  reset();
+  const pk=await run('sell_pack',{dogId:'d4',size:10});
+  eq('a pack is recorded', DB.packs.length, 1);
+  eq('priced from calcPackPrice — 10 medium days less 10%', DB.packs[0].paidAmount, 810);
+  ok('the per-day figure is shown', /Per day/.test(pk.card));
+  const deal=await run('sell_pack',{dogId:'d4',size:10,paidAmount:665});
+  ok('a deal is flagged against the standard', /Standard price/.test(deal.card));
+
+  reset();
+  const noNights=await run('record_deposit',{dogId:'d4'});
+  ok('no boarding means no deposit', /no boarding nights/.test(noNights.say));
+  for (let i=0;i<5;i++) DB.bookings.push({id:'n'+i,dogId:'d4',date:'2026-12-'+(20+i),session:'overnight',cancelled:false});
+  const dep=await run('record_deposit',{dogId:'d4'});
+  eq('a deposit is created', DB.deposits.length, 1);
+  eq('at half of five nights at $115', DB.deposits[0].amount, 288);
+  ok('it says nothing has been sent', /Nothing has been sent/.test(dep.say));
+  ok('and carries the cancellation dates', /Full refund before/.test(dep.card));
+  const twice=await run('record_deposit',{dogId:'d4'});
+  ok('a second deposit on the same stay is refused', /already has a deposit/.test(twice.say));
+
+  reset();
+  const sp=await run('set_price',{bookingId:'b5',price:55});
+  eq('the price changes', DB.bookings.find(b=>b.id==='b5').total, 55);
+  ok('the old figure is shown too', /90/.test(sp.card));
+  await run('set_price',{bookingId:'b5',price:null});
+  eq('null resets to standard', DB.bookings.find(b=>b.id==='b5').total, 90);
+}
+
+console.log('\n--- vaccinations ---');
+{
+  reset();
+  DB.dogs[0].vaccDate='2025-01-01';
+  DB.dogs[1].vaccDate='2027-06-01';
+  const v=await run('vaccinations_due',{});
+  ok('an expired one is caught', /expired/.test(v.say));
+  ok('a dog with nothing on file is caught', /nothing on file/.test(v.say));
+  ok('a current one is not chased', !/Bruno Sala/.test(v.say));
 }
 
 console.log('\n--- names render as typed ---');

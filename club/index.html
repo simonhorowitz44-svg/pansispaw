@@ -3,8 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Two adventures for the price of one | Pansi's Scouts Club</title>
-<meta name="robots" content="noindex, follow">
+<title>Scouts Club — group dog adventures, Inner West Sydney | Pansi's Paws</title>
+<meta name="description" content="Four dogs, three hours, bush and harbour beach. Collected from your door and dropped home tired. $75 an adventure, Inner West Sydney.">
+<!-- Shared to a friend in a DM this is the whole preview, and the page had
+     none of it — every share rendered as a bare grey box on the one channel
+     this page exists to serve. -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://pansispaws.com.au/club/">
+<meta property="og:title" content="Not a walk. An adventure.">
+<meta property="og:description" content="Four dogs, three hours of bush, park and harbour beach — collected from your door and dropped home tired. $75.">
+<meta property="og:image" content="https://pansispaws.com.au/scouts-club-logo.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://pansispaws.com.au/club/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Fraunces:opsz,wght,SOFT@9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet">
@@ -29,10 +40,12 @@
   .card { background:#fff; border:1px solid var(--edge); border-radius:14px; padding:20px 18px; }
   label { display:block; font-size:12px; font-weight:600; letter-spacing:.06em;
     text-transform:uppercase; color:var(--ink-2); margin-bottom:5px; }
-  input { width:100%; font-size:16px; font-family:inherit; color:var(--ink);
+  input, select { width:100%; font-size:16px; font-family:inherit; color:var(--ink);
     padding:13px 14px; border:1.5px solid var(--edge); border-radius:9px;
     background:var(--paper); margin-bottom:15px; }
-  input:focus { outline:none; border-color:var(--sage); background:#fff; }
+  input:focus, select:focus { outline:none; border-color:var(--sage); background:#fff; }
+  /* Native arrow only, so it still looks like something you tap on a phone. */
+  select { appearance:auto; -webkit-appearance:menulist; }
   button { width:100%; font-family:inherit; font-size:16px; font-weight:600;
     color:var(--cream); background:#4d6d34; border:0; border-radius:10px;
     padding:16px; cursor:pointer; }
@@ -51,19 +64,23 @@
   <img class="logo" src="/scouts-club-logo.png" alt="Pansi's Paws">
 
   <div id="form">
-    <span class="badge">First two adventures, price of one</span>
+    <span class="badge">Four dogs · three hours · Inner West Sydney</span>
     <h1>A little adventure club <em>made with big love.</em></h1>
-    <p class="lede">Four dogs, real Sydney bush trails, home tired and happy. About 90 minutes off-lead, with pickup and drop-off included. Every Scout gets a bandana and brings home a patch from every adventure. Leave your details and we will find your dog a spot.</p>
+    <p class="lede">Four dogs, real Sydney bush trails, home tired and happy. About three hours out, with pickup from your door and drop-off included — $75 an adventure. Every Scout gets a bandana. Leave your details and we will find your dog a spot.</p>
 
     <form class="card" action="https://formspree.io/f/xzdaajpb" method="POST">
-      <input type="hidden" name="_subject" value="[Pansi's Paw] Cafe promo — Scouts Club">
-      <input type="hidden" name="form_type" value="promo_scouts">
-      <input type="hidden" name="promo" value="CLUB2FOR1">
-      <input type="hidden" name="source" value="Dog cafe, 29 Aug 2026">
+      <input type="hidden" name="_subject" value="[Pansi's Paws] Scouts Club enquiry">
+      <input type="hidden" name="form_type" value="club_enquiry">
       <input type="hidden" name="_next" value="https://pansispaws.com.au/club/?done=1">
+      <!-- Populated from the bio link's ?utm_source=... so the dropdown below
+           can be cross-checked against where they actually came from. -->
+      <input type="hidden" name="utm" id="fUtm" value="">
+
+      <label for="d">Your dog's name</label>
+      <input id="d" name="dog_name" type="text" required placeholder="Enzo">
 
       <label for="n">Your name</label>
-      <input id="n" name="name" type="text" autocomplete="name" required placeholder="Andressa">
+      <input id="n" name="name" type="text" autocomplete="name" required>
 
       <label for="p">Mobile</label>
       <input id="p" name="phone" type="tel" autocomplete="tel" required placeholder="0410 000 000">
@@ -71,11 +88,28 @@
       <label for="e">Email</label>
       <input id="e" name="email" type="email" autocomplete="email" required placeholder="you@email.com">
 
-      <label for="d">Your dog's name</label>
-      <input id="d" name="dog_name" type="text" required placeholder="Pansi">
+      <label for="s">Your suburb</label>
+      <input id="s" name="suburb" type="text" required placeholder="Leichhardt">
 
-      <button type="submit">Join the club</button>
-      <p class="fine">Your first two adventures for the price of one. New Scouts Club members only — not available on existing memberships. First 10 dogs, book by 30 September 2026.</p>
+      <!-- The one field that makes any channel decision downstream possible.
+           Never reword an option's value once data exists against it — change
+           the label instead. -->
+      <label for="src">How did you hear about us?</label>
+      <select id="src" name="source" required>
+        <option value="" disabled selected>Choose one…</option>
+        <option value="Instagram">Instagram</option>
+        <option value="Facebook">Facebook</option>
+        <option value="Google search">Google — I searched for it</option>
+        <option value="Friend or neighbour">A friend or neighbour</option>
+        <option value="Saw a Scout out walking">Saw the dogs out on a walk</option>
+        <option value="Already a daycare client">I already use the daycare</option>
+        <option value="Vet or groomer">My vet or groomer</option>
+        <option value="Flyer or card">A flyer or a card</option>
+        <option value="Other">Somewhere else</option>
+      </select>
+
+      <button type="submit">Save my dog a spot</button>
+      <p class="fine">Four spots per adventure — that is the legal maximum one person can walk, and it is the point. Every dog starts with a free meet &amp; greet.</p>
     </form>
   </div>
 
@@ -94,6 +128,13 @@
     document.getElementById('form').style.display = 'none';
     document.getElementById('ok').style.display = 'block';
   }
+  /* Belt and braces to the "how did you hear about us" dropdown: a fair few
+     people pick Other or guess, and the bio link already carries the answer. */
+  (function () {
+    var qs = new URLSearchParams(location.search), f = document.getElementById('fUtm');
+    if (f) f.value = ['utm_source','utm_medium','utm_campaign','utm_content']
+      .map(function (k) { return qs.get(k); }).filter(Boolean).join(' / ');
+  })();
 </script>
 </body>
 </html>

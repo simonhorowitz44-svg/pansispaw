@@ -90,9 +90,14 @@ const sends = T.TOOLS.filter(t => t.tier === T.TIERS.SEND);
 for (const t of sends) {
   const body = bodyOf(t.name);
   ok(`${t.name} never pushes to the send queue itself`, !/sendQueue\.push/.test(body));
-  ok(`${t.name} never calls queueInvoice directly`, !/await queueInvoice|await queueDeposit/.test(body));
+  ok(`${t.name} never calls queueInvoice directly`,
+     !/await queueInvoice|await queueDeposit|await queueAllReady/.test(body));
   ok(`${t.name} halts the loop`, /halt: true/.test(body));
-  ok(`${t.name} runs blockers before proposing`, /blockers\(/.test(body));
+  /* Either directly, or via invBuckets, which is the Invoices screen's own
+     classifier and runs blockers inside. What must not happen is a send tool
+     deciding readiness for itself. */
+  ok(`${t.name} runs blockers before proposing`,
+     /blockers\(/.test(body) || /invBuckets\(\)/.test(body));
   ok(`${t.name} offers a Send button`, /askConfirmSend/.test(body));
 }
 /* The panel has had queue-writing buttons since before any of this; what
@@ -156,6 +161,29 @@ ok('assistant-tools.js is whitelisted into the public repo',
    /^!\/assistant-tools\.js$/m.test(readFileSync('./.gitignore', 'utf8')));
 ok('assistant-tools.js pulls in nothing — it must stay testable',
    !/^import /m.test(readFileSync('./assistant-tools.js', 'utf8')));
+
+console.log('\n--- deleting a client leaves nothing pointing at it ---');
+/* deleteOwner took the owner, dogs and bookings and left payments, packs,
+   deposits, billed flags and queued emails behind — an orphan payment still
+   counted in the takings, and a queued send would still have gone out, since
+   the Cloud Function reads the queue and not the client list. */
+{
+  const i = panel.indexOf('async function deleteOwner');
+  const body = panel.slice(i, panel.indexOf('\n}', i));
+  for (const [what, re] of [
+      ['dogs',           /DB\.dogs\s*=\s*DB\.dogs\.filter/],
+      ['bookings',       /DB\.bookings\s*=\s*DB\.bookings\.filter/],
+      ['payments',       /DB\.payments\s*=\s*DB\.payments\.filter/],
+      ['packs',          /DB\.packs\s*=/],
+      ['deposits',       /DB\.deposits\s*=/],
+      ['billed flags',   /delete DB\.meta\.billed/],
+      ['the send queue', /sendQueue = DB\.meta\.sendQueue\.filter/]])
+    ok(`it clears ${what}`, re.test(body));
+  ok('the sending log survives — emails were really sent',
+     !/invoicesSent\s*=/.test(body));
+  ok('it says what is about to go before asking', /confirm\(/.test(body) && /bits\.join/.test(body));
+  ok('and warns it cannot be undone', /cannot be undone/.test(body));
+}
 
 console.log('\n--- the panel wiring ---');
 for (const f of ['openAsk','closeAsk','askSubmit','askKey','askGrow','askReset','askEg','askUndo','askConfirmSend','askDrop']) {
