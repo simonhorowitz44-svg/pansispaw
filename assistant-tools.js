@@ -46,8 +46,11 @@ export const TOOLS = [
     name: 'day',
     tier: TIERS.READ,
     description:
-      "What is booked on a date or across a range: dogs, session types, arrival times, and how "
-      + "much room is left. Scouts is capped at four dogs per trip by NSW law, so say when a trip is full.",
+      "What is booked on a date or across a range: dogs, session types, arrival times, what each dog "
+      + "is being charged, the day's total, and how much room is left. Use this for 'what's on Thursday', "
+      + "'how much are we taking tomorrow', 'what's this week worth'. Scouts is capped at four dogs per "
+      + "trip by NSW law, so say when a trip is full. Every figure comes from the invoicing code — "
+      + "report the numbers it returns and never add them up yourself.",
     input_schema: {
       type: 'object',
       properties: {
@@ -55,6 +58,23 @@ export const TOOLS = [
         to:   { type: 'string', description: 'YYYY-MM-DD. Omit for a single day.' }
       },
       required: ['from']
+    }
+  },
+  {
+    name: 'quote',
+    tier: TIERS.READ,
+    description:
+      "What a session would cost for a particular dog, before anything is booked. Prices depend on the "
+      + "dog's size, so this needs a dogId from find_dogs. Use for 'what would three nights cost for Lola', "
+      + "'how much is a full day for a big dog'. This only quotes — it books nothing.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        dogId:   { type: 'string' },
+        session: { type: 'string', enum: ['meet','trial','half','extended','full','overnight','scouts'] },
+        count:   { type: 'number', description: 'How many days or nights. Defaults to 1.' }
+      },
+      required: ['dogId','session']
     }
   },
   {
@@ -233,7 +253,9 @@ RESOLVING DOGS AND CLIENTS
 Always find_dogs before acting on a name. Several dogs share a name — there are three called Luna. If more than one matches, stop and ask which, and do not write anything. Getting this wrong means a dog arrives that nobody expected.
 
 MONEY
-Never calculate a price, a fee or a total yourself. The tools return figures from the invoicing code and those are the only numbers you may state. If you do not have a figure from a tool, say you need to check rather than estimating.
+Never calculate a price, a fee or a total yourself — not even adding up a column that is already in front of you. The tools return figures from the invoicing code and those are the only numbers you may state. The day tool gives you each dog's charge and the day's total; quote gives you the price of a session that has not been booked yet. If you want a number and no tool gave it to you, call a tool rather than working it out.
+
+Prices depend on the dog's size, so a question like "what do we charge for a full day" has no single answer — quote it for the dog in question, or say that it depends on size and give the range the tool returns.
 
 When something you did costs a client money — a late cancellation charge, mainly — say so plainly in the same breath. Andressa frequently intends to waive those, and she can only do that if she knows.
 

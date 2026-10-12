@@ -5399,21 +5399,58 @@ async function askRunTool(name, a) {
       return { b, d, label: d ? d.name : '(deleted dog)', sess: SESSION_LABELS[b.session] || b.session };
     };
     const rows = bks.map(line);
+    /* "How much are we taking tomorrow" is the question behind half of "what's
+       on tomorrow", and it was unanswerable while this returned session names
+       and no money. calcTotal is the same function that bills the day, so the
+       figure here and the figure on the invoice cannot disagree. */
+    rows.forEach(r => { r.amt = r.d ? calcTotal(r.b, r.d) : 0; });
+    const takings = rows.reduce((t, r) => t + r.amt, 0);
+    const freeCount = rows.filter(r => r.amt === 0).length;
     const scoutsAm = rows.filter(r => r.b.session === 'scouts' && (r.b.scoutsTrip || 'am') === 'am').length;
     const scoutsPm = rows.filter(r => r.b.session === 'scouts' && r.b.scoutsTrip === 'pm').length;
     const capNote = [scoutsAm >= 4 ? 'morning Scouts is full (4 of 4)' : scoutsAm ? `morning Scouts ${scoutsAm} of 4` : '',
                      scoutsPm >= 4 ? 'afternoon Scouts is full (4 of 4)' : scoutsPm ? `afternoon Scouts ${scoutsPm} of 4` : '']
                     .filter(Boolean).join(' · ');
     return {
-      say: `${rows.length} booking(s) ${from}${to !== from ? ' to ' + to : ''}:\n`
+      say: `${rows.length} booking(s) ${from}${to !== from ? ' to ' + to : ''}, worth ${aMoney(takings)} in total:\n`
          + rows.map(r => `${r.b.date} ${r.label} (bookingId ${r.b.id}) ${r.sess}`
                        + (r.b.session === 'scouts' ? ` ${r.b.scoutsTrip || 'am'}` : '')
-                       + (r.b.arrivalTime ? ' from ' + r.b.arrivalTime : '')).join('\n')
+                       + (r.b.arrivalTime ? ' from ' + r.b.arrivalTime : '')
+                       + ` — ${r.amt === 0 ? 'free' : aMoney(r.amt)}`).join('\n')
+         + `\nTotal for the period: ${aMoney(takings)}. This figure is from calcTotal; use it as given.`
+         + (freeCount ? ` ${freeCount} of these are free (meet or trial).` : '')
          + (capNote ? `\nScouts capacity: ${capNote}. The four-dog cap is law and cannot be exceeded.` : ''),
       card: aCard('', `<div class="ask-ttl">${escapeHtml(fmtDateShort(from))}${to !== from ? ' – ' + escapeHtml(fmtDateShort(to)) : ''} · ${rows.length} booked</div>`
         + rows.map(r => aRow(`${to !== from ? fmtDateShort(r.b.date) + ' · ' : ''}${r.label}`,
-                             escapeHtml(r.sess + (r.b.session === 'scouts' ? ' ' + (r.b.scoutsTrip || 'am') : '')))).join('')
+                             `<span style="color:var(--ink-3);font-weight:400">${escapeHtml(r.sess + (r.b.session === 'scouts' ? ' ' + (r.b.scoutsTrip || 'am') : ''))}</span>&nbsp; ${r.amt === 0 ? '<span style="color:var(--ink-3)">free</span>' : escapeHtml(aMoney(r.amt))}`)).join('')
+        + aRow('Total', `<b>${escapeHtml(aMoney(takings))}</b>`)
         + (capNote ? aNote(capNote) : ''))
+    };
+  }
+
+  case 'quote': {
+    const dog = dogById(a.dogId);
+    if (!dog) return { say: 'No dog with that id — call find_dogs first.', card: '' };
+    const n = Math.max(1, Math.round(Number(a.count) || 1));
+    /* Priced through calcTotal on a throwaway booking shape, so a quote and
+       the eventual invoice come from one function. Nothing is written. */
+    const one = calcTotal({ dogId: dog.id, date: todayISO(), session: a.session,
+                            addOns: {}, surcharges: {}, customPrice: null }, dog);
+    const label = SESSION_LABELS[a.session] || a.session;
+    const nights = a.session === 'overnight';
+    const dep = nights && n >= MIN_DEPOSIT_NIGHTS ? Math.round(one * n * DEPOSIT_RATE) : 0;
+    return {
+      say: `${dog.name} is ${dog.size || 'unknown size'}, so a ${label.toLowerCase()} is ${aMoney(one)}`
+         + (n > 1 ? `, and ${n} of them is ${aMoney(one * n)}` : '')
+         + `. Prices vary by size, so this is for ${dog.name} specifically.`
+         + (nights ? (dep ? ` A stay of ${n} nights takes a deposit of ${aMoney(dep)} up front.`
+                          : ` Under ${MIN_DEPOSIT_NIGHTS} nights, so no deposit.`) : '')
+         + ' Nothing has been booked.',
+      card: aCard('', `<div class="ask-ttl">${escapeHtml(dog.name)} · ${escapeHtml(label)}</div>`
+        + aRow(`${dog.size || 'size unknown'}${n > 1 ? ` · ${n}` : ''}`, `<b>${escapeHtml(aMoney(one * n))}</b>`)
+        + (n > 1 ? aRow('Each', escapeHtml(aMoney(one))) : '')
+        + (dep ? aRow('Deposit up front', escapeHtml(aMoney(dep))) : '')
+        + aNote('A quote only — nothing booked.'))
     };
   }
 

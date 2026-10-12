@@ -66,7 +66,7 @@ const deps={
   console
 };
 const names=['escapeHtml','SESSION_LABELS','calcTotal','buildInvoice','blockers','invoicesDue','depositDue',
-             'cancelBands','MIN_DEPOSIT_NIGHTS','buildDepositRequest','latePickupFee','invoiceSubject',
+             'cancelBands','MIN_DEPOSIT_NIGHTS','DEPOSIT_RATE','buildDepositRequest','latePickupFee','invoiceSubject',
              'CANCEL_NOTICE_HOURS','CANCEL_CHARGE_RATE'];
 names.forEach(n=>deps[n]=C[n]);
 const keys=Object.keys(deps);
@@ -229,6 +229,43 @@ console.log('\n--- every card escapes what it prints ---');
   ok('the card did render', /Which one\?/.test(r.card));
   ok('a hostile dog name cannot inject markup', !/<img src=x/.test(r.card));
   ok('it is escaped, not stripped', /&lt;img/.test(r.card));
+}
+
+console.log('\n--- the day carries money ---');
+{
+  /* "What's on tomorrow" is usually "how much are we taking tomorrow". It
+     returned session names and no figures, and the model correctly said it
+     could not answer — so it could not answer the question actually being
+     asked. */
+  reset();
+  const r=await run('day',{from:'2026-10-15'});
+  ok('each dog carries a price', /\$75/.test(r.card));
+  ok('the day has a total', /Total/.test(r.card));
+  ok('the model is given the total', /Total for the period/.test(r.say));
+  ok('and told not to add it up again', /use it as given/.test(r.say));
+  /* Four medium Scouts dogs at $75 */
+  ok('the total is right', /\$300/.test(r.card));
+  ok('the cap is still reported', /4 of 4|full/.test(r.say));
+}
+
+console.log('\n--- quoting without booking ---');
+{
+  reset();
+  const before=DB.bookings.length;
+  const q=await run('quote',{dogId:'d4',session:'full'});
+  ok('a medium full day quotes at $90', /\$90/.test(q.card));
+  ok('it says which dog it is for', /Marlow/.test(q.say));
+  ok('and that size is why', /size/i.test(q.say));
+  eq('nothing was booked', DB.bookings.length, before);
+  eq('and nothing saved', saves, 0);
+
+  const many=await run('quote',{dogId:'d4',session:'overnight',count:5});
+  ok('five nights at $115 is $575', /\$575/.test(many.card));
+  ok('and it quotes the deposit', /\$288|Deposit/.test(many.card));
+  const few=await run('quote',{dogId:'d4',session:'overnight',count:2});
+  ok('under three nights takes no deposit', /no deposit/i.test(few.say));
+  const free=await run('quote',{dogId:'d4',session:'meet'});
+  ok('a meet is free', /\$0/.test(free.card));
 }
 
 console.log('\n--- names render as typed ---');
