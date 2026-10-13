@@ -205,8 +205,8 @@
       <h1 class="sc-h1">A little adventure club <em>made with big love.</em></h1>
       <p class="sc-lede">Four dogs. Morning or afternoon. Real Sydney trails. Every Scout gets their own bandana — and brings home a new collectible patch from every adventure.</p>
       <div class="sc-cta-row">
-        <a href="#enrol" class="sc-btn">Join the club</a>
-        <a href="#enrol" class="sc-ghost">Join the club ↓</a>
+        <a href="/club/" class="sc-btn">Join the club</a>
+        <a href="/club/" class="sc-ghost">Join the club ↓</a>
       </div>
       <p class="sc-strap">Mon + Fri, morning or afternoon<span>·</span>Max 4 dogs<span>·</span>Pickup &amp; drop-off included</p>
     </div>
@@ -375,6 +375,13 @@
           </div>
           <p class="sc-zone" id="zoneNote">We collect from around the Inner West — pop your postcode in and we'll tell you how pickup works for you.</p>
           <input type="hidden" name="pickup_zone" id="pickupZone" value="">
+          <!-- Carried over from the bio link's ?utm_source=... so an enrolment
+               that started on Instagram can be told apart from one that
+               started with a neighbour. The /club form asks outright; this
+               one is already long enough, so it only takes the automatic
+               signal. -->
+          <input type="hidden" name="utm" id="scUtm" value="">
+          <input type="hidden" name="landed_on" value="scouts.html">
 
           <div class="sc-field-group">
             <label class="sc-field-label" for="pickup_notes">Getting in (buzzer, parking, gate — anything that helps at the door)</label>
@@ -548,6 +555,11 @@
 </script>
 
 <script>
+(function () {
+  var qs = new URLSearchParams(location.search), f = document.getElementById('scUtm');
+  if (f) f.value = ['utm_source','utm_medium','utm_campaign','utm_content']
+    .map(function (k) { return qs.get(k); }).filter(Boolean).join(' / ');
+})();
 (function () {
   /* Pickup bands. One place to edit if the run changes.
      CORE   ~5km of Annandale — door-to-door included.
