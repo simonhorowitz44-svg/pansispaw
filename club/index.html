@@ -61,6 +61,17 @@
   .fine { font-size:12px; line-height:1.6; color:var(--ink-3); margin:16px 0 0; text-align:center; }
   .foot { text-align:center; margin-top:26px; font-size:13px; color:var(--ink-2); }
   .foot a { color:var(--ink-2); }
+  .shot { margin:22px 0 0; }
+  .shot img { width:100%; height:auto; display:block; border-radius:14px; }
+  .offer { margin:20px 0 0; padding:14px 16px; border:1.5px solid var(--sage,#6a8f4a); border-radius:12px; text-align:center; background:#f3f7ec; }
+  .offer strong { display:block; font-family:"Fraunces",Georgia,serif; font-size:18px; color:var(--pine,#3d5232); }
+  .offer span { display:block; font-size:12.5px; color:var(--ink-2); margin-top:4px; }
+  .covers { margin:22px 0 0; }
+  .covers h2 { font-family:"Fraunces",Georgia,serif; font-weight:500; font-size:17px; margin:0 0 10px; }
+  .covers ul { margin:0; padding-left:20px; }
+  .covers li { font-size:14.5px; line-height:1.65; color:var(--ink-2); margin-bottom:6px; }
+  .handwrit { font-family:"Fraunces",Georgia,serif; font-style:italic; text-align:center; margin-top:22px; }
+  .opt { font-weight:400; color:var(--ink-3); text-transform:none; letter-spacing:0; }
   .ok { display:none; text-align:center; padding:34px 18px; }
   .ok .tick { font-size:40px; }
   .ok h2 { font-family:"Fraunces",Georgia,serif; font-weight:500; font-size:26px; margin:10px 0 8px; }
@@ -73,8 +84,37 @@
 
   <div id="form">
     <span class="badge">Four dogs · three hours · Inner West Sydney</span>
-    <h1>A little adventure club <em>made with big love.</em></h1>
-    <p class="lede">Four dogs, real Sydney bush trails, home tired and happy. About three hours out, with pickup from your door and drop-off included — $75 an adventure. Every Scout gets a bandana. Leave your details and we will find your dog a spot.</p>
+    <h1>Not a walk. <em>An adventure.</em></h1>
+    <p class="lede">Four dogs, three hours of real Sydney bush, trails and harbour beach, and
+      home tired and happy. We collect your dog from your door and bring them back —
+      $75 an adventure, everything in.</p>
+
+    <figure class="shot">
+      <img src="/images/scouts/harbour-beach.jpg" alt="Four Scouts on a Sydney harbour beach" loading="lazy">
+    </figure>
+
+    <div class="covers">
+      <h2>What $75 covers</h2>
+      <ul>
+        <li>Three hours out, door to door — we collect them and we bring them home</li>
+        <li>Real bush, trails and harbour beach, a different spot each time</li>
+        <li>A pack of four. That is the legal maximum one person can walk, and it is the point</li>
+        <li>Off-lead once Andressa has seen their recall out on the trail</li>
+        <li>A GPS tracker on every Scout</li>
+        <li>Their own bandana, and a numbered badge for it every adventure they finish</li>
+        <li>Photos home the same day</li>
+      </ul>
+    </div>
+
+
+    <div class="offer" data-expires="2026-11-18" hidden>
+      <strong>Your first two adventures, $75 for both</strong>
+      <span>For dogs new to Scouts Club. We book both dates in the same
+        conversation, so your dog has two to look forward to.
+        Ends 18 November 2026.</span>
+    </div>
+
+    <p class="lede handwrit">A little adventure club, made with big love.</p>
 
     <form class="card" action="https://formspree.io/f/xzdaajpb" method="POST">
       <input type="hidden" name="_subject" value="[Pansi's Paws] Scouts Club enquiry">
@@ -94,8 +134,8 @@
       <label for="p">Mobile</label>
       <input id="p" name="phone" type="tel" autocomplete="tel" required placeholder="0410 000 000">
 
-      <label for="e">Email</label>
-      <input id="e" name="email" type="email" autocomplete="email" required placeholder="you@email.com">
+      <label for="e">Email <span class="opt">(optional)</span></label>
+      <input id="e" name="email" type="email" autocomplete="email" placeholder="you@email.com">
 
       <label for="s">Your suburb</label>
       <input id="s" name="suburb" type="text" required placeholder="Leichhardt">
@@ -103,8 +143,8 @@
       <!-- The one field that makes any channel decision downstream possible.
            Never reword an option's value once data exists against it — change
            the label instead. -->
-      <label for="src">How did you hear about us?</label>
-      <select id="src" name="source" required>
+      <label for="src">How did you hear about us? <span class="opt">(optional)</span></label>
+      <select id="src" name="source">
         <option value="" disabled selected>Choose one…</option>
         <option value="Instagram">Instagram</option>
         <option value="Facebook">Facebook</option>
@@ -118,7 +158,7 @@
       </select>
 
       <button type="submit">Save my dog a spot</button>
-      <p class="fine">Four spots per adventure — that is the legal maximum one person can walk, and it is the point. Every dog starts with a free meet &amp; greet.</p>
+      <p class="fine">Four spots per adventure — that is the legal maximum one person can walk, and it is the point. No trial and no assessment to sit through: tell us about your dog and we will find them a spot.<span class="offerfine" data-expires="2026-11-18" hidden> New to Scouts Club: your first two adventures are $75 for both, booked together, until 18 November 2026.</span></p>
     </form>
   </div>
 
@@ -144,6 +184,16 @@
     if (f) f.value = ['utm_source','utm_medium','utm_campaign','utm_content']
       .map(function (k) { return qs.get(k); }).filter(Boolean).join(' / ');
   })();
+</script>
+<script>
+  /* Any dated claim fails closed. The block ships hidden and is only revealed
+     if today is still inside the window — so an expired offer disappears by
+     itself instead of sitting live and dead the way CLUB2FOR1 did for a
+     fortnight. Never replace this with a hardcoded date in the markup. */
+  document.querySelectorAll('[data-expires]').forEach(function (el) {
+    var end = new Date(el.getAttribute('data-expires') + 'T23:59:59+11:00');
+    if (Date.now() <= end.getTime()) el.hidden = false;
+  });
 </script>
 </body>
 </html>

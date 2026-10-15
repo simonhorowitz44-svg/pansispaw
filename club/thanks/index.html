@@ -49,12 +49,15 @@
   <h1>Your dog's on the list</h1>
 
   <div class="card">
-    <p>Thanks — I've got it. I'll text you today to find a time for a free
-       meet &amp; greet, and we'll take it from there. No cost, no commitment —
-       I just like to meet a dog before anybody commits to anything.</p>
+    <p>Thanks — I've got it. I'll text you to find two spots for your dog:
+       their first adventure and the one after, booked together, so they've
+       got two to look forward to.<span data-expires="2026-11-18" hidden>
+       Your first two are $75 for both.</span> I'll check the little things
+       while we're there — how they are with other dogs, and how their
+       recall is.</p>
     <!-- The gap between enquiring and hearing back is dead time. Someone who
-         follows the account during it arrives at the meet & greet already
-         sold, and it is the only free retargeting available here. -->
+         follows the account during it arrives at adventure one already sold,
+         and it is the only free retargeting available here. -->
     <p>While you're waiting, the photos from every adventure go up here:
        <a href="https://www.instagram.com/pansispawsdaycare/" target="_blank" rel="noopener">@pansispawsdaycare</a></p>
   </div>
@@ -63,5 +66,12 @@
     <a href="tel:0410151509">0410 151 509</a> · <a href="/">Home daycare</a>
   </p>
 </div>
+<script>
+  /* Dated claim, fails closed — see club/index.html. */
+  document.querySelectorAll('[data-expires]').forEach(function (el) {
+    var end = new Date(el.getAttribute('data-expires') + 'T23:59:59+11:00');
+    if (Date.now() <= end.getTime()) el.hidden = false;
+  });
+</script>
 </body>
 </html>
