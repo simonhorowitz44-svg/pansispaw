@@ -418,6 +418,15 @@
               <span class="sc-radio-pill"><input type="radio" name="preferred_day" id="pd_mon" value="Monday" required><label for="pd_mon">Monday</label></span>
               <span class="sc-radio-pill"><input type="radio" name="preferred_day" id="pd_fri" value="Friday"><label for="pd_fri">Friday</label></span>
               <span class="sc-radio-pill"><input type="radio" name="preferred_day" id="pd_either" value="Either" checked><label for="pd_either">Either</label></span>
+              <!-- Mon/Fri are the usual days, not the only ones (Simon, 15 Oct: Andressa can
+                   flex). Without this pill a midweek owner has to misrepresent themselves or
+                   abandon the form — the day restriction encoded as validation, which is worse
+                   than copy. -->
+              <span class="sc-radio-pill"><input type="radio" name="preferred_day" id="pd_other" value="Another day"><label for="pd_other">Another day</label></span>
+            </div>
+            <div class="sc-field" id="pd_other_wrap" hidden>
+              <label class="sc-field-label" for="pd_other_text">Which day suits?</label>
+              <input type="text" name="preferred_day_other" id="pd_other_text" placeholder="Wednesday">
             </div>
           </div>
 
@@ -612,6 +621,19 @@
   pc.addEventListener('input', say);
   say();
 })();
+</script>
+<script>
+  /* Reveal the free-text day box only when "Another day" is chosen. Mon/Fri is the
+     default pattern, not a limit — see BUSINESS.md, 15 Oct. */
+  (function () {
+    var wrap = document.getElementById('pd_other_wrap');
+    if (!wrap) return;
+    document.querySelectorAll('input[name="preferred_day"]').forEach(function (r) {
+      r.addEventListener('change', function () {
+        wrap.hidden = document.getElementById('pd_other').checked === false;
+      });
+    });
+  })();
 </script>
 </body>
 </html>
