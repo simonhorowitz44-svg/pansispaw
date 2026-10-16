@@ -181,8 +181,15 @@
      people pick Other or guess, and the bio link already carries the answer. */
   (function () {
     var qs = new URLSearchParams(location.search), f = document.getElementById('fUtm');
-    if (f) f.value = ['utm_source','utm_medium','utm_campaign','utm_content']
+    if (!f) return;
+    var v = ['utm_source','utm_medium','utm_campaign','utm_content']
       .map(function (k) { return qs.get(k); }).filter(Boolean).join(' / ');
+    /* Google auto-tagging sends gclid, never utm_*, so a paid click would
+       otherwise arrive with this field empty and read as direct traffic.
+       Don't store the gclid itself — it is per-click and of no use in an
+       enquiry email; record only that the click was paid. */
+    if (!v && qs.get('gclid')) v = 'google / cpc / scouts-search';
+    f.value = v;
   })();
 </script>
 <script>
