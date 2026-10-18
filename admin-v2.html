@@ -5930,9 +5930,31 @@ async function askRunTool(name, a) {
   case 'record_deposit': {
     const dog = dogById(a.dogId);
     if (!dog) return { say: 'No dog with that id.', card: '' };
-    const nights = DB.bookings.filter(b => b.dogId === dog.id && b.session === 'overnight' && !b.cancelled)
-                              .sort((x, y) => x.date.localeCompare(y.date));
-    if (!nights.length) return { say: `${dog.name} has no boarding nights booked, so there is nothing to hold.`, card: '' };
+    /* This used to take EVERY overnight the dog had ever had — no date filter,
+       no stay grouping — and freeze the lot onto one deposit. Leo's Christmas
+       booking came out as "21 nights, 20 Aug to 17 Jan, $2395", with the
+       cancellation dates counted back from a night in August that had already
+       happened, and a deposit $133 over. It was one click from a client.
+       Scope it to a single upcoming stay, the way the booking sheet always
+       has via stayForBookingId. */
+    const future = DB.bookings
+      .filter(b => b.dogId === dog.id && b.session === 'overnight' && !b.cancelled && b.date >= todayISO())
+      .sort((x, y) => x.date.localeCompare(y.date));
+    if (!future.length) return { say: `${dog.name} has no upcoming boarding nights, so there is nothing to hold.`, card: '' };
+    const stay = stayForBookingId(future[0].id);
+    const nights = stay ? stay.bookings.filter(b => !b.cancelled) : [future[0]];
+    /* More than one stay ahead means guessing which one she means, and the
+       guess is a client's money. Make her say. */
+    /* computeStays returns {dogId, bookings} with no id, so key a stay by the
+       date of its first night. */
+    const stayKeys = [...new Set(future.map(b => {
+      const st = stayForBookingId(b.id);
+      return st ? st.bookings[0].date : b.date;
+    }))];
+    if (stayKeys.length > 1) return {
+      say: `${dog.name} has ${stayKeys.length} separate stays coming up (${stayKeys.join(', ')}). Tell me which one — I will not guess with a deposit.`,
+      card: ''
+    };
     if ((DB.deposits || []).some(d => (d.bookingIds || []).some(id => nights.some(n => n.id === id))))
       return { say: `${dog.name}'s stay already has a deposit against it — use stay to see it.`, card: '' };
     const standard = depositDue(nights, dog);
