@@ -986,6 +986,13 @@ let pendingRemoteDb = null;
 /* The ids this tab held at the moment a remote copy was buffered. Without it
    a merge cannot tell "I deleted this" from "they added this". */
 let pendingHeldIds = null;
+/* The ids this tab last SAW in the document — from load, from a snapshot it
+   applied, or from its own last successful save. A deletion is only
+   recognisable against this: an id the remote copy has, that we held when we
+   last looked, and that is absent from what we are about to write, was
+   deleted here. Captured from the outgoing state instead, as it first was,
+   every deletion looks like someone else's addition and comes straight back. */
+let lastSeenIds = null;
 function snapshotHeldIds(db) {
   const ids = c => new Set((db[c] || []).map(x => x.id));
   return { owners: ids('owners'), dogs: ids('dogs'), bookings: ids('bookings'),
@@ -1010,6 +1017,7 @@ async function loadFromFirestore() {
     if (snap.exists()) {
       const r = snap.data();
       DB = normalizeDb({ owners: r.owners||[], dogs: r.dogs||[], bookings: r.bookings||[], packs: r.packs||[], deposits: r.deposits||[], payments: r.payments||[], meta: r.meta });
+      lastSeenIds = snapshotHeldIds(DB);
       hydrateBiz();
       knownRemoteMs = r._updatedAtMs || 0;
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); } catch (e) { console.warn('LS write failed', e); }
@@ -1018,6 +1026,7 @@ async function loadFromFirestore() {
   } catch (e) {
     console.warn('Firestore load failed, using cache', e);
     DB = loadFromStorage();
+    lastSeenIds = snapshotHeldIds(DB);
     hydrateBiz();
     toast('Offline · using local cache', 'warn');
     return true;
@@ -1079,6 +1088,7 @@ function reconcileWithPending(db) {
   });
   // The user's in-memory DB now reflects the reconciled state
   DB = merged;
+  lastSeenIds = snapshotHeldIds(DB);
   hydrateBiz();
   pendingRemoteDb = null;
   pendingHeldIds = null;
@@ -1148,7 +1158,7 @@ async function save(db) {
           /* reconcileWithPending keeps this tab's edits and carries over
              everything the other device added or changed that we didn't touch. */
           pendingRemoteDb = remoteDb;
-          pendingHeldIds = snapshotHeldIds(db);
+          pendingHeldIds = lastSeenIds || snapshotHeldIds(db);
           db = reconcileWithPending(db);
           knownRemoteMs = r._updatedAtMs || knownRemoteMs;
           const who = (r._updatedBy || '').split('@')[0] || 'another device';
@@ -1172,7 +1182,9 @@ async function save(db) {
     });
     await setDoc(STATE_DOC, payload);
     knownRemoteMs = now;
+    lastSeenIds = snapshotHeldIds(db);
     pendingRemoteDb = null;
+    pendingHeldIds = null;
     // Success — clear pending write counter + hide banner
     failedWriteCount = 0;
     hideSyncBanner();
@@ -1205,6 +1217,7 @@ function startRealtimeSync() {
       return;
     }
     DB = nextDb;
+    lastSeenIds = snapshotHeldIds(DB);
     hydrateBiz();
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); } catch {}
     render();
@@ -1217,6 +1230,7 @@ function startRealtimeSync() {
 function drainPendingRemote() {
   if (!pendingRemoteDb) return;
   DB = pendingRemoteDb;
+  lastSeenIds = snapshotHeldIds(DB);
   hydrateBiz();
   pendingRemoteDb = null;
   pendingHeldIds = null;
