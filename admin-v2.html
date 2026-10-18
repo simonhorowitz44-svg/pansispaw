@@ -3028,6 +3028,27 @@ async function markDepositPaid(depositId) {
   toast(`$${amt} deposit received`, 'ok');
 }
 
+/* A drifted deposit used to take three steps — remove it, ask again, then
+   look at it — when there is really only one decision: is the new figure
+   right. This does the correction in one click and keeps the same deposit
+   row, so the nights it covers and the date it was first asked for survive.
+   Only the amount moves, and only when a human has pressed the button:
+   depositDrift still refuses to self-correct, because an agreed round number
+   and a mistake look identical from in here. */
+async function retuneDeposit(depositId) {
+  const dep = (DB.deposits || []).find(d => d.id === depositId); if (!dep) return;
+  if (dep.paidAt) return toast('That deposit has already been received');
+  const dog = dogById(dep.dogId);
+  const stay = (dep.bookingIds || []).map(id => DB.bookings.find(b => b.id === id)).filter(Boolean);
+  const drift = depositDrift(dep, stay, dog);
+  if (!drift) return toast('Already matches the stay');
+  const was = dep.amount;
+  dep.amount = drift.now;
+  dep.retunedAt = new Date().toISOString();
+  await save(DB); closeSheet(); render();
+  toast(`Deposit updated from $${was} to $${drift.now}`, 'ok');
+}
+
 async function clearDeposit(depositId) {
   const dep = (DB.deposits || []).find(d => d.id === depositId); if (!dep) return;
   if (dep.paidAt && !confirm(`Remove a deposit of $${dep.paidAmount ?? dep.amount} that has already been received?\n\nIt will stop coming off the invoice.`)) return;
@@ -3767,7 +3788,8 @@ function openBookingSheet(bookingId, prefillDate) {
               Half this stay now comes to <b>$${drift.now}</b> — $${Math.abs(drift.diff)}
               ${drift.diff > 0 ? 'more' : 'less'} than was asked for. The nights were
               probably priced after the deposit was recorded. Leave it if $${dep.amount}
-              is what you agreed; otherwise remove it and ask again.
+              is what you agreed.
+              <button type="button" class="btn tiny mt-2" onclick="retuneDeposit('${dep.id}')">Update to $${drift.now}</button>
             </div>` : ''}
             <button type="button" class="btn tiny primary mt-2" onclick="previewDeposit('${dep.id}')">Preview request</button>
             <button type="button" class="btn tiny" onclick="markDepositPaid('${dep.id}')">Mark received</button>
@@ -6312,7 +6334,7 @@ Object.assign(window, {
   confirmAllCertain, notAClient, undoRecorded,
   openInvoicesSheet, renderInvoices, openOneInvoice, printInvoice,
   markInvoicePaid, reopenInvoice,
-  recordDeposit, markDepositPaid, clearDeposit, queueDeposit, previewDeposit,
+  recordDeposit, markDepositPaid, clearDeposit, queueDeposit, previewDeposit, retuneDeposit,
   copyInvoiceText, emailInvoice, openBizSettings, saveBizSettings,
   openInvoiceSettings, saveInvoiceSettings, queueInvoice, queueAllReady, markInvoiceSent,
   openClientMoney, addPayment, removePayment,
