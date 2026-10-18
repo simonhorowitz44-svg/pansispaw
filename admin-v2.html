@@ -786,7 +786,7 @@ import {
   calcTotal, latePickupFee, boardingHoursFee,
   buildInvoice, invoicesDue, sendableInvoices, blockers, orphanBookings,
   weekRunComplete, renderInvoiceHTML, invoiceText, invoiceSubject, payRef, invoiceNumber,
-  depositFor, depositDue, DEPOSIT_RATE, buildDepositRequest,
+  depositFor, depositDue, depositDrift, DEPOSIT_RATE, buildDepositRequest,
   cancelBands, MIN_DEPOSIT_NIGHTS
 } from './invoice-core.js';
 
@@ -3719,9 +3719,21 @@ function openBookingSheet(bookingId, prefillDate) {
           </div>`;
         }
         if (dep) {
+          /* A deposit keeps the figure it was quoted at, so re-pricing the
+             stay afterwards leaves it stale with nothing on screen saying so.
+             Leo's Christmas stay went out $165 short that way. Show the gap;
+             never fix it silently — an agreed round number looks exactly like
+             a mistake, and only Andressa knows which this is. */
+          const drift = depositDrift(dep, nights, dog);
           return `<div class="extras-box">
             <div class="extras-head">Deposit</div>
             <div class="extras-row"><span>Asked for ${fmtDateShort(dep.requestedAt.slice(0,10))} · not received yet</span><b>$${dep.amount}</b></div>
+            ${drift ? `<div class="extras-note" style="color:#b4541a">
+              Half this stay now comes to <b>$${drift.now}</b> — $${Math.abs(drift.diff)}
+              ${drift.diff > 0 ? 'more' : 'less'} than was asked for. The nights were
+              probably priced after the deposit was recorded. Leave it if $${dep.amount}
+              is what you agreed; otherwise remove it and ask again.
+            </div>` : ''}
             <button type="button" class="btn tiny primary mt-2" onclick="queueDeposit('${dep.id}')">Send request</button>
             <button type="button" class="btn tiny" onclick="markDepositPaid('${dep.id}')">Mark received</button>
             <button type="button" class="btn tiny ghost" onclick="clearDeposit('${dep.id}')">Remove</button>

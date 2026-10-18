@@ -358,6 +358,26 @@ export function depositDue(bookings, dog, rate = DEPOSIT_RATE) {
   return Math.round(full * rate);
 }
 
+/* A deposit stores the amount that was quoted, so a later price change cannot
+   silently rewrite what somebody was told. That is the right behaviour, but it
+   has a failure mode: price a stay AFTER recording its deposit and the deposit
+   is quietly stale, with nothing on screen saying so. It happened — a stay
+   booked at the standard nightly rate took a deposit of half that, then the
+   Christmas peak was applied to the nights and the deposit stayed behind,
+   $165 short, still sendable.
+
+   This reports the gap. It never rewrites the stored figure: what to do about
+   a drift is a judgement — a deliberate round number that was agreed on the
+   phone looks identical to a mistake — so the caller shows it and a human
+   decides. Paid deposits are left alone; the money has arrived and the
+   quoted figure is now history. */
+export function depositDrift(dep, bookings, dog) {
+  if (!dep || dep.paidAt) return null;
+  const now = depositDue(bookings, dog, dep.rate ?? DEPOSIT_RATE);
+  if (!now || now === dep.amount) return null;
+  return { quoted: dep.amount, now, diff: now - dep.amount };
+}
+
 /* A deposit request, shaped exactly like an invoice so it goes through the same
    renderers, the same email and the same bank details. It is not an invoice and
    must never be mistaken for one — it bills none of the nights, stamps nothing

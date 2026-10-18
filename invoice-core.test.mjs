@@ -1794,5 +1794,45 @@ console.log('\nA stay held with a deposit');
      C.blockers(mkdb('2026-10-14',1020), rcpt, BIZ, '2026-10-14', { allowSummary:true }).length, 0);
 }
 
+console.log('\nA deposit that went stale when the stay was re-priced');
+{
+  /* The real case: Leo, 18 nights. Booked at the standard small rate, deposit
+     taken at half of that, and only then the Christmas peak applied to the
+     first 11 nights. The deposit stayed at the old figure and nothing said so. */
+  const dog = { id:'d1', name:'Leo', size:'small' };
+  const night = (i, peak) => ({
+    id:'n'+i, dogId:'d1', date:'2026-12-' + String(10+i).padStart(2,'0'),
+    session:'overnight', surcharges: peak ? { xmasPeak:true } : {}
+  });
+  const plain = Array.from({length:18}, (_,i) => night(i, false));
+  const mixed = Array.from({length:18}, (_,i) => night(i, i < 11));
+
+  eq('half the stay at the standard rate', C.depositDue(plain, dog), 900);
+  eq('half once the peak lands on 11 nights', C.depositDue(mixed, dog), 1065);
+
+  const stale = { id:'dep1', amount:900, rate:0.5, paidAt:null };
+  const drift = C.depositDrift(stale, mixed, dog);
+  t('a stale deposit is reported', !!drift);
+  eq('and says what it is short by', drift.diff, 165);
+  eq('without rewriting what was quoted', stale.amount, 900);
+
+  t('a deposit that matches is silent',
+    C.depositDrift({ amount:1065, rate:0.5, paidAt:null }, mixed, dog) === null);
+
+  /* once the money is in, the quoted figure is history and must not nag */
+  t('a paid deposit never drifts',
+    C.depositDrift({ amount:900, rate:0.5, paidAt:'2026-10-18T00:00:00.000Z' }, mixed, dog) === null);
+
+  /* a deliberately agreed round number looks identical to a mistake, so the
+     function reports and the human decides — it must never self-correct */
+  const agreed = { id:'dep2', amount:1000, rate:0.5, paidAt:null };
+  eq('a negotiated figure is reported too, not silently kept',
+     C.depositDrift(agreed, mixed, dog).now, 1065);
+
+  /* under three nights there is no deposit, so there is nothing to drift */
+  t('too short for a deposit means no drift',
+    C.depositDrift({ amount:50, rate:0.5, paidAt:null }, plain.slice(0,2), dog) === null);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
