@@ -386,6 +386,25 @@ export function depositDue(bookings, dog, rate = DEPOSIT_RATE) {
   return Math.round(full * rate);
 }
 
+/* What a deposit is actually for, right now.
+
+   Deposits freeze their amount so that re-pricing a stay cannot rewrite what a
+   client was told. That reasoning is sound the moment the client has been told
+   — and empty before it. An unsent deposit is a number nobody has seen, so
+   freezing it buys nothing and costs plenty: price the nights after recording
+   it and the figure is quietly stale, which is exactly how a stay worth $2160
+   carried a deposit of $900.
+
+   So: track the stay while unsent, freeze on sending. sentAt is the hinge.
+   Before it, there is no promise to honour; after it, there is, and
+   depositDrift reports any gap rather than silently closing it. */
+export function depositAmount(dep, bookings, dog) {
+  if (!dep) return 0;
+  if (dep.paidAt || dep.sentAt) return dep.amount;
+  const live = depositDue(bookings, dog, dep.rate ?? DEPOSIT_RATE);
+  return live || dep.amount;
+}
+
 /* A deposit stores the amount that was quoted, so a later price change cannot
    silently rewrite what somebody was told. That is the right behaviour, but it
    has a failure mode: price a stay AFTER recording its deposit and the deposit
@@ -401,6 +420,9 @@ export function depositDue(bookings, dog, rate = DEPOSIT_RATE) {
    quoted figure is now history. */
 export function depositDrift(dep, bookings, dog) {
   if (!dep || dep.paidAt) return null;
+  /* An unsent deposit tracks the stay (see depositAmount), so it cannot drift
+     — there is no quote to be out of step with. */
+  if (!dep.sentAt) return null;
   const now = depositDue(bookings, dog, dep.rate ?? DEPOSIT_RATE);
   if (!now || now === dep.amount) return null;
   return { quoted: dep.amount, now, diff: now - dep.amount };
@@ -434,19 +456,19 @@ export function buildDepositRequest(db, depositId, opts = {}) {
       note: dep.paidAt
         ? `${Math.round((dep.rate || DEPOSIT_RATE) * 100)} per cent of the stay · the rest is invoiced after they go home`
         : `${Math.round((dep.rate || DEPOSIT_RATE) * 100)}% now, the rest invoiced after they go home`,
-      amt: dep.amount }
+      amt: depositAmount(dep, nights, dog) }
   ];
 
   /* Once the money is in, this same document is the receipt — the client
      already has the request, so sending them a different-looking page for
      the same transaction invites "is this a second charge?". */
-  let total = dep.amount;
+  let total = depositAmount(dep, nights, dog);
   if (dep.paidAt) {
     const paid = Number(dep.paidAmount != null ? dep.paidAmount : dep.amount);
     lines.push({ date: from, dog: '', what: 'Deposit received',
                  note: `received ${fmtDay(String(dep.paidAt).slice(0, 10))}`,
                  credit: true, amt: -paid });
-    total = Math.max(0, dep.amount - paid);
+    total = Math.max(0, depositAmount(dep, nights, dog) - paid);
   }
 
   return {

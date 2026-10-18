@@ -786,7 +786,7 @@ import {
   calcTotal, latePickupFee, boardingHoursFee,
   buildInvoice, invoicesDue, sendableInvoices, blockers, orphanBookings,
   weekRunComplete, renderInvoiceHTML, invoiceText, invoiceSubject, payRef, invoiceNumber,
-  depositFor, depositDue, depositDrift, DEPOSIT_RATE, buildDepositRequest, mergeCollection,
+  depositFor, depositDue, depositDrift, depositAmount, DEPOSIT_RATE, buildDepositRequest, mergeCollection,
   cancelBands, MIN_DEPOSIT_NIGHTS
 } from './invoice-core.js';
 
@@ -2815,14 +2815,15 @@ function renderInvoices() {
           : 'stay not found';
         const drift = depositDrift(dep, nights, dog);
         const bits = [dog ? dog.name : '—', `${nights.length} night${nights.length === 1 ? '' : 's'}`, span,
-                      dep.paidAt ? 'received ' + fmtDateShort(String(dep.paidAt).slice(0, 10)) : 'not received yet']
+                      dep.paidAt ? 'received ' + fmtDateShort(String(dep.paidAt).slice(0, 10))
+                                 : (dep.sentAt ? 'sent ' + fmtDateShort(String(dep.sentAt).slice(0,10)) + ', not paid' : 'not sent yet')]
                      .filter(Boolean).join(' · ');
         return `<div class="mn-row ${dep.paidAt ? '' : 'owing'}" onclick="previewDeposit('${escapeHtml(dep.id)}'${dep.paidAt ? ', { receipt: true }' : ''})">
           <div><div class="mn-name">${escapeHtml(owner ? owner.name : 'Unknown client')}</div>
             <div class="mn-sub">${escapeHtml(bits)}</div>
             ${drift ? `<div class="mn-sub" style="color:#b4541a">Asked \$${dep.amount}, half the stay is now \$${drift.now}</div>` : ''}
           </div>
-          <div class="mn-bal">\$${(dep.paidAmount ?? dep.amount).toFixed ? (dep.paidAmount ?? dep.amount).toFixed(2) : (dep.paidAmount ?? dep.amount)}</div>
+          <div class="mn-bal">\$${Number(dep.paidAmount ?? depositAmount(dep, nights, dog)).toFixed(2)}</div>
         </div>`;
       };
       const unpaid = deps.filter(d => !d.paidAt), paid = deps.filter(d => d.paidAt);
@@ -3010,6 +3011,12 @@ async function queueDeposit(depositId, opts = {}) {
     + `${dog.name} · ${fmtDateShort(req.periodFrom)} – ${fmtDateShort(req.periodTo)}\n`
     + (opts.receipt ? `Received $${(dep.paidAmount ?? dep.amount).toFixed(2)} — nothing to pay.`
                     : `Deposit $${req.total.toFixed(2)} of the full stay.`))) return;
+  /* Sending is the moment the figure becomes a promise. Freeze it here —
+     until now it tracked the stay, so re-pricing could not leave it stale. */
+  const stayNights = (dep.bookingIds || []).map(id => DB.bookings.find(b => b.id === id)).filter(Boolean);
+  dep.amount = depositAmount(dep, stayNights, dog);
+  dep.sentAt = new Date().toISOString();
+
   DB.meta.sendQueue = DB.meta.sendQueue || [];
   DB.meta.sendQueue.push({ ownerId: owner.id, depositId, asAt: today,
                            number: req.number, bookingIds: [], total: req.total,
@@ -3828,7 +3835,7 @@ function openBookingSheet(bookingId, prefillDate) {
           const drift = depositDrift(dep, nights, dog);
           return `<div class="extras-box">
             <div class="extras-head">Deposit</div>
-            <div class="extras-row"><span>Asked for ${fmtDateShort(dep.requestedAt.slice(0,10))} · not received yet</span><b>$${dep.amount}</b></div>
+            <div class="extras-row"><span>${dep.sentAt ? 'Sent ' + fmtDateShort(dep.sentAt.slice(0,10)) : 'Not sent yet · follows the stay'} · not received yet</span><b>$${depositAmount(dep, nights, dog)}</b></div>
             ${drift ? `<div class="extras-note" style="color:#b4541a">
               Half this stay now comes to <b>$${drift.now}</b> — $${Math.abs(drift.diff)}
               ${drift.diff > 0 ? 'more' : 'less'} than was asked for. The nights were

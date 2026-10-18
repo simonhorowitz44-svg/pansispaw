@@ -1736,6 +1736,8 @@ console.log('\nA stay held with a deposit');
     dogs:[dog], packs:[], payments:[], bookings: nights,
     deposits:[{ id:'dep1', dogId:'d1', bookingIds: nights.map(n=>n.id),
                 amount:1020, rate:0.5, requestedAt:'2026-10-12T00:00:00.000Z',
+                /* sent, so the quoted figure is now a promise and is frozen */
+                sentAt:'2026-10-12T00:00:00.000Z',
                 paidAt, paidAmount }]
   });
 
@@ -1810,28 +1812,70 @@ console.log('\nA deposit that went stale when the stay was re-priced');
   eq('half the stay at the standard rate', C.depositDue(plain, dog), 900);
   eq('half once the peak lands on 11 nights', C.depositDue(mixed, dog), 1065);
 
-  const stale = { id:'dep1', amount:900, rate:0.5, paidAt:null };
+  const sent = '2026-10-18T00:00:00.000Z';
+  const stale = { id:'dep1', amount:900, rate:0.5, sentAt:sent, paidAt:null };
   const drift = C.depositDrift(stale, mixed, dog);
   t('a stale deposit is reported', !!drift);
   eq('and says what it is short by', drift.diff, 165);
   eq('without rewriting what was quoted', stale.amount, 900);
 
   t('a deposit that matches is silent',
-    C.depositDrift({ amount:1065, rate:0.5, paidAt:null }, mixed, dog) === null);
+    C.depositDrift({ amount:1065, rate:0.5, sentAt:sent, paidAt:null }, mixed, dog) === null);
 
   /* once the money is in, the quoted figure is history and must not nag */
   t('a paid deposit never drifts',
-    C.depositDrift({ amount:900, rate:0.5, paidAt:'2026-10-18T00:00:00.000Z' }, mixed, dog) === null);
+    C.depositDrift({ amount:900, rate:0.5, sentAt:sent, paidAt:'2026-10-18T00:00:00.000Z' }, mixed, dog) === null);
 
   /* a deliberately agreed round number looks identical to a mistake, so the
      function reports and the human decides — it must never self-correct */
-  const agreed = { id:'dep2', amount:1000, rate:0.5, paidAt:null };
+  const agreed = { id:'dep2', amount:1000, rate:0.5, sentAt:sent, paidAt:null };
   eq('a negotiated figure is reported too, not silently kept',
      C.depositDrift(agreed, mixed, dog).now, 1065);
 
   /* under three nights there is no deposit, so there is nothing to drift */
   t('too short for a deposit means no drift',
-    C.depositDrift({ amount:50, rate:0.5, paidAt:null }, plain.slice(0,2), dog) === null);
+    C.depositDrift({ amount:50, rate:0.5, sentAt:sent, paidAt:null }, plain.slice(0,2), dog) === null);
+}
+
+console.log('\nAn unsent deposit follows the stay; sending freezes it');
+{
+  const dog = { id:'d1', name:'Leo', size:'small' };
+  const night = (i, peak) => ({ id:'n'+i, dogId:'d1',
+    date:'2026-12-' + String(10+i).padStart(2,'0'), session:'overnight',
+    surcharges: peak ? { xmasPeak:true } : {} });
+  const plain = Array.from({length:18}, (_,i) => night(i, false));   // $1800 → 900
+  const mixed = Array.from({length:18}, (_,i) => night(i, i < 11));  // $2130 → 1065
+
+  /* recorded against the cheap version, then the nights were re-priced */
+  const unsent = { id:'d1', amount:900, rate:0.5, sentAt:null, paidAt:null };
+  eq('an unsent deposit follows the re-priced stay',
+     C.depositAmount(unsent, mixed, dog), 1065);
+  t('so it cannot drift before anyone has seen it',
+     C.depositDrift(unsent, mixed, dog) === null);
+  eq('and the stored figure is untouched', unsent.amount, 900);
+
+  /* once sent the client has been told a number, so it holds */
+  const sent = { id:'d2', amount:900, rate:0.5, sentAt:'2026-10-18T00:00:00.000Z', paidAt:null };
+  eq('a sent deposit keeps what was quoted', C.depositAmount(sent, mixed, dog), 900);
+  eq('and now reports the gap instead', C.depositDrift(sent, mixed, dog).diff, 165);
+
+  /* paid is final whatever happens to the stay afterwards */
+  const paid = { id:'d3', amount:900, rate:0.5, sentAt:null, paidAt:'2026-10-18T00:00:00.000Z' };
+  eq('a paid deposit is fixed', C.depositAmount(paid, mixed, dog), 900);
+
+  /* an unsent deposit on a stay too short to take one keeps its figure
+     rather than collapsing to zero */
+  eq('no live figure means keep the stored one',
+     C.depositAmount({ amount:120, rate:0.5 }, plain.slice(0,2), dog), 120);
+
+  /* the document asks for the live figure while unsent */
+  const db = { owners:[{id:'o1', name:'S', email:'e@x.com'}],
+    dogs:[{...dog, ownerId:'o1'}], bookings:mixed, packs:[], payments:[],
+    deposits:[{ id:'dep', dogId:'d1', bookingIds:mixed.map(n=>n.id), amount:900,
+                rate:0.5, requestedAt:'2026-10-18T00:00:00.000Z', sentAt:null, paidAt:null }],
+    meta:{ invoicing:{ goLive:'2026-01-01' } } };
+  eq('the request shows the live figure, not the stale one',
+     C.buildDepositRequest(db, 'dep', { asAt:'2026-10-18' }).total, 1065);
 }
 
 console.log('\nMerging a remote copy without resurrecting what was deleted');
