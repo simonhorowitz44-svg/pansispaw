@@ -298,6 +298,34 @@ export function packCoversDate(pack, isoDate) {
   return !pack.expiryDate || isoDate <= pack.expiryDate;
 }
 
+/* ---------- merging two copies of the database ---------- */
+
+/* Two tabs, or a phone and a laptop, both hold the whole document. When a
+   remote copy lands while a dialog is open the panel buffers it and merges on
+   save: start from the remote list, overlay mine, mine wins on conflicts.
+
+   That merge cannot express a deletion. A record you deleted is simply absent
+   from your side, so the remote copy survives the overlay and the thing you
+   just deleted comes straight back — silently, every time. It cost an
+   afternoon on a deposit that would not stay removed, and it applies equally
+   to deleting a booking, a dog or an owner.
+
+   The fix needs one extra fact: which ids this tab held when the remote copy
+   was buffered. An id in `base` but missing from `mine` is then unambiguous —
+   if we HELD it, we deleted it, so it stays gone; if we never held it, it is
+   new from the other device, so it stays. Without `heldIds` the two cases are
+   indistinguishable, which is exactly why the original merge got it wrong. */
+export function mergeCollection(base = [], mine = [], heldIds = null) {
+  const mineMap = new Map(mine.map(x => [x.id, x]));
+  const out = [];
+  for (const item of base) {
+    if (mineMap.has(item.id)) continue;                 // mine wins, added below
+    if (heldIds && heldIds.has(item.id)) continue;      // we held it and dropped it: deleted
+    out.push(item);                                     // genuinely new from the other side
+  }
+  return [...out, ...mine];
+}
+
 /* ---------- deposits ---------- */
 
 /* A stay is usually held with half the money up front, and the deposit belongs

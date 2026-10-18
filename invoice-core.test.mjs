@@ -1834,5 +1834,43 @@ console.log('\nA deposit that went stale when the stay was re-priced');
     C.depositDrift({ amount:50, rate:0.5, paidAt:null }, plain.slice(0,2), dog) === null);
 }
 
+console.log('\nMerging a remote copy without resurrecting what was deleted');
+{
+  const held = new Set(['a','b','c']);
+  const base = [{id:'a',v:1},{id:'b',v:1},{id:'c',v:1}];
+
+  /* the bug: delete c locally, remote still has it */
+  const afterDelete = [{id:'a',v:1},{id:'b',v:1}];
+  const merged = C.mergeCollection(base, afterDelete, held);
+  eq('a deleted record stays deleted', merged.length, 2);
+  t('and it is the right one gone', !merged.some(x => x.id === 'c'));
+
+  /* without heldIds the old behaviour returns — proves the fact is load-bearing */
+  eq('without heldIds the deletion is undone',
+     C.mergeCollection(base, afterDelete, null).length, 3);
+
+  /* a record the other device added must survive */
+  const remoteAdded = [...base, {id:'d',v:1}];
+  const mergedAdd = C.mergeCollection(remoteAdded, base, held);
+  t('a record added remotely is kept', mergedAdd.some(x => x.id === 'd'));
+  eq('and nothing else is lost', mergedAdd.length, 4);
+
+  /* my edit beats theirs on the same record */
+  const mineEdited = [{id:'a',v:99},{id:'b',v:1},{id:'c',v:1}];
+  eq('my version of a record wins',
+     C.mergeCollection(base, mineEdited, held).find(x => x.id==='a').v, 99);
+
+  /* delete one and receive one in the same round */
+  const both = C.mergeCollection([...base, {id:'e',v:1}], afterDelete, held);
+  t('deleted stays gone', !both.some(x => x.id === 'c'));
+  t('and the new arrival lands', both.some(x => x.id === 'e'));
+
+  /* the real shape: Leo's deposit removed while a snapshot was buffered */
+  const deposits = [{id:'b5f1af7d', amount:1198}];
+  const afterRemove = [];
+  eq("Leo's deposit does not come back",
+     C.mergeCollection(deposits, afterRemove, new Set(['b5f1af7d'])).length, 0);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

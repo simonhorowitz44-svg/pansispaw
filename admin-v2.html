@@ -786,7 +786,7 @@ import {
   calcTotal, latePickupFee, boardingHoursFee,
   buildInvoice, invoicesDue, sendableInvoices, blockers, orphanBookings,
   weekRunComplete, renderInvoiceHTML, invoiceText, invoiceSubject, payRef, invoiceNumber,
-  depositFor, depositDue, depositDrift, DEPOSIT_RATE, buildDepositRequest,
+  depositFor, depositDue, depositDrift, DEPOSIT_RATE, buildDepositRequest, mergeCollection,
   cancelBands, MIN_DEPOSIT_NIGHTS
 } from './invoice-core.js';
 
@@ -983,6 +983,14 @@ let lastLocalSaveTs = parseInt(localStorage.getItem(LAST_SAVE_KEY) || '0', 10);
 const CLIENT_ID = (crypto?.randomUUID?.() || Math.random().toString(36).slice(2)) + '-' + Date.now();
 // Buffer for remote snapshots that arrive while a modal is open — applied on close
 let pendingRemoteDb = null;
+/* The ids this tab held at the moment a remote copy was buffered. Without it
+   a merge cannot tell "I deleted this" from "they added this". */
+let pendingHeldIds = null;
+function snapshotHeldIds(db) {
+  const ids = c => new Set((db[c] || []).map(x => x.id));
+  return { owners: ids('owners'), dogs: ids('dogs'), bookings: ids('bookings'),
+           packs: ids('packs'), deposits: ids('deposits'), payments: ids('payments') };
+}
 /* The whole database is one Firestore document, and a save rewrites all of it
    from this tab's copy. So a save from a stale tab silently destroys whatever
    changed in between — it has cost a pack, a client's email, two payments and
@@ -1055,20 +1063,18 @@ function mergeMeta(remote, mine) {
 
 function reconcileWithPending(db) {
   if (!pendingRemoteDb) return db;
-  const merge = (base = [], mine = []) => {
-    const map = new Map(base.map(x => [x.id, x]));
-    mine.forEach(x => map.set(x.id, x));
-    return [...map.values()];
-  };
+  /* mergeCollection, not a plain id overlay: an overlay silently resurrects
+     anything deleted locally while the remote copy was buffered. */
+  const merge = (c) => mergeCollection(pendingRemoteDb[c], db[c], pendingHeldIds ? pendingHeldIds[c] : null);
   const merged = normalizeDb({
-    owners:   merge(pendingRemoteDb.owners,   db.owners),
-    dogs:     merge(pendingRemoteDb.dogs,     db.dogs),
-    bookings: merge(pendingRemoteDb.bookings, db.bookings),
-    packs:    merge(pendingRemoteDb.packs,    db.packs),
-    deposits: merge(pendingRemoteDb.deposits, db.deposits),
+    owners:   merge('owners'),
+    dogs:     merge('dogs'),
+    bookings: merge('bookings'),
+    packs:    merge('packs'),
+    deposits: merge('deposits'),
     /* payments has no merge above because older records predate the field;
        treat it like the rest. */
-    payments: merge(pendingRemoteDb.payments, db.payments),
+    payments: merge('payments'),
     meta: mergeMeta(pendingRemoteDb.meta, db.meta)
   });
   // The user's in-memory DB now reflects the reconciled state
@@ -1141,6 +1147,7 @@ async function save(db) {
           /* reconcileWithPending keeps this tab's edits and carries over
              everything the other device added or changed that we didn't touch. */
           pendingRemoteDb = remoteDb;
+          pendingHeldIds = snapshotHeldIds(db);
           db = reconcileWithPending(db);
           knownRemoteMs = r._updatedAtMs || knownRemoteMs;
           const who = (r._updatedBy || '').split('@')[0] || 'another device';
@@ -1192,6 +1199,7 @@ function startRealtimeSync() {
     // If a modal is open, buffer the remote update so we don't wipe the in-progress form
     if (modalIsOpen()) {
       pendingRemoteDb = nextDb;
+      pendingHeldIds = snapshotHeldIds(DB);
       toast(`Remote changes pending — will apply when you close`, 'info');
       return;
     }
@@ -1210,6 +1218,7 @@ function drainPendingRemote() {
   DB = pendingRemoteDb;
   hydrateBiz();
   pendingRemoteDb = null;
+  pendingHeldIds = null;
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); } catch {}
   render();
   toast('Applied remote changes', 'info');
