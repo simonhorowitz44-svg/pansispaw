@@ -2914,6 +2914,41 @@ async function payThenReceipt(ownerId, suggested) {
 /* Send the client the deposit request — or, once it's paid, the receipt for
    it. buildDepositRequest has existed since deposits were built and was never
    imported, so the deposit could be recorded but never asked for. */
+/* Before this existed the only thing between Andressa and a client's inbox
+   was a one-line browser confirm. An invoice has had a full preview since it
+   was built; a deposit — often the largest single document a client gets, and
+   the first one they ever see — did not. Same renderer, same blockers, so what
+   is on screen here is what lands in their email.
+
+   It also surfaces a drift. depositDrift reports a stored amount that no
+   longer matches the stay, and this is the last place to notice before it is
+   sent. */
+function previewDeposit(depositId, opts = {}) {
+  const dep = (DB.deposits || []).find(d => d.id === depositId); if (!dep) return;
+  const dog = dogById(dep.dogId); const owner = dog && ownerById(dog.ownerId);
+  if (!owner) return toast('No client on this stay');
+  const today = todayISO();
+  const req = buildDepositRequest(DB, depositId, { asAt: today });
+  if (!req) return toast("Couldn't build the deposit request");
+  const receipt = !!opts.receipt;
+  const why = blockers(DB, req, BIZ, today, { allowSummary: receipt });
+
+  const stay = (dep.bookingIds || []).map(id => DB.bookings.find(b => b.id === id)).filter(Boolean);
+  const drift = depositDrift(dep, stay, dog);
+
+  openSheet(`
+    <h2 class="sheet-title">${escapeHtml(owner.name)}</h2>
+    <p class="sheet-sub">${escapeHtml(dog.name)} · deposit ${receipt ? 'receipt' : 'request'} · ${fmtDateShort(req.periodFrom)} – ${fmtDateShort(req.periodTo)}</p>
+    ${drift ? `<div class="today-warn">Asked for $${dep.amount}, but half this stay now comes to $${drift.now}
+       — $${Math.abs(drift.diff)} ${drift.diff > 0 ? 'more' : 'less'}. Fix it before sending unless $${dep.amount} is what you agreed.</div>` : ''}
+    ${why.length ? `<div class="today-warn">${escapeHtml(why.join(' · '))}</div>` : ''}
+    ${renderInvoiceHTML(req, BIZ)}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
+      ${!why.length ? `<button class="btn primary" onclick="queueDeposit('${escapeHtml(depositId)}'${receipt ? ', { receipt: true }' : ''})">Send it</button>` : ''}
+      <button class="btn ghost" onclick="closeSheet()">Not yet</button>
+    </div>`);
+}
+
 async function queueDeposit(depositId, opts = {}) {
   const dep = (DB.deposits || []).find(d => d.id === depositId); if (!dep) return;
   const dog = dogById(dep.dogId); const owner = dog && ownerById(dog.ownerId);
@@ -3714,7 +3749,7 @@ function openBookingSheet(bookingId, prefillDate) {
             <div class="extras-head">Deposit</div>
             <div class="extras-row"><span>Received ${fmtDateShort(dep.paidAt.slice(0,10))}, covering ${dep.bookingIds.length} night${dep.bookingIds.length===1?'':'s'}</span><b>$${dep.paidAmount ?? dep.amount}</b></div>
             <div class="extras-note">Credited on the invoice when the stay is billed.</div>
-            <button type="button" class="btn tiny primary mt-2" onclick="queueDeposit('${dep.id}', { receipt: true })">Send receipt</button>
+            <button type="button" class="btn tiny primary mt-2" onclick="previewDeposit('${dep.id}', { receipt: true })">Preview receipt</button>
             <button type="button" class="btn tiny ghost" onclick="clearDeposit('${dep.id}')">Remove</button>
           </div>`;
         }
@@ -3734,7 +3769,7 @@ function openBookingSheet(bookingId, prefillDate) {
               probably priced after the deposit was recorded. Leave it if $${dep.amount}
               is what you agreed; otherwise remove it and ask again.
             </div>` : ''}
-            <button type="button" class="btn tiny primary mt-2" onclick="queueDeposit('${dep.id}')">Send request</button>
+            <button type="button" class="btn tiny primary mt-2" onclick="previewDeposit('${dep.id}')">Preview request</button>
             <button type="button" class="btn tiny" onclick="markDepositPaid('${dep.id}')">Mark received</button>
             <button type="button" class="btn tiny ghost" onclick="clearDeposit('${dep.id}')">Remove</button>
           </div>`;
@@ -6277,7 +6312,7 @@ Object.assign(window, {
   confirmAllCertain, notAClient, undoRecorded,
   openInvoicesSheet, renderInvoices, openOneInvoice, printInvoice,
   markInvoicePaid, reopenInvoice,
-  recordDeposit, markDepositPaid, clearDeposit, queueDeposit,
+  recordDeposit, markDepositPaid, clearDeposit, queueDeposit, previewDeposit,
   copyInvoiceText, emailInvoice, openBizSettings, saveBizSettings,
   openInvoiceSettings, saveInvoiceSettings, queueInvoice, queueAllReady, markInvoiceSent,
   openClientMoney, addPayment, removePayment,
