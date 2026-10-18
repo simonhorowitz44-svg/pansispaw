@@ -2795,6 +2795,41 @@ function renderInvoices() {
     ${b.receipts.length ? `<h3 class="grp-title">Paid already · receipt ready</h3>
       ${b.receipts.map(i => card(i, ['paid in full — send them the receipt'])).join('')}` : ''}
 
+    ${(() => {
+      /* A deposit request is an invoice — same number format, same due date,
+         same bank block, same renderer; buildDepositRequest says so. But this
+         screen did not know deposits existed, so the only way to reach one was
+         to remember which of nineteen nights it hung off. "Who have we asked
+         for money, and who hasn't paid" was unanswerable from the one page
+         named for exactly that question. */
+      const deps = (DB.deposits || []).slice().sort((x, y) =>
+        String(y.requestedAt || '').localeCompare(String(x.requestedAt || '')));
+      if (!deps.length) return '';
+      const row = (dep) => {
+        const dog = dogById(dep.dogId);
+        const owner = dog && ownerById(dog.ownerId);
+        const nights = (dep.bookingIds || []).map(id => DB.bookings.find(bk => bk.id === id)).filter(Boolean)
+                        .sort((a, b2) => a.date.localeCompare(b2.date));
+        const span = nights.length
+          ? `${fmtDateShort(nights[0].date)} – ${fmtDateShort(nights[nights.length - 1].date)}`
+          : 'stay not found';
+        const drift = depositDrift(dep, nights, dog);
+        const bits = [dog ? dog.name : '—', `${nights.length} night${nights.length === 1 ? '' : 's'}`, span,
+                      dep.paidAt ? 'received ' + fmtDateShort(String(dep.paidAt).slice(0, 10)) : 'not received yet']
+                     .filter(Boolean).join(' · ');
+        return `<div class="mn-row ${dep.paidAt ? '' : 'owing'}" onclick="previewDeposit('${escapeHtml(dep.id)}'${dep.paidAt ? ', { receipt: true }' : ''})">
+          <div><div class="mn-name">${escapeHtml(owner ? owner.name : 'Unknown client')}</div>
+            <div class="mn-sub">${escapeHtml(bits)}</div>
+            ${drift ? `<div class="mn-sub" style="color:#b4541a">Asked \$${dep.amount}, half the stay is now \$${drift.now}</div>` : ''}
+          </div>
+          <div class="mn-bal">\$${(dep.paidAmount ?? dep.amount).toFixed ? (dep.paidAmount ?? dep.amount).toFixed(2) : (dep.paidAmount ?? dep.amount)}</div>
+        </div>`;
+      };
+      const unpaid = deps.filter(d => !d.paidAt), paid = deps.filter(d => d.paidAt);
+      return (unpaid.length ? `<h3 class="grp-title">Deposits · asked for</h3>${unpaid.map(row).join('')}` : '')
+           + (paid.length ? `<h3 class="grp-title">Deposits · received</h3>${paid.map(row).join('')}` : '');
+    })()}
+
     ${b.blocked.length ? `<h3 class="grp-title">Needs a look</h3>
       ${b.blocked.map(x => card(x.inv, x.why)).join('')}` : ''}
 
