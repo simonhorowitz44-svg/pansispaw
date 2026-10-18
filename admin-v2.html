@@ -1081,6 +1081,7 @@ function reconcileWithPending(db) {
   DB = merged;
   hydrateBiz();
   pendingRemoteDb = null;
+  pendingHeldIds = null;
   return merged;
 }
 
