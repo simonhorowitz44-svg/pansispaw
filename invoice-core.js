@@ -471,14 +471,33 @@ export function buildDepositRequest(db, depositId, opts = {}) {
     total = Math.max(0, depositAmount(dep, nights, dog) - paid);
   }
 
+  /* Anchor the identity of this document to the DEPOSIT, not to the day it is
+     rendered. Both the number and the payment reference used to be built from
+     `asAt`, so rebuilding the same deposit on another day produced a different
+     number and a different reference.
+
+     That is not cosmetic. The sender's duplicate check is
+     `invoicesSent.has(number)` and Resend's idempotency key is the number too,
+     so a number that moves with the calendar defeats both: the same deposit
+     went to a client repeatedly, once per run, each copy looking new. And the
+     reference is what she types into her bank — changing it each time breaks
+     the matching that reconciliation depends on.
+
+     requestedAt never moves, so this is stable for deposits that already
+     exist and needs no migration. A deposit's due date still counts from the
+     day it is actually sent, which is the one thing that should follow the
+     calendar. */
+  const anchor = String(dep.requestedAt || asAt).slice(0, 10);
+
   return {
     kind: 'deposit', owner, asAt, lines, bookingIds: [], packNotes: [], warnings: [],
     /* A date is unarguable in a way a formula is not, and it is the thing the
        client has in their inbox when they come to cancel. */
     cancelBands: cancelBands(nights),
     periodFrom: from, periodTo: to, total, nothingDue: total <= 0,
-    ref: payRef(db, owner, asAt),
-    number: invoiceNumber(owner, asAt, opts.seq || 1).replace(/^PP-/, 'PPD-'),
+    depositId: dep.id,
+    ref: payRef(db, owner, anchor),
+    number: invoiceNumber(owner, anchor, opts.seq || 1).replace(/^PP-/, 'PPD-'),
     dueISO: addDaysISO(asAt, INVOICE_TERMS_DAYS)
   };
 }

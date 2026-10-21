@@ -37,6 +37,21 @@ initializeApp();
 const fs = getFirestore();
 const STATE = 'pansis-admin/state';
 
+/* Every write from here must be identifiable as the function's.
+
+   The panel skips a snapshot whose `_updatedByClientId` matches its own, and
+   skips the pre-save merge on the same test. A partial update() leaves that
+   field at whatever the last PANEL write set, so the function's writes used to
+   arrive wearing a tab's identity: that tab ignored them, kept its stale
+   `meta`, and wrote it back — restoring a drained send queue and erasing the
+   ledger that records what already went out. A client was invoiced again as a
+   result. Stamping it is what makes those writes visible as somebody else's. */
+const CLOUD_CLIENT_ID = 'cloud-function';
+const stamped = (patch) => ({ ...patch,
+  _updatedByClientId: CLOUD_CLIENT_ID,
+  _updatedAtMs: Date.now(),
+  _updatedBy: 'Pansi\'s Paws automation' });
+
 /* Sydney's date, not the server's. A run at 09:00 UTC is already tomorrow here. */
 const sydneyToday = () =>
   new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney', year:'numeric', month:'2-digit', day:'2-digit' })
@@ -122,7 +137,7 @@ async function runInvoicing(reason, apiKey) {
       plan.held.map(i => `  ${i.owner.name} — $${i.total.toFixed(2)} (${i.lines.length} lines)`).join('\n') +
       `\n\nOpen the panel and send them by hand if that's right, or raise the limit in Invoices → Change.`,
       `held/${today}/${plan.held.length}`);
-    await fs.doc(STATE).update({ 'meta.invoicingLastRun': { at: new Date().toISOString(), reason, held: plan.held.length } });
+    await fs.doc(STATE).update(stamped({ 'meta.invoicingLastRun': { at: new Date().toISOString(), reason, held: plan.held.length } }));
     return { held: plan.held.length };
   }
   /* Approve mode only ever acts on what Andressa has already tapped. Without
@@ -166,11 +181,20 @@ async function runInvoicing(reason, apiKey) {
       const meta = cur.meta || {};
       const billed = meta.billed || {};
       const already = new Set((meta.invoicesSent || []).map(x => x.number));
+      /* A deposit has no bookingIds, so the `billed` guard below never covers
+         it, and until the number was anchored to the deposit a rebuild on a
+         later day produced a new number that slipped past `already` too. One
+         client received the same deposit several times that way. Key deposits
+         by their own id as well, so identity does the work rather than a
+         string that used to move. */
+      const alreadyDeposits = new Set((meta.invoicesSent || [])
+        .map(x => x.depositId).filter(Boolean));
       const inFlight = meta.sending || {};
       const now = Date.now();
       claimed.length = 0;
       for (const inv of jobs) {
         if (already.has(inv.number)) continue;                       // already gone out
+        if (inv.depositId && alreadyDeposits.has(inv.depositId)) continue; // this deposit has gone out before
         if (inv.bookingIds.some(id => billed[id])) continue;         // its days are billed
         const held = inFlight[inv.number];
         if (held && now - held < CLAIM_TTL_MS) continue;             // another run has it
@@ -178,7 +202,7 @@ async function runInvoicing(reason, apiKey) {
         claimed.push(inv);
       }
       meta.sending = inFlight;
-      tx.update(fs.doc(STATE), { meta });
+      tx.update(fs.doc(STATE), stamped({ meta }));
     });
   }
   if (jobs.length && !claimed.length) return { skipped: 'already in flight' };
@@ -231,7 +255,7 @@ async function runInvoicing(reason, apiKey) {
              the one field that lets a credit be matched to an invoice with
              certainty rather than by guessing at names. Recording the due date
              alongside it is what makes "who is overdue" answerable at all. */
-          ref: inv.ref, dueISO: inv.dueISO,
+          ref: inv.ref, dueISO: inv.dueISO, depositId: inv.depositId || null,
           asAt: inv.asAt, total: inv.total, bookingIds: inv.bookingIds,
           to: inv.owner.email, providerId: id,
           sentAt: new Date().toISOString(), mode: cfg.mode, reason,
@@ -260,7 +284,7 @@ async function runInvoicing(reason, apiKey) {
         ...failed.map(f => ({ who: f.who, number: f.number, why: f.why,
                               at: new Date().toISOString(), kind: 'failed' }))
       ];
-      tx.update(fs.doc(STATE), { meta });
+      tx.update(fs.doc(STATE), stamped({ meta }));
     });
   }
 
@@ -556,10 +580,10 @@ export const sendInvoicingNotice = onCall(
     }
 
     if (mode === 'send') {
-      await fs.doc(STATE).update({
+      await fs.doc(STATE).update(stamped({
         'meta.noticesSent': { at: new Date().toISOString(), subject: NOTICE_SUBJECT,
                               delivered: done.map(d => d.to), failed: bad }
-      });
+      }));
     }
     logger.info('invoicing notice', mode, 'sent', done.length, 'failed', bad.length);
     return { mode, sent: done.length, failed: bad.length, failures: bad };

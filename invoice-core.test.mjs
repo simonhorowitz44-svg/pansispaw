@@ -1837,6 +1837,43 @@ console.log('\nA deposit that went stale when the stay was re-priced');
     C.depositDrift({ amount:50, rate:0.5, sentAt:sent, paidAt:null }, plain.slice(0,2), dog) === null);
 }
 
+console.log("\nA deposit's number and reference do not move with the calendar");
+{
+  /* The real incident: the same deposit was rendered on 18 and 22 Oct and
+     produced PPD-20261018-CEB9 then PPD-20261022-CEB9. The sender dedups on
+     invoicesSent.has(number) and Resend keys idempotency on it too, so a
+     number that follows the calendar defeats both and the client was sent
+     the same bill again, once per run. The payment reference moved with it,
+     so her bank transfer could not be matched either. */
+  const dog = { id:'d1', name:'Leo', ownerId:'o1CEB9', size:'small' };
+  const owner = { id:'o1CEB9', name:'Shabnam Jafaripour', email:'s@x.com' };
+  const nights = Array.from({length:18}, (_,i) => ({
+    id:'n'+i, dogId:'d1', date:'2026-12-' + String(10+i).padStart(2,'0'), session:'overnight' }));
+  const db = { owners:[owner], dogs:[dog], bookings:nights, packs:[], payments:[],
+    deposits:[{ id:'dep1', dogId:'d1', bookingIds:nights.map(n=>n.id), amount:900, rate:0.5,
+                requestedAt:'2026-10-18T00:00:00.000Z', sentAt:null, paidAt:null }],
+    meta:{ invoicing:{ goLive:'2026-01-01' } } };
+
+  const day1 = C.buildDepositRequest(db, 'dep1', { asAt:'2026-10-18' });
+  const day5 = C.buildDepositRequest(db, 'dep1', { asAt:'2026-10-22' });
+
+  eq('the number is the same on a later day', day5.number, day1.number);
+  eq('and is anchored to when it was asked for', day1.number, 'PPD-20261018-CEB9');
+  eq('the payment reference is the same too', day5.ref, day1.ref);
+  t('the document carries its deposit id for dedup', day1.depositId === 'dep1');
+
+  /* the due date SHOULD follow the day it is sent — that is the one thing
+     that legitimately moves */
+  t('but the due date still counts from today', day5.dueISO !== day1.dueISO);
+
+  /* a second deposit for the same owner must not collide with the first */
+  db.deposits.push({ id:'dep2', dogId:'d1', bookingIds:nights.slice(0,4).map(n=>n.id),
+                     amount:200, rate:0.5, requestedAt:'2026-11-01T00:00:00.000Z',
+                     sentAt:null, paidAt:null });
+  t('a later deposit gets its own number',
+    C.buildDepositRequest(db, 'dep2', { asAt:'2026-11-05' }).number !== day1.number);
+}
+
 console.log('\nAn unsent deposit follows the stay; sending freezes it');
 {
   const dog = { id:'d1', name:'Leo', size:'small' };
