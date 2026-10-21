@@ -786,7 +786,7 @@ import {
   calcTotal, latePickupFee, boardingHoursFee,
   buildInvoice, invoicesDue, sendableInvoices, blockers, orphanBookings,
   weekRunComplete, renderInvoiceHTML, invoiceText, invoiceSubject, payRef, invoiceNumber,
-  depositFor, depositDue, depositDrift, depositAmount, DEPOSIT_RATE, buildDepositRequest, mergeCollection,
+  depositFor, depositDue, depositDrift, depositAmount, depositSentAt, DEPOSIT_RATE, buildDepositRequest, mergeCollection,
   cancelBands, MIN_DEPOSIT_NIGHTS
 } from './invoice-core.js';
 
@@ -1281,6 +1281,21 @@ function computeStays(bookings) {
   });
   return stays;
 }
+
+/* A deposit that went out before sentAt existed still has to count as sent —
+   otherwise its amount tracks the stay and a figure the client already holds
+   can move. Resolve it against the send ledger and hand the rest of the app a
+   deposit that knows the truth about itself. */
+function withSent(dep) {
+  if (!dep || dep.sentAt) return dep;
+  const dog = dogById(dep.dogId); const owner = dog && ownerById(dog.ownerId);
+  const anchor = String(dep.requestedAt || '').slice(0, 10);
+  const number = owner && anchor
+    ? invoiceNumber(owner, anchor, 1).replace(/^PP-/, 'PPD-') : null;
+  const sentAt = depositSentAt(DB, dep, number);
+  return sentAt ? { ...dep, sentAt } : dep;
+}
+
 function stayForBookingId(bookingId) {
   const stays = computeStays(DB.bookings);
   return stays.find(s => s.bookings.some(b => b.id === bookingId));
@@ -2827,17 +2842,18 @@ function renderInvoices() {
         const span = nights.length
           ? `${fmtDateShort(nights[0].date)} – ${fmtDateShort(nights[nights.length - 1].date)}`
           : 'stay not found';
-        const drift = depositDrift(dep, nights, dog);
+        const dpS = withSent(dep);
+        const drift = depositDrift(dpS, nights, dog);
         const bits = [dog ? dog.name : '—', `${nights.length} night${nights.length === 1 ? '' : 's'}`, span,
                       dep.paidAt ? 'received ' + fmtDateShort(String(dep.paidAt).slice(0, 10))
-                                 : (dep.sentAt ? 'sent ' + fmtDateShort(String(dep.sentAt).slice(0,10)) + ', not paid' : 'not sent yet')]
+                                 : (dpS.sentAt ? 'sent ' + fmtDateShort(String(dpS.sentAt).slice(0,10)) + ', not paid' : 'not sent yet')]
                      .filter(Boolean).join(' · ');
         return `<div class="mn-row ${dep.paidAt ? '' : 'owing'}" onclick="previewDeposit('${escapeHtml(dep.id)}'${dep.paidAt ? ', { receipt: true }' : ''})">
           <div><div class="mn-name">${escapeHtml(owner ? owner.name : 'Unknown client')}</div>
             <div class="mn-sub">${escapeHtml(bits)}</div>
             ${drift ? `<div class="mn-sub" style="color:#b4541a">Asked \$${dep.amount}, half the stay is now \$${drift.now}</div>` : ''}
           </div>
-          <div class="mn-bal">\$${Number(dep.paidAmount ?? depositAmount(dep, nights, dog)).toFixed(2)}</div>
+          <div class="mn-bal">\$${Number(dep.paidAmount ?? depositAmount(dpS, nights, dog)).toFixed(2)}</div>
         </div>`;
       };
       const unpaid = deps.filter(d => !d.paidAt), paid = deps.filter(d => d.paidAt);
@@ -3106,7 +3122,7 @@ async function retuneDeposit(depositId) {
   if (dep.paidAt) return toast('That deposit has already been received');
   const dog = dogById(dep.dogId);
   const stay = (dep.bookingIds || []).map(id => DB.bookings.find(b => b.id === id)).filter(Boolean);
-  const drift = depositDrift(dep, stay, dog);
+  const drift = depositDrift(withSent(dep), stay, dog);
   if (!drift) return toast('Already matches the stay');
   const was = dep.amount;
   dep.amount = drift.now;
@@ -3846,10 +3862,11 @@ function openBookingSheet(bookingId, prefillDate) {
              Leo's Christmas stay went out $165 short that way. Show the gap;
              never fix it silently — an agreed round number looks exactly like
              a mistake, and only Andressa knows which this is. */
-          const drift = depositDrift(dep, nights, dog);
+          const dpS = withSent(dep);
+          const drift = depositDrift(dpS, nights, dog);
           return `<div class="extras-box">
             <div class="extras-head">Deposit</div>
-            <div class="extras-row"><span>${dep.sentAt ? 'Sent ' + fmtDateShort(dep.sentAt.slice(0,10)) : 'Not sent yet · follows the stay'} · not received yet</span><b>$${depositAmount(dep, nights, dog)}</b></div>
+            <div class="extras-row"><span>${dpS.sentAt ? 'Sent ' + fmtDateShort(dpS.sentAt.slice(0,10)) : 'Not sent yet · follows the stay'} · not received yet</span><b>$${depositAmount(dpS, nights, dog)}</b></div>
             ${drift ? `<div class="extras-note" style="color:#b4541a">
               Half this stay now comes to <b>$${drift.now}</b> — $${Math.abs(drift.diff)}
               ${drift.diff > 0 ? 'more' : 'less'} than was asked for. The nights were

@@ -1837,6 +1837,50 @@ console.log('\nA deposit that went stale when the stay was re-priced');
     C.depositDrift({ amount:50, rate:0.5, sentAt:sent, paidAt:null }, plain.slice(0,2), dog) === null);
 }
 
+console.log('\nA deposit sent before sentAt existed still counts as sent');
+{
+  /* sentAt only started being written when sending began freezing the amount.
+     Shabnam's deposit had already gone out, so it read as unsent — wrong on
+     screen, and worse underneath: an unsent deposit tracks the stay, so the
+     $1080 she was holding could have moved. The send ledger is the authority. */
+  const dep = { id:'dep1', amount:1080, rate:0.5, sentAt:null, paidAt:null };
+  const ledger = (rows) => ({ meta:{ invoicesSent: rows } });
+
+  eq('an old send is found by document number',
+     C.depositSentAt(ledger([{ number:'PPD-20261018-CEB9', sentAt:'2026-10-18T19:00:00.000Z' }]),
+                     dep, 'PPD-20261018-CEB9'), '2026-10-18T19:00:00.000Z');
+
+  eq('a newer send is found by deposit id',
+     C.depositSentAt(ledger([{ depositId:'dep1', sentAt:'2026-10-20T00:00:00.000Z' }]), dep),
+     '2026-10-20T00:00:00.000Z');
+
+  /* it went out repeatedly; the FIRST time is when it became a promise */
+  eq('repeated sends resolve to the earliest',
+     C.depositSentAt(ledger([
+       { number:'PPD-20261022-CEB9', depositId:'dep1', sentAt:'2026-10-22T07:02:00.000Z' },
+       { number:'PPD-20261018-CEB9', sentAt:'2026-10-18T19:00:00.000Z' }
+     ]), dep, 'PPD-20261018-CEB9'), '2026-10-18T19:00:00.000Z');
+
+  t('a deposit that never went out stays unsent',
+    C.depositSentAt(ledger([]), dep, 'PPD-NOPE') === null);
+  t('and a missing ledger does not throw',
+    C.depositSentAt({}, dep, 'PPD-NOPE') === null);
+  eq('an explicit flag still wins',
+     C.depositSentAt(ledger([{ depositId:'dep1', sentAt:'2026-10-20T00:00:00.000Z' }]),
+                     { ...dep, sentAt:'2026-01-01T00:00:00.000Z' }), '2026-01-01T00:00:00.000Z');
+
+  /* the point of all this: once resolved as sent, the figure must freeze */
+  const dog = { id:'d1', size:'small' };
+  const mixed = Array.from({length:18}, (_,i) => ({ id:'n'+i, dogId:'d1',
+    date:'2026-12-' + String(10+i).padStart(2,'0'), session:'overnight',
+    surcharges: i < 11 ? { xmasPeak:true } : {} }));
+  const resolved = { ...dep, sentAt:'2026-10-18T19:00:00.000Z' };
+  eq('a resolved-sent deposit holds its quoted figure',
+     C.depositAmount(resolved, mixed, dog), 1080);
+  t('and reports the gap instead of moving',
+     C.depositDrift(resolved, mixed, dog).now === 1065);
+}
+
 console.log("\nA deposit's number and reference do not move with the calendar");
 {
   /* The real incident: the same deposit was rendered on 18 and 22 Oct and

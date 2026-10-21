@@ -386,6 +386,28 @@ export function depositDue(bookings, dog, rate = DEPOSIT_RATE) {
   return Math.round(full * rate);
 }
 
+/* Has this deposit ever actually gone to the client?
+
+   `sentAt` only began being written when sending started freezing the amount.
+   Deposits that went out before that carry no flag, so they read as unsent —
+   which is wrong on the screen and dangerous underneath it: an unsent deposit
+   tracks the stay, so a figure a client already has in her inbox could move.
+   Shabnam's did exactly this.
+
+   The send ledger is the authority, not the flag. Entries written from now on
+   carry depositId; older ones only have the document number, so match on
+   either. Returns the earliest send — the first time she saw the number is
+   the moment it became a promise. */
+export function depositSentAt(db, dep, number = null) {
+  if (!dep) return null;
+  if (dep.sentAt) return dep.sentAt;
+  const sent = (db && db.meta && db.meta.invoicesSent) || [];
+  const hits = sent.filter(x =>
+    (x.depositId && x.depositId === dep.id) || (number && x.number === number));
+  if (!hits.length) return null;
+  return hits.map(x => x.sentAt).filter(Boolean).sort()[0] || null;
+}
+
 /* What a deposit is actually for, right now.
 
    Deposits freeze their amount so that re-pricing a stay cannot rewrite what a
