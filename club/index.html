@@ -122,6 +122,10 @@
       <!-- Populated from the bio link's ?utm_source=... so the dropdown below
            can be cross-checked against where they actually came from. -->
       <input type="hidden" name="utm" id="fUtm" value="">
+      <!-- Search keyword, from ?utm_term= (Google Ads fills it via {keyword} in
+           the final URL suffix). Own field, not appended to "utm" above: that
+           one drops empty parts, so a fifth position would be ambiguous. -->
+      <input type="hidden" name="utm_term" id="fUtmTerm" value="">
       <input type="hidden" name="landed_on" value="club">
 
       <label for="d">Your dog's name</label>
@@ -188,6 +192,8 @@
        enquiry email; record only that the click was paid. */
     if (!v && qs.get('gclid')) v = 'google / cpc / scouts-search';
     f.value = v;
+    var t = document.getElementById('fUtmTerm');
+    if (t) t.value = (qs.get('utm_term') || '').trim().slice(0, 100);
   })();
 </script>
 <script>
