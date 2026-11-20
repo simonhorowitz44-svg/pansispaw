@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18512202375"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'AW-18512202375');
+  </script>
+<!-- The link Andressa pastes into local Facebook group posts (brief 003).
+     One redirect for every group: /fb/?g=<code> tags the enquiry with that
+     group's code, so each group is counted on its own without a new page per
+     group. A missing or mistyped code still lands on /club/ and still counts
+     as facebook, tagged "none", instead of 404ing and losing the lead.
+     The meta refresh lives in <noscript> so it can't race the script and
+     drop the group code. -->
+<title>Pansi's Paws — Scouts Club</title>
+<meta name="robots" content="noindex, follow">
+<link rel="canonical" href="https://pansispaws.com.au/club/">
+<!-- Facebook scrapes this page for the post preview. Its own tags keep the
+     preview from pulling /club/'s description, which carries the price. -->
+<meta property="og:url" content="https://pansispaws.com.au/fb/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Not a walk. An adventure.">
+<meta property="og:description" content="About three hours out, door to door, somewhere new each time.">
+<meta property="og:image" content="https://pansispaws.com.au/scouts-club-logo.png">
+<noscript><meta http-equiv="refresh" content="0; url=/club/?utm_source=facebook&utm_medium=group&utm_campaign=t05&utm_content=none"></noscript>
+<script>
+  (function () {
+    var g = (new URLSearchParams(location.search).get('g') || '')
+      .toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8) || 'none';
+    location.replace('/club/?utm_source=facebook&utm_medium=group&utm_campaign=t05&utm_content=' + g);
+  })();
+</script>
+<style>
+  body { margin:0; min-height:100vh; display:grid; place-items:center;
+    background:#faf6ed; color:#7a5e3f;
+    font-family:"DM Sans",system-ui,sans-serif; font-size:15px; }
+</style>
+</head>
+<body>
+  <p>Taking you to Scouts Club… <a href="/club/?utm_source=facebook&utm_medium=group&utm_campaign=t05&utm_content=none">tap here if nothing happens</a>.</p>
+</body>
+</html>
