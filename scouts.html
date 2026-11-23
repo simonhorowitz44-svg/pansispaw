@@ -244,7 +244,6 @@
       <div class="sc-rate-row"><span class="sc-rate-label">Single adventure</span><span class="sc-rate-price">$75</span></div>
       <div class="sc-rate-row"><span class="sc-rate-label">Second household dog</span><span class="sc-rate-price">$75</span></div>
       <div class="sc-rate-row"><span class="sc-rate-label">Pickup &amp; drop-off <span style="display:block; font-size:11px; color:var(--ink-3); font-weight:400; letter-spacing:0.02em; margin-top:2px;">Inner West run — see below</span></span><span class="sc-rate-price" style="color: var(--sage-dark); font-size: 14px;">included</span></div>
-      <div class="sc-rate-row"><span class="sc-rate-label">Just outside the run <span style="display:block; font-size:11px; color:var(--ink-3); font-weight:400; letter-spacing:0.02em; margin-top:2px;">Door-to-door, a little further afield</span></span><span class="sc-rate-price">+$20</span></div>
       <div class="sc-rate-row"><span class="sc-rate-label">GPS tracker on every Scout</span><span class="sc-rate-price" style="color: var(--sage-dark); font-size: 14px;">included</span></div>
     </div>
     <div class="sc-founding" style="text-align: left;">
@@ -478,7 +477,7 @@
 
     <details>
       <summary>What if I live outside your pickup area?</summary>
-      <p>You're still very welcome. We collect door to door across the Inner West and the suburbs around it. A little further out we can usually still come to you for $20 extra. The postcode box on the form will tell you which applies to you, and if you're further afield than that, get in touch anyway — we may be able to work something out.</p>
+      <p>You're still very welcome. We collect door to door across the Inner West and the suburbs around it. A little further out we can usually still come to you, and pickup and drop-off are still included in the $75. The postcode box on the form will tell you whether you're on our run, and if you're further afield than that, get in touch anyway — we may be able to work something out.</p>
     </details>
 
     <details>
@@ -529,7 +528,7 @@
 (function () {
   /* Pickup bands. One place to edit if the run changes.
      CORE   ~5km of Annandale — door-to-door included.
-     NEAR   ~5-10km          — door-to-door for a small supplement.
+     NEAR   ~5-10km          — door-to-door, included in the $75.
      Beyond — ask, rather than naming a place for them to come to. The run is
               door-to-door by design and nothing on the site invites a client
               to the house. */
@@ -537,7 +536,6 @@
               '2048','2049','2050','2204','2007','2008','2009'];
   var NEAR = ['2010','2015','2016','2017','2018','2046','2047',
               '2130','2131','2132','2133','2203','2205'];
-  var NEAR_FEE = 20;
 
   var pc   = document.getElementById('postcode');
   var note = document.getElementById('zoneNote');
@@ -558,8 +556,7 @@
     } else if (NEAR.indexOf(v) > -1) {
       zone.value = 'near';
       note.className = 'sc-zone extended';
-      note.textContent = "You're just outside our usual loop, but we can still collect from your door for $"
-        + NEAR_FEE + " extra.";
+      note.textContent = "You're just outside our usual loop, but we can still collect from your door, and pickup and drop-off are included in the $75.";
     } else {
       zone.value = 'outside';
       note.className = 'sc-zone outside';
